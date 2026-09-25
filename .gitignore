@@ -4,5 +4,6 @@
 /target/
 /data/
 /.env
+/.rebel_readline_history
 *.log
 .DS_Store

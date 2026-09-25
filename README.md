@@ -24,6 +24,27 @@ See [the roadmap](docs/ROADMAP.md) for implementation order and acceptance crite
 Each feature commit includes its tests and relevant documentation. No license has
 been selected yet.
 
+### Interactive REPL
+
+Launch [Rebel Readline](https://github.com/bhauman/rebel-readline) with the pinned JDK:
+
+```sh
+mise exec -- clojure -M:repl
+```
+
+The `:repl` alias includes source and test namespaces, with completion, syntax
+highlighting, and multiline editing. Rebel is a development-only dependency.
+Native terminal access is enabled for JDK 25 in this alias. Use `clojure` rather
+than `clj` to avoid wrapping Rebel in another readline tool. Exit with Ctrl-D.
+
+For example, query the application handler without starting an HTTP listener:
+
+```clojure
+(require '[pds.app :as app] '[pds.config :as config])
+(def handler (app/handler (config/load-config {})))
+(handler {:request-method :get :uri "/xrpc/_health"})
+```
+
 ## Configuration
 
 Configuration comes from environment variables (a `.env` file is not loaded).
