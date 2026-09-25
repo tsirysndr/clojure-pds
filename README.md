@@ -5,15 +5,20 @@ reviewable commits. **Work in progress:** this is not yet a federating PDS.
 
 ## Development
 
-Install the Clojure CLI and JDK 25 (recommended; JDK 21 or newer required).
+Install the Clojure CLI and [mise](https://mise.jdx.dev/). The project pins
+Temurin JDK `25.0.3+9.0.LTS` in `mise.toml`.
 
 ```sh
-clojure -M:test
-clojure -M:run
+mise trust
+mise install
+mise exec -- clojure -M:test
+mise exec -- clojure -M:run
 ```
 
 Dependencies are pinned in `deps.edn`. Tests use `clojure.test` and are discovered
 from `test/**/*_test.clj`; no external test runner is required.
+With mise activated in your shell, `clojure -M:test` and `clojure -M:run` also
+use the pinned JDK. Explicit `mise exec` works without shell activation.
 
 See [the roadmap](docs/ROADMAP.md) for implementation order and acceptance criteria.
 Each feature commit includes its tests and relevant documentation. No license has
