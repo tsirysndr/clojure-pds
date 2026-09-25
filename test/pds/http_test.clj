@@ -25,7 +25,8 @@
         (let [health (request client port "GET" "/xrpc/_health?ignored=true")
               head (request client port "HEAD" "/xrpc/_health")
               wrong-method (request client port "POST" "/xrpc/_health")
-              missing (request client port "GET" "/not-found")]
+              missing (request client port "GET" "/not-found")
+              discovery (request client port "GET" "/xrpc/com.atproto.server.describeServer")]
           (is (pos? port))
           (is (= 200 (.statusCode health)))
           (is (= {"version" app/version} (json/read-str (.body health))))
@@ -37,7 +38,10 @@
                  (.orElse (.firstValue (.headers head) "content-length") nil)))
           (is (= 405 (.statusCode wrong-method)))
           (is (= 404 (.statusCode missing)))
-          (is (= "MethodNotImplemented" (get (json/read-str (.body missing)) "error")))))
+          (is (= "MethodNotImplemented" (get (json/read-str (.body missing)) "error")))
+          (is (= 200 (.statusCode discovery)))
+          (is (= {"did" "did:web:localhost" "availableUserDomains" []}
+                 (json/read-str (.body discovery))))))
       (finally (stop!)))
     (stop!)
     ;; Closing releases the listening port, and a fresh server can reuse it.

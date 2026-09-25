@@ -10,7 +10,7 @@ and moderation services are separate services; the PDS will proxy to them.
 Each numbered milestone is split into atomic feature commits. Keep every commit
 runnable and update this document as features land.
 
-1. **Foundation (in progress):** Clojure CLI project, tests, validated environment
+1. **Foundation (complete):** Clojure CLI project, tests, validated environment
    configuration, HTTP lifecycle, XRPC errors, health and server discovery.
    Acceptance: start locally, query discovery, reject invalid configuration,
    test responses over a real socket, and shut down cleanly.
@@ -51,6 +51,11 @@ runnable and update this document as features land.
     suite against a pinned upstream revision.
 
 ## Architecture decisions
+
+Current checkpoint: foundation complete, JDK pinned with mise, health and
+`com.atproto.server.describeServer` available. Next commit series: protocol
+identifier validation with pinned upstream fixtures, followed by binary codecs.
+All other protocol milestones remain unimplemented.
 
 - Plain Clojure namespaces, explicit dependencies, and pure functions for protocol
   logic; isolate network, clock, randomness and persistence at the edges.

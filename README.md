@@ -43,6 +43,8 @@ resolvable identity. Public DID hosting and TLS arrive in later milestones.
 ```sh
 curl http://127.0.0.1:3000/xrpc/_health
 # {"version":"0.1.0-dev"}
+curl http://127.0.0.1:3000/xrpc/com.atproto.server.describeServer
+# {"did":"did:web:localhost","availableUserDomains":[]}
 ```
 
 Health reports process liveness only. Unknown paths return a JSON XRPC error and
@@ -53,3 +55,9 @@ support HEAD. Stop with Ctrl-C to release the listener and worker threads.
 JDK HTTP server. The initial adapter supports UTF-8 response bodies. Binary
 streams, WebSockets, CORS, authentication, persistence, and federation are still
 on the roadmap. Local binding is the default; this milestone is for development.
+
+Discovery follows the required fields of the official
+[describeServer lexicon](https://github.com/bluesky-social/atproto/blob/main/lexicons/com/atproto/server/describeServer.json).
+The handle-domain list is empty because account creation is not implemented yet.
+The service DID is derived from `PDS_HOSTNAME`; publishing its DID document remains
+part of the identity milestone.
