@@ -61,6 +61,8 @@ resolvable identity. Public DID hosting and TLS arrive in later milestones.
 
 ## HTTP foundation
 
+`GET /` returns the AT Protocol ASCII banner and a pointer to `/xrpc/` as plain text.
+
 ```sh
 curl http://127.0.0.1:3000/xrpc/_health
 # {"version":"0.1.0-dev"}

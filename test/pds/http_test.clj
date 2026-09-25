@@ -1,5 +1,6 @@
 (ns pds.http-test
   (:require [clojure.data.json :as json]
+            [clojure.java.io :as io]
             [clojure.test :refer [deftest is]]
             [pds.app :as app]
             [pds.config :as config]
@@ -26,7 +27,16 @@
               head (request client port "HEAD" "/xrpc/_health")
               wrong-method (request client port "POST" "/xrpc/_health")
               missing (request client port "GET" "/not-found")
-              discovery (request client port "GET" "/xrpc/com.atproto.server.describeServer")]
+              discovery (request client port "GET" "/xrpc/com.atproto.server.describeServer")
+              root (request client port "GET" "/")
+              root-head (request client port "HEAD" "/")]
+          (is (= 200 (.statusCode root)))
+          (is (= "text/plain; charset=utf-8"
+                 (.orElse (.firstValue (.headers root) "content-type") nil)))
+          (is (= (slurp (io/resource "pds/banner.txt") :encoding "UTF-8")
+                 (.body root)))
+          (is (= 200 (.statusCode root-head)))
+          (is (= "" (.body root-head)))
           (is (pos? port))
           (is (= 200 (.statusCode health)))
           (is (= {"version" app/version} (json/read-str (.body health))))
