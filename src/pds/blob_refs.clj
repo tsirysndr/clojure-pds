@@ -18,7 +18,7 @@
                     cid (cond
                           (and (= "blob" (get value "$type"))
                                (instance? pds.protocol.codec.Link (get value "ref"))
-                               (integer? (get value "size")) (pos? (get value "size")))
+                               (integer? (get value "size")) (<= 0 (get value "size")))
                           (:cid (get value "ref"))
                           (and (not (contains? value "$type")) (string? (get value "cid"))) (get value "cid"))
                     found (if (and (string? mime) (seq mime) (raw-cid? cid)) (conj found cid) found)]

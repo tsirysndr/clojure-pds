@@ -77,7 +77,7 @@
                (when-not (and (instance? Link (get result "ref"))
                               (= 85 (aget (cid-bytes (:cid (get result "ref"))) 1))
                               (string? (get result "mimeType")) (seq (get result "mimeType"))
-                              (integer? (get result "size")) (pos? (get result "size")))
+                              (integer? (get result "size")) (<= 0 (get result "size")))
                  (fail! "Invalid blob reference")))
              result))))
      (vector? value) (mapv #(from-json % (inc depth)) value)

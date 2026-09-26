@@ -48,7 +48,7 @@
   uncertain remote outcomes require separately tracked orphan reconciliation."
   [conn settings did content mime-type]
   (let [size (alength ^bytes content) cid (codec/cid 85 content)]
-    (when-not (<= 1 size max-size) (errors/invalid! "Blob size is outside the allowed range"))
+    (when-not (<= 0 size max-size) (errors/invalid! "Blob size is outside the allowed range"))
     ;; Serialize duplicates across PDS processes; the first MIME type wins.
     (lock! conn did cid)
     (or (when-let [existing (metadata conn did cid)]

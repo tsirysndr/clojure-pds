@@ -22,7 +22,6 @@
              _ (when-not (and type (re-matches #"[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+" type))
                  (errors/invalid! "A valid Content-Type is required"))
              bytes (request/body-bytes r max-size)]
-         (when (zero? (alength bytes)) (errors/invalid! "Blob must not be empty"))
          (let [stored (blobs/store! conn settings (:did account) bytes type)]
            {:blob {:$type "blob" :ref {:$link (:cid stored)} :mimeType (:mime_type stored) :size (:size stored)}})))))
    "/xrpc/com.atproto.repo.listMissingBlobs"

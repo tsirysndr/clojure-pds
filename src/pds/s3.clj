@@ -68,7 +68,7 @@
       (.putObject client ^PutObjectRequest request (RequestBody/fromBytes content))
       {:object-key key :object-bucket bucket}))
   (get-object! [_ bucket key size]
-    (when-not (<= 1 size blobs/max-size) (blobs/unavailable!))
+    (when-not (<= 0 size blobs/max-size) (blobs/unavailable!))
     (let [request (-> (GetObjectRequest/builder) (.bucket bucket) (.key key) .build)]
       (with-open [stream (.getObject client ^GetObjectRequest request)]
         ;; Close aborts unread excess content. Never buffer an arbitrary remote

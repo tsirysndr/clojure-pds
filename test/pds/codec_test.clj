@@ -33,3 +33,11 @@
     (is (thrown? Exception (codec/decode (byte-array (map unchecked-byte data))))))
   (doseq [value [Long/MIN_VALUE Long/MAX_VALUE 0 -1 24 255 65536 4294967296]]
     (is (= value (codec/decode (codec/encode value))))))
+
+(deftest empty-blob-metadata-is-valid
+  (let [value {"$type" "blob" "ref" {"$link" (codec/cid 85 (byte-array 0))}
+               "mimeType" "application/octet-stream" "size" 0}
+        native (codec/from-json value)]
+    (is (= value (codec/to-json (codec/decode (codec/encode native)))))
+    (doseq [size [-1 nil "0" 0.5]]
+      (is (thrown? Exception (codec/from-json (assoc value "size" size)))))))

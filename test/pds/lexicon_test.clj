@@ -12,6 +12,16 @@
 (def demo "example.lexicon.record")
 (def demo-catalog {demo (fixture "lexicon/catalog/record.json")})
 (def raw-cid (codec/cid 85 (byte-array [1 2 3])))
+
+(deftest application-constraints-still-apply-to-empty-blobs
+  (let [native (codec/from-json {"$type" "blob" "ref" {"$link" (codec/cid 85 (byte-array 0))}
+                                 "mimeType" "application/octet-stream" "size" 0})
+        schema {"type" "blob" "accept" ["*/*"] "maxSize" 10}]
+    (is (= native (lexicon/validate! {} "com.example.file" schema native)))
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (lexicon/validate! {} "com.example.file" (assoc schema "minSize" 1) native)))
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (lexicon/validate! {} "com.example.file" (assoc schema "accept" ["image/*"]) native)))))
 (defn valid-demo! [record]
   (lexicon/validate-record! demo-catalog demo "demo" (codec/from-json record) true))
 (defn with-raw-blobs [record]

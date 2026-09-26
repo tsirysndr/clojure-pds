@@ -245,6 +245,13 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
   overlapping upload/deletion, real Moto removal and delayed deletion isolation.
   Downloads include a sandbox CSP and explicit content length. Failed-commit S3
   orphans and physical historical-block reclamation remain pending.
+- Zero-byte blobs follow the same upload/reference/download/deletion lifecycle on
+  PostgreSQL and S3, with `Content-Length: 0` on download. Negative sizes and
+  mismatched metadata remain invalid, and application Lexicon size/MIME constraints
+  still apply. Migration 023 reindexes earlier imported empty references without
+  altering record bytes or repository heads/revisions. This follows the
+  [blob specification](https://atproto.com/specs/blob), which explicitly permits
+  empty content; HTTP round trips, bounded reads and upgrade preservation are tested.
 - A child-JVM test runs `pds.main`, checks HTTP health, and verifies graceful shutdown,
   including optional S3/Redis clients when the combined suite enables them.
 - Rate limiting defaults to bounded in-memory counters. Optional Redis uses atomic
