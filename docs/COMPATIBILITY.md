@@ -297,9 +297,10 @@ External service interoperability and OAuth remain pending.
 4. OAuth authorization server: discovery metadata, browser authorization/consent,
    refresh behavior, permission sets and scopes. [DPoP verification and persistent
    replay tracking, client metadata/JWKS, redirect validation, and confidential-client
-   authentication, and durable PAR/PKCE](OAUTH.md)
+   authentication, durable PAR/PKCE and browser consent state](OAUTH.md)
    are implemented as foundations; OAuth routes and
-   resource-server authentication are not enabled yet.
+   resource-server authentication are not enabled yet. Optional passkeys and
+   authenticator-app TOTP, including enrollment/recovery and all login paths, remain pending.
 5. Relay notification and external relay interoperability,
    event retention/compaction, and remaining record/blob takedown semantics.
 6. Remaining migration private-state APIs, streaming proxy transfers, and external

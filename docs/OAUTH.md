@@ -186,10 +186,50 @@ an authorization/token flow that is still incomplete. References:
 [RFC 9126 PAR](https://www.rfc-editor.org/rfc/rfc9126.html) and
 [RFC 7636 PKCE](https://www.rfc-editor.org/rfc/rfc7636.html).
 
+## Durable browser interactions and consent
+
+Migration 027 and `pds.oauth.interaction` implement the authorization state machine.
+Starting an interaction atomically consumes PAR and persists its immutable snapshot.
+Each interaction lasts ten minutes and receives independent random identifiers and
+browser secrets; PostgreSQL stores their hashes. CSRF values are purpose-separated
+HMACs bound to the browser secret, interaction and a rotating nonce. Authentication
+rotates the nonce, so a login form cannot also approve the request. The forthcoming
+HTTP adapter must deliver secrets in secure HttpOnly cookies, enforce same-origin
+POSTs and render only escaped content.
+
+Login accepts an active account's primary password, respects `login_hint`, and
+requires the configured email sign-in factor. App passwords cannot delegate new
+OAuth authority. The email challenge/outbox commits before a factor-required result;
+factor consumption and authenticated interaction state commit together. No legacy
+session is created. Login and consent are distinct operations; automatic approval
+and account switching within an authenticated interaction are not supported.
+
+Approval freshly resolves client metadata outside the database transaction, then
+locks and rechecks the interaction and account. Removed redirects, changed scopes
+or changed client keys cannot reuse the original request. A database-maintained
+account security version changes on password, email, email-confirmation, email-factor
+or status updates. Pending approval remains invalid after a setting is changed back.
+Factor enrollment/removal can explicitly advance the version. Future token/session
+authentication must check this version too; that integration is not yet implemented.
+
+Exactly one concurrent decision succeeds. Approval atomically marks the interaction
+complete and stores a hashed random code with a 60-second lifetime, the account
+version, PKCE challenge, client binding and DPoP thumbprint. Denial issues no code.
+Callbacks retain the registered URI's original query and append `state`, `iss` and
+`code` or `error=access_denied`. Failed inserts roll back completion. Code redemption
+and replay/session revocation are the next token-lifecycle step, not claimed here.
+Expired interactions are cleaned in bounded batches when new ones start.
+
+PostgreSQL tests cover cookie/interaction substitution, CSRF rotation, primary-only
+login, hints, email-factor delivery and transactional consumption, lifecycle changes,
+expiration, concurrent decisions, metadata changes and failed PAR/code inserts.
+Browser pages and routes remain unmounted while the complete OAuth flow is built.
+
 ## Remaining steps
 
-1. Browser authorization, primary-account login, CSRF protection, consent and
-   exact redirect handling; one-use authorization codes and issuer responses.
+1. Browser pages, secure cookies, same-origin POST validation and session management
+   backed by the implemented interaction state machine. Add optional passkeys and
+   authenticator-app TOTP with enrollment, removal, recovery and login integration.
 2. Opaque DPoP-bound access/refresh tokens, refresh rotation/replay revocation,
    client key revalidation, revocation endpoints and session lifecycle integration.
 3. Resource-server authentication, permission scopes/sets, service proxy and
