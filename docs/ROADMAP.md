@@ -24,7 +24,7 @@ runnable and update this document as features land.
    atomic writes with swap checks, record CRUD, pagination, repository description,
    CAR import/export. Acceptance: reference implementation verifies our exports
    and we verify its exports, including deletion and concurrent writes.
-5. **Identity and accounts (did:web/did:plc signup and remote resolution implemented; updates/migration pending):** DNS/HTTPS handle resolution, did:plc/did:web resolution,
+5. **Identity and accounts (signup, resolution and handle updates implemented; key rotation/migration pending):** DNS/HTTPS handle resolution, did:plc/did:web resolution,
    account provisioning, DID document publication, handle updates and key rotation.
    Acceptance: persisted identities resolve from a separate process; remote fetches
    have bounded sizes/timeouts and protection against SSRF.
@@ -81,7 +81,10 @@ claimed. Preserve atomic feature commits and test each protocol boundary.
   chain verification and audit recovery rules. Tests exchange signed operations
   with the pinned reference library. Directory submission and durable provisioning
   verify the audit log, use encrypted per-account rotation keys, and activate only
-  after confirmation. Key rotation, handle updates and migration are next;
+  after confirmation. Handle updates also use durable verified operations and
+  transactional identity events, preserving web DID hostnames and unrelated PLC
+  fields. Recommended public DID credentials are exposed for migration. Key
+  rotation, migration and conflicted-operation administration remain pending;
   general PLC resolution still trusts the directory's HTTPS document response.
 - Track conformance honestly: unsupported features stay unsupported until their
   invariants are implemented. Health indicates process liveness, not federation

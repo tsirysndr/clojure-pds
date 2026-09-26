@@ -69,6 +69,6 @@
                      (if (= host (:hostname settings))
                        {:id (:service-did settings)
                         :service [{:id "#atproto_pds" :type "AtprotoPersonalDataServer" :serviceEndpoint (:public-url settings)}]}
-                       (let [account (accounts/resolve-identity conn host)
+                       (let [account (accounts/resolve-identity conn (str "did:web:" host))
                              repo (first (db/query conn "SELECT public_key FROM repositories WHERE did = ?" (:did account)))]
                          (accounts/did-document conn settings account (:public_key repo))))))))})

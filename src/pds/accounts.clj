@@ -8,6 +8,7 @@
             [pds.errors :as errors]
             [pds.events :as events]
             [pds.invites :as invites]
+            [pds.handle-registry :as handles]
             [pds.identity :as identity]
             [pds.plc :as plc]
             [pds.plc-provision :as provision]
@@ -102,7 +103,8 @@
                 (if (pos? (db/execute! conn "INSERT INTO accounts(did, handle, email, password_hash, status)
                                              VALUES (?, ?, ?, ?, 'provisioning') ON CONFLICT DO NOTHING"
                                       (:did prepared) handle address hash))
-                  (do (invites/consume! conn settings (get body "inviteCode") (:did prepared))
+                  (do (handles/reserve! conn (:did prepared) handle)
+                      (invites/consume! conn settings (get body "inviteCode") (:did prepared))
                       (provision/reserve! conn prepared)
                       (:did prepared))
                   (let [account (first (db/query conn "SELECT * FROM accounts WHERE handle = ? FOR UPDATE" handle))
@@ -153,6 +155,7 @@
            ds
            (fn [conn]
              (db/execute! conn "INSERT INTO accounts(did, handle, email, password_hash) VALUES (?, ?, ?, ?)" did handle address hash)
+             (handles/reserve! conn did handle)
              (invites/consume! conn settings (get body "inviteCode") did)
              (repo/initialize! conn settings did handle)
              (let [account (resolve-account conn did)]
@@ -260,6 +263,9 @@
           (when-not (and account (crypto/password-matches? (get body "password") (:password_hash account)))
             (errors/raise! 401 "AuthenticationRequired" "Invalid DID or password"))
           (consume-token! conn "delete-account" (get body "token") did (:email account))
+          (when (seq (db/query conn "SELECT 1 FROM handle_updates WHERE did = ?" did))
+            (errors/raise! 409 "IdentityUpdatePending" "Finish the pending identity update before deleting this account"))
+          (db/execute! conn "UPDATE handle_reservations SET permanent = true WHERE did = ?" did)
           (db/execute! conn "INSERT INTO blob_delete_jobs(object_bucket, object_key)
                             SELECT object_bucket, object_key FROM blobs WHERE did = ? AND storage_backend = 's3'
                             ON CONFLICT (object_bucket, object_key) DO NOTHING" did)

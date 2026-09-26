@@ -107,8 +107,8 @@ this server, preserving the Host header. The service hostname is reserved.
 Set `PDS_DID_METHOD=plc` to create portable **did:plc** identities. This requires
 an HTTPS public URL and a non-reserved user domain. The default `web` mode creates
 **did:web** accounts tied to their hostname and supports local development.
-The PDS publishes
-`/.well-known/did.json` and `/.well-known/atproto-did` for hosted accounts. The
+The PDS publishes `/.well-known/atproto-did` for hosted handles and
+`/.well-known/did.json` at each did:web account's original hostname. The
 identity endpoints resolve local and remote handles, `did:web`, and `did:plc`.
 Remote handles use DNS TXT first and HTTPS fallback. `resolveIdentity` and
 `refreshIdentity` return a bidirectionally verified handle, or `handle.invalid`.
@@ -132,6 +132,20 @@ same operation after restart. Permanent failures remain reserved for an explicit
 signup retry; inspect `plc_identities.status` and `last_error` for sanitized status.
 Already active accounts use `createSession`, not repeated signup. Account deletion
 erases local private keys and content but does not tombstone the public PLC DID.
+
+Authenticated `com.atproto.identity.updateHandle` accepts a hosted handle or a
+custom domain whose DNS/HTTPS handle proof resolves to the account's DID. A web
+account keeps its original DID hostname reserved and serving its document after
+renaming. PLC changes reserve the new handle, sign against the latest verified
+directory audit, and commit the local handle and identity event after directory
+confirmation. Unrelated DID fields are preserved; changed signing keys or PDS
+endpoints require migration instead. Custom-domain proof is rechecked before
+submission. A `503 IdentityUpdatePending` leaves a durable job: retry the same
+handle or let the background worker finish. Pending jobs block a different handle
+change and account deletion. Permanent conflicts retain the reservation; there is
+no cancellation/reconciliation admin API yet. Inspect `handle_updates.status`
+and `last_error` for sanitized status. `getRecommendedDidCredentials` returns the
+account's public repository key, PDS endpoint, handle and available rotation keys.
 
 Set `PDS_REQUIRE_INVITE_CODE=true` to require an invitation during signup;
 `PDS_ENABLE_SIGNUP` must also be enabled. Set `PDS_ADMIN_PASSWORD` to a random

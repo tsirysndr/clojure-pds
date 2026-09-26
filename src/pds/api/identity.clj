@@ -2,17 +2,21 @@
   (:require [clojure.walk :as walk]
             [clojure.string :as str]
             [pds.accounts :as accounts]
+            [pds.auth :as auth]
             [pds.db :as db]
             [pds.errors :as errors]
             [pds.identity :as identity]
+            [pds.handles :as handles]
             [pds.request :as request]
             [pds.xrpc :as xrpc]))
 
-(defn local-handle [ds handle]
-  (with-open [conn (db/connection ds)]
-    (when-let [row (first (db/query conn "SELECT did, status FROM accounts WHERE handle = ?" handle))]
-      (when (#{"deleted" "provisioning"} (:status row)) (errors/raise! 400 "HandleNotFound" "Handle was not found"))
-      (:did row))))
+(defn local-handle [ds settings handle]
+  ;; Custom domains must continue to prove their current DNS/HTTPS binding.
+  (when (handles/hosted? settings handle)
+    (with-open [conn (db/connection ds)]
+      (when-let [row (first (db/query conn "SELECT did, status FROM accounts WHERE handle = ?" handle))]
+        (when (#{"deleted" "provisioning"} (:status row)) (errors/raise! 400 "HandleNotFound" "Handle was not found"))
+        (:did row)))))
 
 (defn local-document [ds settings did]
   (if (= did (:service-did settings))
@@ -28,10 +32,17 @@
           :else (walk/stringify-keys (accounts/did-document conn settings account (:public_key account))))))))
 
 (defn routes [ds settings]
-  (let [resolver (identity/resolver (merge settings {:local-handle #(local-handle ds %)
+  (let [resolver (identity/resolver (merge settings {:local-handle #(local-handle ds settings %)
                                                      :local-document #(local-document ds settings %)}))
         route (fn [method f] {:method method :handler #(identity/bounded-call! resolver (fn [] (xrpc/response 200 (f %))))})]
-    {"/xrpc/com.atproto.identity.resolveHandle"
+    {"/xrpc/com.atproto.identity.updateHandle"
+     {:method :post :handler (fn [r]
+                               (identity/bounded-call! resolver #(handles/update! ds settings r (request/json-body r)))
+                               {:status 200 :headers {} :body ""})}
+     "/xrpc/com.atproto.identity.getRecommendedDidCredentials"
+     (route :get #(db/transact! ds (fn [conn]
+                                    (handles/recommended conn settings (auth/authenticate! conn settings % {:allow-deactivated? true})))))
+     "/xrpc/com.atproto.identity.resolveHandle"
      (route :get #(hash-map :did (identity/resolve-handle! resolver (get (request/query-params %) "handle"))))
      "/xrpc/com.atproto.identity.resolveDid"
      (route :get #(hash-map :didDoc (identity/resolve-did! resolver (get (request/query-params %) "did"))))

@@ -38,7 +38,8 @@
   the current canonical head. Never replaces a different head. Retrying after a
   crash/timeout is safe because the signed operation and CID are unchanged.
   Recovery forks require a separate explicit flow and are not submitted here."
-  [client origin did op]
+  ([client origin did op] (ensure-operation! client origin did op (fn [])))
+  ([client origin did op before-submit!]
   (plc/operation! op)
   (let [url (did-url origin did)
         target (plc/operation-cid op)
@@ -51,6 +52,7 @@
             (when-not (and (:data before) (= (:head before) (get op "prev"))) (fail! :conflict false))
             (plc/signer! (get-in before [:data "rotationKeys"]) op))
           (plc/verify-genesis! did op))
+        (before-submit!)
         (let [submission (try
                            {:status (:status (net/post-json! client url (codec/utf8 (json/write-str op))))}
                            (catch Exception _ {:uncertain true}))
@@ -61,4 +63,4 @@
             (and (:status submission) (<= 400 (:status submission) 499)
                  (not (#{408 429} (:status submission)))) (fail! :rejected false)
             (and (:status submission) (<= 300 (:status submission) 399)) (fail! :redirect false)
-            :else (fail! :unconfirmed true)))))))
+            :else (fail! :unconfirmed true))))))))

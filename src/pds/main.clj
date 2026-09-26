@@ -8,6 +8,7 @@
             [pds.db :as db]
             [pds.email :as email]
             [pds.http :as http]
+            [pds.handles :as handles]
             [pds.firehose :as firehose]
             [pds.invites :as invites]
             [pds.identity :as identity]
@@ -48,7 +49,8 @@
       (let [stop-email! (email/start! ds email-config)
             stop-cleanup! (try (blob-cleanup/start! ds blob-store)
                                (catch Throwable t (stop-email!) (throw t)))
-            stop-provision! (try (provision/start! #(accounts/provision-one! ds settings nil))
+            stop-provision! (try (provision/start! #(do (accounts/provision-one! ds settings nil)
+                                                       (handles/process-one! ds settings nil)))
                                  (catch Throwable t (try (stop-email!) (finally (stop-cleanup!))) (throw t)))]
         (try
           (let [{:keys [port stop!]} (http/start! settings (app/handler settings ds))

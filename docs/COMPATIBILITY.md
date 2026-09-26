@@ -25,6 +25,7 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | `com.atproto.server` | `requestEmailUpdate`, `updateEmail` | Proof to current confirmed address, old-token invalidation, optional email authentication factor |
 | `com.atproto.server` | `requestPasswordReset`, `resetPassword` | Same public result for known/unknown addresses; reset revokes sessions |
 | `com.atproto.identity` | `resolveHandle`, `resolveDid`, `resolveIdentity`, `refreshIdentity` | Hosted identities and remote DNS/HTTPS handles, did:web/PLC documents, bidirectional handle verification; uncached, bounded concurrency |
+| `com.atproto.identity` | `updateHandle`, `getRecommendedDidCredentials` | Hosted/custom handles, durable audited PLC changes, stable web DID hostnames, public migration credentials; migration itself pending |
 | `com.atproto.repo` | `createRecord`, `putRecord`, `deleteRecord`, `applyWrites` | Atomic signed commits; record/repo swap checks; batch maximum 200 |
 | `com.atproto.repo` | `getRecord`, `listRecords`, `describeRepo` | Current records; keyset pagination and reverse order |
 | `com.atproto.repo` | `uploadBlob` | Authenticated, maximum 5 MiB, account ownership |
@@ -82,6 +83,15 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
 - Canonical CBOR encoding and CID generation match upstream bytes/hashes. Decoding
   rejects noncanonical forms, invalid UTF-8, duplicate keys, floats, trailing data,
   and oversized/deep blocks. JSON request depth is bounded before parsing.
+- Handle changes reserve targets against concurrent signup, reauthenticate after
+  external validation, and append identity events atomically with local updates.
+  PLC jobs preserve the latest directory fields and recheck custom-domain proof
+  before submission. Tests cover remote acceptance followed by local rollback,
+  stale leases after a later update, signing-key drift, lost custom-domain control,
+  and reservation migration. A did:web account retains its original hostname;
+  custom handles are resolved externally even when stored locally. Conflicting
+  PLC jobs retain reservations and block deletion or another target until resolved;
+  cancellation/admin reconciliation remains unfinished.
 - Record schema validation uses 33 pinned, checksummed Lexicons (17 record roots).
   Tests cover upstream record fixtures, required/nullable fields, nested unions,
   references, UTF-8/grapheme limits, blobs, string formats, and key rules. Unknown
@@ -136,11 +146,11 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
 1. Expand the Lexicon catalog, dynamic schema resolution, and complete input/output
    validation against pinned official endpoint lexicons.
 2. Integrating PLC audit verification into general resolution, bounded identity caching,
-   handle updates, signing/rotation key lifecycle, and migration.
+   signing/rotation key lifecycle, conflicted-operation administration, and migration.
 3. Remaining administrative APIs, record/blob takedowns, and broader account recovery controls.
 4. OAuth authorization server: metadata, PAR, PKCE, DPoP, client metadata/consent,
    refresh behavior, permission sets and scopes.
-5. Relay notification and external relay interoperability, identity-change events,
+5. Relay notification and external relay interoperability,
    event retention/compaction, and remaining record/blob takedown semantics.
 6. Service auth JWTs, authenticated proxying to AppViews/labelers, and external
    client/relay end-to-end tests.

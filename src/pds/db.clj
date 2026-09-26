@@ -59,7 +59,7 @@
                  "005-blob-storage.sql" "006-app-passwords.sql" "007-account-lifecycle.sql"
                  "008-blob-deletion.sql" "009-email-security.sql" "010-invites.sql"
                  "011-account-takedowns.sql" "012-repository-block-ownership.sql" "013-event-payloads.sql"
-                 "014-plc-provisioning.sql"])
+                 "014-plc-provisioning.sql" "015-handle-updates.sql"])
 
 (defn migrate! [ds]
   (transact!
