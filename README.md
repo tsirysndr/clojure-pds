@@ -154,3 +154,41 @@ Run the Worker contract tests with:
 
 Cloudflare setup reference:
 [Workers email API](https://developers.cloudflare.com/email-service/api/send-emails/workers-api/).
+
+## Accounts and identity
+
+The server now requires `PDS_MASTER_KEY`: a stable base64url-encoded 32-byte secret.
+Generate one once, store it in your secret manager, and reuse it on every restart.
+It encrypts repository signing keys and derives a separate session-signing key.
+Losing or changing it without a migration makes existing private keys unreadable
+and invalidates tokens. Back up this key separately from PostgreSQL.
+
+```sh
+# Generate once; save securely before restarting the server.
+export PDS_MASTER_KEY="$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n')"
+export PDS_HOSTNAME='pds.example.com'
+export PDS_PUBLIC_URL='https://pds.example.com'
+export PDS_USER_DOMAIN='example.com'
+export PDS_ENABLE_SIGNUP='true'
+```
+
+Registration is disabled by default. The initial identity implementation provisions
+**did:web** accounts on direct children of `PDS_USER_DOMAIN`, such as
+`alice.example.com`. Configure wildcard DNS and HTTPS routing for those hosts to
+this server, preserving the Host header. The service hostname is reserved.
+`/.well-known/did.json` and `/.well-known/atproto-did` publish each hosted account's
+identity. Local handle resolution is available; remote resolution and did:plc
+provisioning/import remain on the roadmap. did:web accounts are tied to their
+hostnames and do not provide PLC's portable identity semantics.
+
+Implemented server endpoints include `createAccount`, `createSession`,
+`getSession`, `refreshSession`, `deleteSession`, `requestEmailConfirmation`,
+`confirmEmail`, `requestPasswordReset`, and `resetPassword`. Signup queues an
+email confirmation when delivery is configured. Passwords use Argon2id. Access
+JWTs expire after 15 minutes; sessions expire after 90 days. Refresh rotation is
+single-use; replay revokes the session, and password reset revokes all sessions.
+Email tokens expire after 30 minutes and can be used once.
+
+A bounded in-process IP limiter allows 120 requests/minute. Deployments need
+shared limits at their trusted reverse proxy; this server does not trust
+client-supplied forwarding headers. This implementation is still in development.

@@ -6,7 +6,8 @@
            [java.util.concurrent Executors ExecutorService]))
 
 (defn- request-map [^HttpExchange exchange]
-  {:request-method (-> (.getRequestMethod exchange) str/lower-case keyword)
+  {:remote-addr (.getHostAddress (.getAddress (.getRemoteAddress exchange)))
+   :request-method (-> (.getRequestMethod exchange) str/lower-case keyword)
    :uri (.getRawPath (.getRequestURI exchange))
    :query-string (.getRawQuery (.getRequestURI exchange))
    :headers (into {} (map (fn [[k v]] [(str/lower-case k) (str/join "," v)]))

@@ -1,12 +1,18 @@
 (ns pds.app
   (:require [clojure.java.io :as io]
-            [pds.xrpc :as xrpc]))
+            [pds.xrpc :as xrpc]
+            [pds.api.server :as server-api]
+            [pds.rate-limit :as rate-limit]))
 
 (def version "0.1.0-dev")
 
-(defn handler [config]
+(defn handler
+  ([config] (handler config nil))
+  ([config ds]
   (let [banner (slurp (io/resource "pds/banner.txt") :encoding "UTF-8")]
-    (xrpc/router
+    (rate-limit/wrap
+     (xrpc/router
+      (merge (when ds (server-api/routes ds config))
      {"/"
       {:method :get
        :handler (fn [_] {:status 200
@@ -18,4 +24,4 @@
       {:method :get
        :handler (fn [_]
                   (xrpc/response 200 {:did (:service-did config)
-                                      :availableUserDomains []}))}})))
+                                      :availableUserDomains (if (and ds (:signup-enabled config)) [(str "." (:user-domain config))] [])}))}}))))))
