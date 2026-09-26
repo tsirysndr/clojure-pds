@@ -1,0 +1,64 @@
+name: ci
+
+on:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18.6
+        env:
+          POSTGRES_USER: pds
+          POSTGRES_PASSWORD: pds-ci-password
+          POSTGRES_DB: pds_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pds -d pds_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+      redis:
+        image: redis:8.2.3-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      PDS_DATABASE_USER: pds
+      PDS_DATABASE_PASSWORD: pds-ci-password
+      PDS_TEST_DATABASE_URL: jdbc:postgresql://127.0.0.1:5432/pds_test
+      PDS_TEST_REDIS_URL: redis://127.0.0.1:6379/0
+      PDS_TEST_UPSTREAM: 'true'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the mise-pinned JDK
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+      - name: Install Clojure CLI
+        uses: DeLaGuardo/setup-clojure@6d46099eae24853c33c0482f2bb54edf4f1a4c74 # 13.7.0
+        with:
+          cli: 1.12.4.1618
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.13.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: 0.11.6
+      - name: Install pinned upstream conformance tools
+        run: npm ci --prefix scripts/conformance --ignore-scripts
+      - name: Run Clojure, PostgreSQL, Redis, S3 and upstream conformance tests
+        run: uv run scripts/test-s3.py
+      - name: Test the email Worker contract
+        run: node --test examples/email-worker/handler.test.mjs

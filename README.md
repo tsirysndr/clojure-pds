@@ -48,6 +48,10 @@ node --test examples/email-worker/handler.test.mjs
 mise exec -- clojure -M:repl        # Rebel Readline
 ```
 
+The GitHub Actions workflow `ci` runs on every push. It uses the mise-pinned JDK,
+PostgreSQL and Redis services, a local S3 emulator, the pinned upstream repository
+verifier, and the email Worker contract tests. It needs no deployment credentials.
+
 `PG_BIN=/path/to/postgresql/bin bash scripts/test-postgres.sh` selects another
 PostgreSQL installation. The script stops its temporary cluster after testing;
 files remain in the OS temporary directory for diagnosis. It never changes an

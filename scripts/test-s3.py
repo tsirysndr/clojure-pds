@@ -18,6 +18,10 @@ try:
     host, port = server.get_host_and_port()
     env = dict(os.environ, PDS_TEST_S3_ENDPOINT=f"http://{host}:{port}")
     root = Path(__file__).resolve().parents[1]
-    raise SystemExit(subprocess.call(["bash", "scripts/test-postgres.sh"], cwd=root, env=env))
+    # CI supplies a disposable PostgreSQL service. Local runs keep using the
+    # isolated temporary cluster unless an explicit test database is provided.
+    command = (["mise", "exec", "--", "clojure", "-M:integration"]
+               if env.get("PDS_TEST_DATABASE_URL") else ["bash", "scripts/test-postgres.sh"])
+    raise SystemExit(subprocess.call(command, cwd=root, env=env))
 finally:
     server.stop()
