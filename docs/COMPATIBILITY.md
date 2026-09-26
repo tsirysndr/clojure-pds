@@ -296,7 +296,8 @@ External service interoperability and OAuth remain pending.
 3. Remaining administrative APIs, record/blob takedowns, and broader account recovery controls.
 4. OAuth authorization server: metadata, PAR, PKCE, client metadata/consent,
    refresh behavior, permission sets and scopes. [DPoP verification and persistent
-   replay tracking, plus client metadata/JWKS and redirect validation](OAUTH.md),
+   replay tracking, client metadata/JWKS, redirect validation, and confidential-client
+   authentication](OAUTH.md)
    are implemented as foundations; OAuth routes and
    resource-server authentication are not enabled yet.
 5. Relay notification and external relay interoperability,

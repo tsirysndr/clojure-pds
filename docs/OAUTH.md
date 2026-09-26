@@ -93,20 +93,61 @@ percent escapes, invalid UTF-8 and duplicate scalar parameters, with a 16 KiB an
 Unit and real TLS tests cover web/native/development clients, invalid client IDs,
 redirect substitution, metadata/JWKS changes, body limits, status/MIME failures,
 private socket addresses, certificate hostname failures, cookie suppression,
-redirect rejection and permit release. These primitives do not yet authenticate
-client assertion JWTs or enable OAuth endpoints.
+redirect rejection and permit release. These primitives feed the client assertion checks below; OAuth endpoints remain
+disabled until the authorization/token flow is complete.
+
+## Confidential-client authentication
+
+`pds.oauth.client-auth/verify!` validates `private_key_jwt` assertions against the
+freshly resolved client keyset. It requires the JWT-bearer assertion type, ES256,
+a nonempty key ID, the exact client ID in `iss` and `sub`, the authorization-server
+origin in `aud`, and fresh `iat`, `exp` and `jti` claims. Audience arrays are
+supported when they contain the server origin. Optional `nbf` is enforced.
+Expiration is mandatory, the maximum assertion lifetime is five minutes, and
+issue timestamps allow at most 30 seconds of future clock skew. The JWT type may
+be omitted or `JWT`; DPoP proofs cannot substitute for client assertions. Embedded
+key material never overrides the published keyset. Both JOSE signature S forms
+remain supported.
+
+Public clients return a `none` binding and cannot become confidential by supplying
+an assertion. Shared client secrets are rejected. A confidential binding retains
+client ID, method, key ID, algorithm and thumbprint. Passing an existing binding
+requires an exact match, preventing key replacement, key renaming and method
+downgrades during a session. `binding-current?` checks whether refreshed metadata
+still advertises the bound key; the forthcoming session lifecycle must revoke
+sessions whose keys have disappeared. No session revocation route is claimed yet.
+
+Migration 025 stores hashes of client IDs and jti values with assertion expiration.
+The composite unique index prevents concurrent reuse across every key belonging
+to a client. Expiration is checked again before consumption, and cleanup removes
+at most 1,000 expired entries per successful acceptance. A committed assertion
+survives connection reopening; subsequent application rollback cannot revive it.
+Invalid signatures or bindings never consume a ledger entry.
+
+OAuth endpoint adapters should use `accept-request!`: it verifies the DPoP nonce
+and both proofs before atomically consuming their replay entries in PostgreSQL.
+A nonce challenge leaves the assertion available for the retry. If either proof
+has already been used, neither new entry commits. Successful authentication commits
+before grant logic; a failed grant requires fresh proofs. Metadata resolution
+stays outside the transaction. The separate `accept!` helper authenticates only
+the client assertion and does not satisfy OAuth's DPoP requirement by itself.
+
+Tests exercise claim/type/audience/time boundaries, key binding and substitution,
+key removal through real HTTPS JWKS resolution, concurrent and re-signed replay,
+client isolation, rollback, expiry cleanup, and atomic DPoP/assertion acceptance.
+The assertion profile follows [RFC 7523](https://www.rfc-editor.org/rfc/rfc7523.html).
+Unlike a legacy allowance in the pinned reference provider, assertions without
+`exp` are rejected as required by that RFC.
 
 ## Remaining steps
 
-1. Confidential-client assertion verification, durable assertion replay tracking,
-   and session binding to the authenticated client key.
-2. Authorization server/resource metadata and CORS, pushed requests, mandatory
+1. Authorization server/resource metadata and CORS, pushed requests, mandatory
    PKCE with challenge reuse prevention, and client/DPoP binding.
-3. Browser authorization, primary-account login, CSRF protection, consent and
+2. Browser authorization, primary-account login, CSRF protection, consent and
    exact redirect handling; one-use authorization codes and issuer responses.
-4. Opaque DPoP-bound access/refresh tokens, refresh rotation/replay revocation,
+3. Opaque DPoP-bound access/refresh tokens, refresh rotation/replay revocation,
    client key revalidation, revocation endpoints and session lifecycle integration.
-5. Resource-server authentication, permission scopes/sets, service proxy and
+4. Resource-server authentication, permission scopes/sets, service proxy and
    getServiceAuth authorization, nonce headers, and end-to-end reference clients.
 
 Sources: [AT Protocol OAuth profile](https://atproto.com/specs/oauth),
