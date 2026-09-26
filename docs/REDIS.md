@@ -9,6 +9,9 @@ accounts, repository state, and email jobs always remain in PostgreSQL.
 | `PDS_RATE_LIMIT_BACKEND` | `memory` | `memory` or `redis` |
 | `PDS_RATE_LIMIT_REQUESTS` | `120` | Maximum admitted requests per window; 1–1,000,000 |
 | `PDS_RATE_LIMIT_WINDOW_SECONDS` | `60` | Window duration; 1–3,600 seconds |
+| `PDS_RECORD_WRITE_RATE_LIMIT_ENABLED` | `true` | Set `false` to disable record-write rate limiting entirely |
+| `PDS_RECORD_WRITE_RATE_LIMIT_REQUESTS` | general request limit | Separate record-write request budget; 1–1,000,000 |
+| `PDS_RECORD_WRITE_RATE_LIMIT_WINDOW_SECONDS` | general window | Record-write window; 1–86,400 seconds |
 | `PDS_REDIS_URL` | required in Redis mode | `redis://` or `rediss://`, credentials and optional database number |
 | `PDS_REDIS_PREFIX` | `clojure-pds` | Namespace shared by all instances of this PDS |
 
@@ -41,9 +44,38 @@ cluster and Sentinel discovery are not implemented.
 
 Both backends use the socket peer address and ignore `X-Forwarded-For`. Behind a
 reverse proxy, configure proxy-level limits or a future trusted-proxy policy;
-otherwise callers share the proxy's IP budget. This limiter applies to every
-route, including health. Credential/identity-specific abuse controls remain work
+otherwise callers share the proxy's IP budget. The general limiter applies to every route, including health, unless a record-write
+override is configured. Credential/identity-specific abuse controls remain work
 for the full PDS.
+
+## Record-write overrides
+
+Without any `PDS_RECORD_WRITE_RATE_LIMIT_*` settings, record writes share the
+existing general IP budget. Setting any of these options selects a separate
+budget for POST `com.atproto.repo.createRecord`, `putRecord`, `deleteRecord` and
+`applyWrites`. All four share one write budget per socket peer address; a batch
+counts as one HTTP request. This is a request limit, not a per-record points quota.
+The other endpoints keep the general budget.
+
+For example, allow 3,000 write requests per hour:
+
+```sh
+PDS_RECORD_WRITE_RATE_LIMIT_REQUESTS=3000
+PDS_RECORD_WRITE_RATE_LIMIT_WINDOW_SECONDS=3600
+```
+
+To disable record-write limiting entirely:
+
+```sh
+PDS_RECORD_WRITE_RATE_LIMIT_ENABLED=false
+```
+
+Disabled write endpoints bypass both counters, including an exhausted or
+unavailable general limiter. Authentication, validation and size limits still
+apply. The switch works with memory and Redis. Other endpoints still use the
+configured backend, so Redis mode continues to require Redis at startup.
+Separate Redis write counters use the same pool and a distinct namespace. Use
+identical configuration across instances and restart the PDS after changing it.
 
 ## Verification
 

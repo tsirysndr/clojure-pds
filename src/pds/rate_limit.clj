@@ -4,6 +4,15 @@
 (defprotocol Limiter
   (admit! [limiter key] "Return {:allowed? boolean :retry-after seconds}."))
 
+(defprotocol RequestLimiter
+  (admit-request! [limiter request] "Select the configured budget for this request."))
+
+(defn record-write? [request]
+  (and (= :post (:request-method request))
+       (contains? #{"/xrpc/com.atproto.repo.createRecord" "/xrpc/com.atproto.repo.putRecord"
+                    "/xrpc/com.atproto.repo.deleteRecord" "/xrpc/com.atproto.repo.applyWrites"}
+                  (:uri request))))
+
 (defn memory-limiter
   "Bounded process-local fixed windows; the first request starts the window."
   ([] (memory-limiter {:max-requests 120 :window-ms 60000}))
@@ -31,7 +40,9 @@
   ([handler] (wrap handler (memory-limiter)))
   ([handler limiter]
    (fn [request]
-     (let [decision (try (admit! limiter (or (:remote-addr request) "unknown"))
+     (let [decision (try (if (satisfies? RequestLimiter limiter)
+                          (admit-request! limiter request)
+                          (admit! limiter (or (:remote-addr request) "unknown")))
                          (catch Exception _ nil))]
        (cond
          (nil? decision) (assoc-in (xrpc/error-response 503 "RateLimitUnavailable" "Rate limiting is unavailable")

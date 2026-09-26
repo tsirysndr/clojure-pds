@@ -31,3 +31,20 @@
           (is (= 503 (:status ((rate-limit/wrap (constantly {:status 200}) a) {:remote-addr "127.0.0.1"}))))))
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unable to connect"
                            (redis/open-limiter (assoc config :uri (java.net.URI. "redis://127.0.0.1:1"))))))))
+
+(when-let [url (System/getenv "PDS_TEST_REDIS_URL")]
+  (deftest record-write-budgets-are-shared-separate-and-optional
+    (let [config (redis/settings {"PDS_RATE_LIMIT_BACKEND" "redis" "PDS_REDIS_URL" url
+                                  "PDS_REDIS_PREFIX" (str "test-" (UUID/randomUUID))
+                                  "PDS_RATE_LIMIT_REQUESTS" "1" "PDS_RECORD_WRITE_RATE_LIMIT_REQUESTS" "2"})
+          request {:remote-addr "127.0.0.1" :request-method :post :uri "/xrpc/com.atproto.repo.putRecord"}]
+      (with-open [a (redis/open-limiter config) b (redis/open-limiter config)]
+        (is (:allowed? (rate-limit/admit-request! a request)))
+        (is (:allowed? (rate-limit/admit-request! b request)))
+        (is (false? (:allowed? (rate-limit/admit-request! a request))))
+        (is (:allowed? (rate-limit/admit! a "127.0.0.1")))
+        (is (false? (:allowed? (rate-limit/admit! b "127.0.0.1"))))
+        (with-open [disabled (redis/open-limiter (assoc-in config [:record-writes :enabled] false))]
+          (.close ^java.io.Closeable disabled)
+          (is (= 200 (:status ((rate-limit/wrap (constantly {:status 200}) disabled) request))))
+          (is (= 503 (:status ((rate-limit/wrap (constantly {:status 200}) disabled) (assoc request :uri "/"))))))))))

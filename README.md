@@ -93,6 +93,7 @@ to avoid wrapping Rebel in a second readline tool.
 | `PDS_DATABASE_PASSWORD` | empty | Database password |
 | `PDS_BLOB_BACKEND` | `postgres` | `postgres` or `s3`; [S3 settings](docs/S3.md) |
 | `PDS_RATE_LIMIT_BACKEND` | `memory` | `memory` or `redis`; [Redis settings](docs/REDIS.md) |
+| `PDS_RECORD_WRITE_RATE_LIMIT_ENABLED` | `true` | `false` disables record-write limits; [write budget settings](docs/REDIS.md#record-write-overrides) |
 | `PDS_RATE_LIMIT_REQUESTS` | `120` | Requests per IP per window |
 | `PDS_RATE_LIMIT_WINDOW_SECONDS` | `60` | Fixed window duration |
 | `PDS_EMAIL_WORKER_URL` | unset | Email Worker HTTPS endpoint |

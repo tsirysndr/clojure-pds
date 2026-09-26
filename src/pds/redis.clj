@@ -16,7 +16,18 @@
 (defn settings [env]
   (let [backend (get env "PDS_RATE_LIMIT_BACKEND" "memory")
         options {:backend backend :max-requests (integer-setting env "PDS_RATE_LIMIT_REQUESTS" 120 1000000)
-                 :window-ms (* 1000 (integer-setting env "PDS_RATE_LIMIT_WINDOW_SECONDS" 60 3600))}]
+                 :window-ms (* 1000 (integer-setting env "PDS_RATE_LIMIT_WINDOW_SECONDS" 60 3600))}
+        write-enabled (get env "PDS_RECORD_WRITE_RATE_LIMIT_ENABLED" "true")
+        _ (when-not (#{"true" "false"} write-enabled)
+            (config-error! "PDS_RECORD_WRITE_RATE_LIMIT_ENABLED must be true or false"))
+        options (if (some #(contains? env %) ["PDS_RECORD_WRITE_RATE_LIMIT_ENABLED"
+                                             "PDS_RECORD_WRITE_RATE_LIMIT_REQUESTS"
+                                             "PDS_RECORD_WRITE_RATE_LIMIT_WINDOW_SECONDS"])
+                  (assoc options :record-writes
+                         {:enabled (= "true" write-enabled)
+                          :max-requests (integer-setting env "PDS_RECORD_WRITE_RATE_LIMIT_REQUESTS" (:max-requests options) 1000000)
+                          :window-ms (* 1000 (integer-setting env "PDS_RECORD_WRITE_RATE_LIMIT_WINDOW_SECONDS" (quot (:window-ms options) 1000) 86400))})
+                  options)]
     (when-not (#{"memory" "redis"} backend) (config-error! "PDS_RATE_LIMIT_BACKEND must be memory or redis"))
     (if (= "memory" backend) options
         (let [^URI uri (try (URI. (get env "PDS_REDIS_URL" "")) (catch Exception _ nil))
@@ -56,7 +67,7 @@
   java.io.Closeable
   (close [_] (.close client)))
 
-(defn open-limiter [{:keys [backend uri prefix max-requests window-ms] :as options}]
+(defn- open-base-limiter [{:keys [backend uri prefix max-requests window-ms] :as options}]
   (if (= "memory" backend)
     (rate-limit/memory-limiter options)
     (let [tls (doto (SSLParameters.) (.setEndpointIdentificationAlgorithm "HTTPS"))
@@ -75,3 +86,24 @@
           (.close client)
           ;; Do not expose credentials from a Redis URI through exception data.
           (throw (ex-info "Unable to connect to the configured Redis rate limiter" {})))))))
+
+(defn open-limiter [{:keys [backend record-writes] :as options}]
+  (let [base (open-base-limiter options)]
+    (if-not record-writes base
+      (let [writes (when (:enabled record-writes)
+                     (if (= "memory" backend)
+                       (rate-limit/memory-limiter record-writes)
+                       ;; Share one connection pool, with a separate counter namespace.
+                       (assoc base :prefix (str (:prefix options) ":record-write")
+                                   :max-requests (:max-requests record-writes) :window-ms (:window-ms record-writes))))]
+        (reify
+          rate-limit/Limiter
+          (admit! [_ key] (rate-limit/admit! base key))
+          rate-limit/RequestLimiter
+          (admit-request! [_ request]
+            (let [limiter (if (rate-limit/record-write? request) writes base)]
+              (if limiter
+                (rate-limit/admit! limiter (or (:remote-addr request) "unknown"))
+                {:allowed? true :retry-after 0})))
+          java.io.Closeable
+          (close [_] (when (instance? java.io.Closeable base) (.close ^java.io.Closeable base))))))))
