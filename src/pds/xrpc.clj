@@ -22,6 +22,12 @@
           (assoc-in (error-response 405 "MethodNotAllowed" "HTTP method is not supported")
                     [:headers "Allow"] (if (= method :get) "GET, HEAD" "POST")))
         (error-response 404 "MethodNotImplemented" "Endpoint is not implemented"))
+      (catch clojure.lang.ExceptionInfo e
+        (if (:xrpc (ex-data e))
+          (let [{:keys [status error]} (ex-data e)]
+            (cond-> (error-response status error (.getMessage e))
+              (= status 401) (assoc-in [:headers "WWW-Authenticate"] "Bearer")))
+          (error-response 500 "InternalServerError" "An internal server error occurred")))
       (catch Exception _
         ;; Do not expose exception messages (which may contain credentials).
         (binding [*out* *err*] (println "XRPC handler failed"))
