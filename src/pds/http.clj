@@ -15,7 +15,7 @@
    :body (.getRequestBody exchange)})
 
 (defn- respond! [^HttpExchange exchange {:keys [status headers body]}]
-  (let [bytes (.getBytes ^String (or body "") StandardCharsets/UTF_8)
+  (let [bytes (if (bytes? body) body (.getBytes ^String (or body "") StandardCharsets/UTF_8))
         no-body? (or (= "HEAD" (.getRequestMethod exchange))
                      (#{204 304} status))]
     (doseq [[k v] headers]

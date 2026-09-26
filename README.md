@@ -192,3 +192,19 @@ Email tokens expire after 30 minutes and can be used once.
 A bounded in-process IP limiter allows 120 requests/minute. Deployments need
 shared limits at their trusted reverse proxy; this server does not trust
 client-supplied forwarding headers. This implementation is still in development.
+
+## Repository APIs
+
+Authenticated `com.atproto.repo.createRecord`, `putRecord`, `deleteRecord`, and
+`applyWrites` persist records and publish signed version-3 commits in the same
+PostgreSQL transaction. The commit and record swap checks prevent lost updates;
+batch failures roll back the entire batch. Reads include `getRecord`, paginated
+`listRecords`, and `describeRepo`. Sync queries include `getRepo` (CAR export),
+`getLatestCommit`, `getRepoStatus`, and paginated `listRepos`.
+
+Records receive generic AT data-model validation and report
+`validationStatus: "unknown"`. Explicit `validate: true` currently fails because a
+Lexicon catalog validator is not implemented yet. The MST is deterministic and
+matches upstream root fixtures, but is rebuilt on each commit (O(n)); incremental
+updates are needed before hosting large repositories. Historical blocks are
+retained internally; exports include only the current repository graph.

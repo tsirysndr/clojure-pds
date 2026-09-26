@@ -2,6 +2,7 @@
   (:require [clojure.java.io :as io]
             [pds.xrpc :as xrpc]
             [pds.api.server :as server-api]
+            [pds.api.repo :as repo-api]
             [pds.rate-limit :as rate-limit]))
 
 (def version "0.1.0-dev")
@@ -13,6 +14,7 @@
     (rate-limit/wrap
      (xrpc/router
       (merge (when ds (server-api/routes ds config))
+             (when ds (repo-api/routes ds config))
      {"/"
       {:method :get
        :handler (fn [_] {:status 200
