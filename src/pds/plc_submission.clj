@@ -18,7 +18,7 @@
 (defn- snapshot! [conn settings request operation cid]
   (let [account (auth/authenticate! conn settings request {:allow-deactivated? true})
         did (:did account)
-        identity (first (db/query conn "SELECT * FROM plc_identities WHERE did = ? AND status = 'ready'" did))
+        identity (first (db/query conn "SELECT * FROM plc_identities WHERE did = ? AND status IN ('ready', 'prepared')" did))
         repo (first (db/query conn "SELECT public_key FROM repositories WHERE did = ?" did))
         pending (first (db/query conn "SELECT operation_kind, operation_cid FROM handle_updates WHERE did = ?" did))]
     (when-not identity (errors/raise! 400 "UnsupportedDID" "This account has no managed PLC identity"))

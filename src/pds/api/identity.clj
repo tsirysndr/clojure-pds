@@ -24,14 +24,15 @@
   (if (= did (:service-did settings))
     {"id" did "service" [{"id" "#atproto_pds" "type" "AtprotoPersonalDataServer" "serviceEndpoint" (:public-url settings)}]}
     (with-open [conn (db/connection ds)]
-      (when-let [account (first (db/query conn "SELECT a.did, a.handle, a.status, r.public_key FROM accounts a LEFT JOIN repositories r ON r.did = a.did WHERE a.did = ?" did))]
+      (when-let [account (first (db/query conn "SELECT a.did, a.handle, a.status, a.imported, r.public_key FROM accounts a LEFT JOIN repositories r ON r.did = a.did WHERE a.did = ?" did))]
         (cond
           ;; A local snapshot is not authoritative for a portable identity:
           ;; migration, recovery or rotation may have happened at the directory.
-          (= "deleted" (:status account)) (when-not (str/starts-with? did "did:plc:")
+          (= "deleted" (:status account)) (when-not (or (:imported account) (str/starts-with? did "did:plc:"))
                                              (errors/raise! 400 "DidDeactivated" "DID is deactivated"))
           (= "provisioning" (:status account)) (errors/raise! 400 "DidNotFound" "DID is not registered")
           (str/starts-with? did "did:plc:") nil
+          (:imported account) nil
           :else (walk/stringify-keys (accounts/did-document conn settings account (:public_key account))))))))
 
 (defn routes [ds settings]

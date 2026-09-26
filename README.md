@@ -174,7 +174,22 @@ metadata and publishing an identity event. Identical retries reconcile without
 duplicate events. A `503 IdentityUpdatePending` uses the same durable retry and
 lease behavior as handle changes. Deactivated primary sessions can submit without
 activating the account. This endpoint supports normal successors and already
-accepted operations; recovery forks and destination account import remain pending.
+accepted operations; recovery forks remain pending.
+
+Destination account preparation supports `createAccount` with an existing
+`did:plc` or resolvable `did:web`. Authenticate with a service token from the source
+PDS, addressed to this PDS and bound to `com.atproto.server.createAccount`. The
+token issuer must exactly match `did`. Signup and invitation settings apply;
+custom handles must prove their binding through DNS/HTTPS. The transaction consumes
+the token and invite, reserves the account and handle, generates fresh encrypted
+local keys, creates a private empty repository, and queues confirmation email.
+The returned primary session works while the account is deactivated. PLC accounts
+can obtain `getRecommendedDidCredentials`, have the source sign those credentials,
+and call `submitPlcOperation` here. Account preparation publishes no repository
+events and does not alter the remote DID. A source identity snapshot is retained
+for repository validation. **Repository import and final destination activation
+are unfinished:** owner and admin activation return `MigrationIncomplete` until
+that work lands. This is preparation support, not a completed migration flow.
 
 `GET /xrpc/com.atproto.server.getServiceAuth` issues a short-lived service JWT for
 the authenticated account. Supply `aud` as a service DID or `did#serviceId` reference
@@ -188,16 +203,16 @@ taken-down accounts can request only `createAccount` for migration. Responses ar
 marked `Cache-Control: no-store`. These tokens cannot be used as local access or
 refresh sessions. Issued tokens cannot be individually revoked before expiration.
 
-Receiving-side verification and replay primitives are implemented for migration
-integration. They require an exact method and PDS audience (the service DID or its
+Receiving-side verification and replay protection authenticate destination account
+preparation. They require an exact method and PDS audience (the service DID or its
 `#atproto_pds` reference), `typ=JWT`, and the issuer's current `#atproto` key resolved
 through the bounded identity resolver. The maximum accepted lifetime is one hour,
 with 30 seconds of allowance for a future issue timestamp. Expiration is rechecked
 after resolution and before consuming the proof. PostgreSQL stores a hash of each
 used nonce with its issuer, atomically with the protected mutation; rolled-back
 mutations retain retryability. Cleanup removes at most 1,000 expired entries per
-successful consumption. Destination account creation and proxy integration remain
-pending, so existing HTTP endpoints still use their current session authentication.
+successful consumption. Proxy integration remains pending. Other existing HTTP
+endpoints retain their current session authentication.
 
 Set `PDS_REQUIRE_INVITE_CODE=true` to require an invitation during signup;
 `PDS_ENABLE_SIGNUP` must also be enabled. Set `PDS_ADMIN_PASSWORD` to a random

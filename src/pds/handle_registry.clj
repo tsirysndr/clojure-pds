@@ -1,10 +1,11 @@
 (ns pds.handle-registry
-  (:require [pds.db :as db]
+  (:require [clojure.string :as str]
+            [pds.db :as db]
             [pds.errors :as errors]))
 
 (defn reserve! [conn did handle]
   (db/execute! conn "INSERT INTO handle_reservations(handle, did, permanent) VALUES (?, ?, ?) ON CONFLICT DO NOTHING"
-               handle did (= did (str "did:web:" handle)))
+               handle did (= (str/lower-case did) (str "did:web:" handle)))
   (when-not (= did (:did (first (db/query conn "SELECT did FROM handle_reservations WHERE handle = ?" handle))))
     (errors/raise! 400 "HandleNotAvailable" "Handle is reserved by another account")))
 

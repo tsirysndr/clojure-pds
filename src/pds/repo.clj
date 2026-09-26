@@ -35,7 +35,8 @@
       (doseq [cid (cons head (keys blocks))] (block-index/associate! conn (:did repo) cid))
       (db/execute! conn "INSERT INTO repo_block_owners(did, cid) SELECT did, cid FROM records WHERE did = ? ON CONFLICT DO NOTHING" (:did repo))
       (db/execute! conn "UPDATE repositories SET head = ?, rev = ? WHERE did = ?" head rev (:did repo))
-      (let [proof (mst/covering-proof tree (map #(get % "path") ops))
+      (when-not (:suppress-events? repo)
+       (let [proof (mst/covering-proof tree (map #(get % "path") ops))
             record-cids (keep #(some-> (get % "cid") :cid) ops)
             relevant (reduce (fn [all cid] (assoc all cid (:content (first (db/query conn "SELECT content FROM repo_blocks WHERE cid = ?" cid)))))
                              (assoc proof head (codec/encode signed)) record-cids)
@@ -43,7 +44,7 @@
         (when-let [handle (:announce-handle repo)]
           (events/append! conn (:did repo) "identity" {"did" (:did repo) "handle" handle})
           (events/account! conn (:did repo) "active"))
-        (events/commit! conn (:did repo) head rev (:rev repo) (get previous "data") ops relevant))
+        (events/commit! conn (:did repo) head rev (:rev repo) (get previous "data") ops relevant)))
       {:cid head :rev rev}))))
 (defn initialize!
   ([conn settings did] (initialize! conn settings did nil))

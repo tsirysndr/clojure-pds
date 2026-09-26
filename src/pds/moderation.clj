@@ -44,6 +44,8 @@
           base-status (if inactive? "deactivated" "active")
           status (if suspended? "taken_down" base-status)
           reference (when suspended? (if takedown (get takedown "ref") (:takedown_ref account)))]
+      (when (and (= "active" base-status) (seq (db/query conn "SELECT 1 FROM account_imports WHERE did = ?" (:did account))))
+        (errors/raise! 400 "MigrationIncomplete" "Complete the pending account migration before activation"))
       ;; Account lock is shared with authentication and repository writes. The
       ;; sequencer lock then places the status after any completed writes.
       (db/execute! conn "UPDATE accounts SET status = ?, status_before_takedown = ?, takedown_ref = ?,

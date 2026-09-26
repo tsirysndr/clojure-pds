@@ -246,6 +246,8 @@
 
 (defn activate! [conn account]
   (auth/require-primary! account)
+  (when (seq (db/query conn "SELECT 1 FROM account_imports WHERE did = ?" (:did account)))
+    (errors/raise! 400 "MigrationIncomplete" "Repository import and destination activation are not yet complete"))
   (when (= "deactivated" (:status account))
     (db/execute! conn "UPDATE accounts SET status = 'active', delete_after = NULL WHERE did = ?" (:did account))
     (events/account! conn (:did account) "active")
@@ -272,7 +274,7 @@
           (db/execute! conn "INSERT INTO blob_delete_jobs(object_bucket, object_key)
                             SELECT object_bucket, object_key FROM blobs WHERE did = ? AND storage_backend = 's3'
                             ON CONFLICT (object_bucket, object_key) DO NOTHING" did)
-          (doseq [table ["sessions" "app_passwords" "account_tokens" "blobs" "plc_identities" "repositories"]]
+          (doseq [table ["sessions" "app_passwords" "account_tokens" "blobs" "account_imports" "plc_identities" "repositories"]]
             (db/execute! conn (str "DELETE FROM " table " WHERE did = ?") did))
           (db/execute! conn "DELETE FROM email_outbox WHERE payload->>'to' = ?" (:email account))
           (db/execute! conn "DELETE FROM repo_events WHERE did = ? AND event_type IN ('commit', 'sync')" did)

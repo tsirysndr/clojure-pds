@@ -93,7 +93,7 @@
               (when claimed
                 ;; Deletion is blocked while a job exists. Deactivation/takedown
                 ;; do not undo a previously authorized directory change.
-                (db/execute! conn "UPDATE plc_identities SET operation = ?, operation_cid = ?, confirmed_at = now() WHERE did = ?"
+                (db/execute! conn "UPDATE plc_identities SET operation = ?, operation_cid = ?, confirmed_at = now(), status = 'ready' WHERE did = ?"
                              (:operation job) (:operation_cid job) (:did job))
                 (db/execute! conn "DELETE FROM handle_updates WHERE did = ?" (:did job))
                 (if (= "submit" (:operation_kind job))
@@ -143,8 +143,10 @@
 
 (defn recommended [conn settings account]
   (let [repo (first (db/query conn "SELECT public_key FROM repositories WHERE did = ?" (:did account)))
-        identity (first (db/query conn "SELECT operation FROM plc_identities WHERE did = ? AND status = 'ready'" (:did account)))]
+        identity (first (db/query conn "SELECT operation, status, rotation_public FROM plc_identities WHERE did = ? AND status IN ('ready', 'prepared')" (:did account)))]
     (cond-> {:alsoKnownAs [(str "at://" (:handle account))]
              :verificationMethods {:atproto (plc/did-key {:algorithm "ES256" :public (:public_key repo)})}
              :services {:atproto_pds {:type "AtprotoPersonalDataServer" :endpoint (:public-url settings)}}}
-      identity (assoc :rotationKeys (get (plc/normalize (codec/decode (:operation identity))) "rotationKeys")))))
+      identity (assoc :rotationKeys (if (= "prepared" (:status identity))
+                                     [(plc/did-key {:algorithm "ES256K" :public (:rotation_public identity)})]
+                                     (get (plc/normalize (codec/decode (:operation identity))) "rotationKeys"))))))

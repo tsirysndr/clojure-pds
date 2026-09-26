@@ -6,6 +6,8 @@
             [pds.db :as db]
             [pds.errors :as errors]
             [pds.invites :as invites]
+            [pds.identity :as identity]
+            [pds.migration :as migration]
             [pds.request :as request]
             [pds.service-auth :as service-auth]
             [pds.xrpc :as xrpc]))
@@ -18,6 +20,7 @@
   (fn [request]
     (db/transact! ds (fn [conn] (f conn (auth/authenticate! conn settings request options) request))))))
 (defn routes [ds settings]
+  (let [resolver (identity/resolver settings)]
   {"/xrpc/com.atproto.server.getServiceAuth"
    {:method :get
     :handler (fn [r]
@@ -25,7 +28,11 @@
                                              (fn [conn account r] (service-auth/issue! conn settings account (request/query-params r)))) r))
                          [:headers "Cache-Control"] "no-store"))}
    "/xrpc/com.atproto.server.createAccount"
-   (json-route :post #(accounts/create! ds settings (request/json-body %)))
+   (json-route :post (fn [r]
+                       (let [body (request/json-body r)]
+                         (if (contains? body "did")
+                           (migration/create! ds settings resolver r body)
+                           (accounts/create! ds settings body)))))
    "/xrpc/com.atproto.server.createSession"
    (json-route :post #(accounts/login! ds settings (request/json-body %)))
    "/xrpc/com.atproto.server.refreshSession"
@@ -78,4 +85,4 @@
                         :service [{:id "#atproto_pds" :type "AtprotoPersonalDataServer" :serviceEndpoint (:public-url settings)}]}
                        (let [account (accounts/resolve-identity conn (str "did:web:" host))
                              repo (first (db/query conn "SELECT public_key FROM repositories WHERE did = ?" (:did account)))]
-                         (accounts/did-document conn settings account (:public_key repo))))))))})
+                         (accounts/did-document conn settings account (:public_key repo))))))))}))

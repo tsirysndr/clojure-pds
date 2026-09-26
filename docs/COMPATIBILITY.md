@@ -13,12 +13,12 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | Namespace | Methods | Scope |
 | --- | --- | --- |
 | `com.atproto.server` | `describeServer` | Service DID, hosted suffix when signup is open, blob limit |
-| `com.atproto.server` | `createAccount` | Configurable did:web or did:plc signup, optional recovery key, durable directory confirmation and transactional invitations; no imports or phone verification |
+| `com.atproto.server` | `createAccount` | Configurable signup and service-authenticated destination preparation for existing web/PLC DIDs; inactive imports with new local keys; repository import/activation and phone verification pending |
 | `com.atproto.server` | `createInviteCode`, `createInviteCodes`, `getAccountInviteCodes` | Admin-issued codes, bounded batches, account listing and concurrent redemption limits; no automatic grants |
 | `com.atproto.admin` | `disableInviteCodes`, `disableAccountInvites`, `enableAccountInvites` | Optional Basic admin credentials; code invalidation and future-grant policy |
 | `com.atproto.admin` | `getAccountInfo`, `getSubjectStatus`, `updateSubjectStatus` | Private account inspection and repoRef account takedowns; activation state preserved; record/blob subjects pending |
 | `com.atproto.server` | `createSession`, `getSession`, `refreshSession`, `deleteSession` | Primary/app-password sessions, JWT type separation, single-use refresh, revocation |
-| `com.atproto.server` | `getServiceAuth` | Repository-key JWTs, exact audience/service reference, method and expiration checks, primary/app-password privilege policy; incoming service authentication and proxying pending |
+| `com.atproto.server` | `getServiceAuth` | Repository-key JWTs, exact audience/service reference, method and expiration checks, primary/app-password privilege policy; authenticated proxying pending |
 | `com.atproto.server` | `createAppPassword`, `listAppPasswords`, `revokeAppPassword` | One-time secrets, scoped sessions, privileged flag, metadata-only listing, immediate revocation |
 | `com.atproto.server` | `deactivateAccount`, `activateAccount` | Primary-session lifecycle; inactive content is hidden, identity remains resolvable, durable account events |
 | `com.atproto.server` | `requestAccountDelete`, `deleteAccount` | One-use email token plus primary password; credential removal, tombstone and durable S3 cleanup |
@@ -28,7 +28,7 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | `com.atproto.identity` | `resolveHandle`, `resolveDid`, `resolveIdentity`, `refreshIdentity` | Hosted identities and remote DNS/HTTPS handles, did:web/PLC documents, bidirectional handle verification; uncached, bounded concurrency |
 | `com.atproto.identity` | `updateHandle`, `getRecommendedDidCredentials` | Hosted/custom handles, durable audited PLC changes, stable web DID hostnames, public migration credentials; migration itself pending |
 | `com.atproto.identity` | `requestPlcOperationSignature`, `signPlcOperation` | Primary session plus one-use emailed proof; verified latest audit, partial credential overrides; returns an operation without submitting it |
-| `com.atproto.identity` | `submitPlcOperation` | Credential constraints, authorized successor signatures, durable directory reconciliation and atomic identity events; imported accounts and recovery forks pending |
+| `com.atproto.identity` | `submitPlcOperation` | Credential constraints, authorized successor signatures, durable directory reconciliation and atomic identity events; prepared destination identities supported; recovery forks pending |
 | `com.atproto.repo` | `createRecord`, `putRecord`, `deleteRecord`, `applyWrites` | Atomic signed commits; record/repo swap checks; batch maximum 200 |
 | `com.atproto.repo` | `getRecord`, `listRecords`, `describeRepo` | Current records; keyset pagination and reverse order |
 | `com.atproto.repo` | `uploadBlob` | Authenticated, maximum 5 MiB, account ownership |
@@ -165,8 +165,16 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
   matching the reference verifier; repository/PLC checks remain strict. PostgreSQL
   replay tests cover twelve concurrent uses, transaction rollback, reopened
   connections, issuer isolation, expiry cleanup and alternate signatures sharing
-  one nonce. Receiving primitives await destination endpoint integration. This
+  one nonce. Destination account creation consumes verified proofs transactionally. This
   proves token interoperability, not external service access or complete migration.
+- Destination preparation retains the verified source DID document, creates fresh
+  encrypted keys and a private empty repository, and returns a deactivated primary
+  session. PLC keys remain `prepared` until a source-authorized operation is accepted.
+  Tests cover actual HTTP signup, invite/nonce/outbox rollback, concurrent creation,
+  source key rotation during preparation, custom-handle proof, credential handoff,
+  and public repo invisibility. Owner/admin activation is gated while repository
+  import remains unfinished. Imported web DIDs resolve externally, including after
+  local deletion; deleting a destination account removes its source snapshot/keys.
 - Blob bytes can use PostgreSQL or configurable S3-compatible storage. An upgrade
   test preserves existing blobs. Moto-backed HTTP tests cover binary round trips,
   ownership, duplicate uploads, missing objects and failed PUT rollback; fault
@@ -188,7 +196,7 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
    refresh behavior, permission sets and scopes.
 5. Relay notification and external relay interoperability,
    event retention/compaction, and remaining record/blob takedown semantics.
-6. Integrating incoming service authentication with migration endpoints, authenticated proxying to AppViews/labelers, and external
+6. Completing destination repository import/activation, authenticated proxying to AppViews/labelers, and external
    client/relay end-to-end tests.
 7. Repository import, blob missing/list-since behavior, garbage collection,
    incremental MST mutation, streaming, quotas and bulk blob-backend migration.
