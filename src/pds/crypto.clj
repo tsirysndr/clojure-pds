@@ -85,7 +85,13 @@
         prefix (mapv #(bit-and 255 %) (take 2 bytes))
         algorithm (case prefix [128 36] "ES256" [231 1] "ES256K" (codec/fail! "Unsupported multikey"))]
     (when-not (= 35 (alength bytes)) (codec/fail! "Invalid compressed key length"))
-    {:algorithm algorithm :public (Arrays/copyOfRange bytes 2 35)}))
+    (let [public (Arrays/copyOfRange bytes 2 35)
+          params (domain algorithm)]
+      (when-not (#{2 3} (bit-and 255 (aget public 0))) (codec/fail! "Invalid compressed key prefix"))
+      ;; Reject infinity and off-curve points at identity parsing time, before a
+      ;; malformed signing key can be selected from a DID document.
+      (ECPublicKeyParameters. (.decodePoint (.getCurve params) public) params)
+      {:algorithm algorithm :public public})))
 
 (defn seal [key purpose plaintext]
   (let [nonce (random-bytes 12) cipher (Cipher/getInstance "AES/GCM/NoPadding")]

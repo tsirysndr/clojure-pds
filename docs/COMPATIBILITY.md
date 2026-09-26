@@ -24,7 +24,7 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | `com.atproto.server` | `requestEmailConfirmation`, `confirmEmail` | Durable email outbox, expiring one-use confirmation |
 | `com.atproto.server` | `requestEmailUpdate`, `updateEmail` | Proof to current confirmed address, old-token invalidation, optional email authentication factor |
 | `com.atproto.server` | `requestPasswordReset`, `resetPassword` | Same public result for known/unknown addresses; reset revokes sessions |
-| `com.atproto.identity` | `resolveHandle` | Hosted accounts only |
+| `com.atproto.identity` | `resolveHandle`, `resolveDid`, `resolveIdentity`, `refreshIdentity` | Hosted identities and remote DNS/HTTPS handles, did:web/PLC documents, bidirectional handle verification; uncached, bounded concurrency |
 | `com.atproto.repo` | `createRecord`, `putRecord`, `deleteRecord`, `applyWrites` | Atomic signed commits; record/repo swap checks; batch maximum 200 |
 | `com.atproto.repo` | `getRecord`, `listRecords`, `describeRepo` | Current records; keyset pagination and reverse order |
 | `com.atproto.repo` | `uploadBlob` | Authenticated, maximum 5 MiB, account ownership |
@@ -41,6 +41,16 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
 - Identifier validators run the vendored handle, DID, NSID, record-key, TID, AT URI,
   and AT identifier syntax fixtures. One known upstream NSID discrepancy is
   documented in `test/fixtures/README.md`.
+- Identity tests cover DNS precedence, conflicting claims, HTTPS fallback,
+  reserved names, DID document identifier matching, first-handle selection,
+  bidirectional verification, curve-point validation, and key/service selection.
+  DNS socket tests exercise CNAME chains, TXT string concatenation, and removal of
+  unrelated answer records. HTTP/TLS socket tests verify public-address checks,
+  mixed DNS answers, redirect revalidation, byte bounds, cookie isolation, and
+  certificate/hostname verification. PostgreSQL/HTTP tests cover hosted, remote,
+  deleted and service identities. Resolution uses no application cache yet;
+  `refreshIdentity` fetches fresh data. PLC directory responses are trusted over
+  verified HTTPS; PLC operation-chain verification and provisioning remain pending.
 - Canonical CBOR encoding and CID generation match upstream bytes/hashes. Decoding
   rejects noncanonical forms, invalid UTF-8, duplicate keys, floats, trailing data,
   and oversized/deep blocks. JSON request depth is bounded before parsing.
@@ -97,7 +107,7 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
 
 1. Expand the Lexicon catalog, dynamic schema resolution, and complete input/output
    validation against pinned official endpoint lexicons.
-2. did:plc provisioning, remote DID/handle resolution with SSRF protection,
+2. did:plc provisioning, PLC operation-chain verification, bounded identity caching,
    handle updates, signing/rotation key lifecycle, and migration.
 3. Remaining administrative APIs, record/blob takedowns, and broader account recovery controls.
 4. OAuth authorization server: metadata, PAR, PKCE, DPoP, client metadata/consent,
@@ -109,7 +119,8 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
 7. Repository import, blob missing/list-since behavior, garbage collection,
    incremental MST mutation, streaming, quotas and bulk blob-backend migration.
 8. PostgreSQL connection pooling, account-specific abuse controls, metrics/logging, CORS,
-   operational deployment/TLS, backup/restore drills and CI.
+   operational deployment/TLS and backup/restore drills. Push CI is configured;
+   its first GitHub execution still requires a push.
 
 ## Source pins
 

@@ -55,11 +55,6 @@
    (empty-route #(accounts/request-reset! ds settings (request/json-body %)))
    "/xrpc/com.atproto.server.resetPassword"
    (empty-route #(accounts/reset-password! ds (request/json-body %)))
-   "/xrpc/com.atproto.identity.resolveHandle"
-   (json-route :get (fn [r]
-                      (with-open [conn (db/connection ds)]
-                        (let [handle (get (request/query-params r) "handle")]
-                          {:did (:did (accounts/resolve-identity conn handle))}))))
    "/.well-known/atproto-did"
    {:method :get :handler (fn [r]
                            (with-open [conn (db/connection ds)]

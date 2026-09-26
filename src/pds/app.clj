@@ -3,6 +3,7 @@
             [pds.xrpc :as xrpc]
             [pds.api.server :as server-api]
             [pds.api.admin :as admin-api]
+            [pds.api.identity :as identity-api]
             [pds.api.repo :as repo-api]
             [pds.api.blob :as blob-api]
             [pds.api.sync :as sync-api]
@@ -18,6 +19,7 @@
     (rate-limit/wrap
      (xrpc/router
       (merge (when ds (server-api/routes ds config))
+             (when ds (identity-api/routes ds config))
              (when ds (admin-api/routes ds config))
              (when ds (repo-api/routes ds config))
              (when ds (blob-api/routes ds config))

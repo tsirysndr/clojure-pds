@@ -24,7 +24,7 @@ runnable and update this document as features land.
    atomic writes with swap checks, record CRUD, pagination, repository description,
    CAR import/export. Acceptance: reference implementation verifies our exports
    and we verify its exports, including deletion and concurrent writes.
-5. **Identity and accounts (hosted did:web implemented):** DNS/HTTPS handle resolution, did:plc/did:web resolution,
+5. **Identity and accounts (hosted did:web and remote resolution implemented; PLC provisioning pending):** DNS/HTTPS handle resolution, did:plc/did:web resolution,
    account provisioning, DID document publication, handle updates and key rotation.
    Acceptance: persisted identities resolve from a separate process; remote fetches
    have bounded sizes/timeouts and protection against SSRF.
@@ -59,8 +59,8 @@ rotating sessions, scoped app passwords, email recovery, schema-validated record
 implemented. See [the compatibility matrix](COMPATIBILITY.md) for exact coverage,
 verification evidence, and limits. Full PDS compatibility is not achieved yet.
 
-Next implementation series: extend Lexicon endpoint validation and administration,
-remote identity/PLC, then streaming sync and relay conformance. OAuth
+Next implementation series: PLC provisioning and identity/key lifecycle, migration,
+then extend Lexicon endpoint validation and administration, and relay conformance. OAuth
 and service proxying remain required before a full client integration can be
 claimed. Preserve atomic feature commits and test each protocol boundary.
 

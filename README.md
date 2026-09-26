@@ -105,9 +105,16 @@ such as `alice.example.com`. Configure wildcard DNS and HTTPS reverse proxying t
 this server, preserving the Host header. The service hostname is reserved.
 
 Accounts currently use **did:web**, tied to their hostname. The PDS publishes
-`/.well-known/did.json` and `/.well-known/atproto-did` for hosted accounts. Local
-handle resolution works; remote resolution, did:plc creation, and portable account
-migration are unfinished. The default localhost identities are development-only.
+`/.well-known/did.json` and `/.well-known/atproto-did` for hosted accounts. The
+identity endpoints resolve local and remote handles, `did:web`, and `did:plc`.
+Remote handles use DNS TXT first and HTTPS fallback. `resolveIdentity` and
+`refreshIdentity` return a bidirectionally verified handle, or `handle.invalid`.
+Set `PDS_PLC_URL` to an HTTPS directory origin (default `https://plc.directory`).
+Remote requests use public addresses, verified TLS, bounded bodies and deadlines;
+local identities resolve directly from PostgreSQL. Resolution is currently
+uncached, with at most 32 concurrent identity requests per server instance.
+did:plc creation and portable account migration remain unfinished. The default
+localhost identities are development-only.
 
 Set `PDS_REQUIRE_INVITE_CODE=true` to require an invitation during signup;
 `PDS_ENABLE_SIGNUP` must also be enabled. Set `PDS_ADMIN_PASSWORD` to a random
