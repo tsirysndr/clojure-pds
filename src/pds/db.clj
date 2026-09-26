@@ -56,7 +56,7 @@
       (catch Throwable t (.rollback conn) (throw t)))))
 
 (def migrations ["001-storage.sql" "002-email.sql" "003-sessions.sql" "004-repo-events.sql"
-                 "005-blob-storage.sql" "006-app-passwords.sql"])
+                 "005-blob-storage.sql" "006-app-passwords.sql" "007-account-lifecycle.sql"])
 
 (defn migrate! [ds]
   (transact!

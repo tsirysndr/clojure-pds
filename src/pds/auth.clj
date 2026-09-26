@@ -74,15 +74,20 @@
     (if-let [[_ token] (and value (re-matches #"(?i)Bearer ([A-Za-z0-9_.-]+)" value))]
       token (errors/raise! 401 "AuthenticationRequired" "A Bearer token is required"))))
 
-(defn authenticate! [conn settings request]
+(defn authenticate!
+  ([conn settings request] (authenticate! conn settings request {}))
+  ([conn settings request {:keys [allow-deactivated?]}]
   (let [claims (verify-jwt settings "at+jwt" (bearer request))
         session (first (db/query conn "SELECT a.*, s.app_password_id, p.privileged FROM sessions s JOIN accounts a ON a.did = s.did
                                         LEFT JOIN app_passwords p ON p.id = s.app_password_id
                                         WHERE s.id = ? AND s.did = ? AND NOT s.revoked
-                                          AND s.expires_at > now() AND a.status = 'active'"
+                                          AND s.expires_at > now() FOR UPDATE OF a"
                                  (UUID/fromString (get claims "sid")) (get claims "sub")))]
-    (when-not (and session (= (access-scope session) (get claims "scope"))) (invalid-token!))
-    (assoc session :session-id (UUID/fromString (get claims "sid")) :access-scope (access-scope session))))
+    (when-not (and session (= (access-scope session) (get claims "scope"))
+                   (or (= "active" (:status session))
+                       (and allow-deactivated? (= "deactivated" (:status session)) (nil? (:app_password_id session)))))
+      (invalid-token!))
+    (assoc session :session-id (UUID/fromString (get claims "sid")) :access-scope (access-scope session)))))
 
 (defn refresh! [ds settings request]
   (let [token (bearer request) claims (verify-jwt settings "refresh+jwt" token)
@@ -90,17 +95,22 @@
         (db/transact!
          ds
          (fn [conn]
+           ;; Lock account before sessions, matching authenticated mutations.
+           (db/query conn "SELECT did FROM accounts WHERE did = ? FOR UPDATE" (get claims "sub"))
            (let [session (first (db/query conn "SELECT s.*, a.handle, a.status FROM sessions s JOIN accounts a ON s.did = a.did
                                                 WHERE s.id = ? AND s.did = ? AND s.expires_at > now() FOR UPDATE OF s"
                                          (UUID/fromString (get claims "sid")) (get claims "sub")))
                  refresh (first (db/query conn "SELECT * FROM refresh_tokens WHERE token_hash = ? AND session_id = ? AND expires_at > now()"
                                          (crypto/digest-token token) (UUID/fromString (get claims "sid"))))]
              (cond
-               (or (nil? session) (:revoked session) (not= "active" (:status session)) (nil? refresh)) nil
+               (or (nil? session) (:revoked session) (nil? refresh)
+                   (not (or (= "active" (:status session))
+                            (and (= "deactivated" (:status session)) (nil? (:app_password_id session)))))) nil
                (:used refresh) (do (db/execute! conn "UPDATE sessions SET revoked = true WHERE id = ?" (:id session)) nil)
                :else (do
                        (db/execute! conn "UPDATE refresh_tokens SET used = true WHERE token_hash = ?" (crypto/digest-token token))
-                       (merge {:did (:did session) :handle (:handle session) :active true}
+                       (merge (cond-> {:did (:did session) :handle (:handle session) :active (= "active" (:status session))}
+                                (= "deactivated" (:status session)) (assoc :status "deactivated"))
                               (issue! conn settings (:did session) (:id session))))))))]
     ;; Throw outside the transaction: revocation on replay must commit.
     (or result (invalid-token!))))

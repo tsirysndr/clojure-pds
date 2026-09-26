@@ -6,6 +6,8 @@
             [pds.db :as db]
             [pds.email :as email]
             [pds.errors :as errors]
+            [pds.events :as events]
+            [pds.protocol.formats :as formats]
             [pds.protocol.syntax :as syntax]
             [pds.repo :as repo]
             [pds.request :as request])
@@ -27,8 +29,9 @@
     {:user-domain (str/lower-case domain) :public-url (str/replace url #"/$" "") :signup-enabled (= "true" signup)}))
 
 (defn public-account [account]
-  {:did (:did account) :handle (:handle account) :email (:email account)
-   :emailConfirmed (:email_confirmed account) :active (= "active" (:status account))})
+  (cond-> {:did (:did account) :handle (:handle account) :email (:email account)
+           :emailConfirmed (:email_confirmed account) :active (= "active" (:status account))}
+    (not= "active" (:status account)) (assoc :status (if (= "taken_down" (:status account)) "takendown" (:status account)))))
 (defn did-document [settings account public-key]
   {:id (:did account) :alsoKnownAs [(str "at://" (:handle account))]
    :verificationMethod [{:id (str (:did account) "#atproto") :type "Multikey"
@@ -39,6 +42,10 @@
   (or (first (db/query conn "SELECT * FROM accounts WHERE (did = ? OR handle = ?) AND status = 'active'"
                       identifier (str/lower-case (request/string! identifier "repo"))))
       (errors/raise! 400 "RepoNotFound" "Account was not found")))
+(defn resolve-identity [conn identifier]
+  (or (first (db/query conn "SELECT * FROM accounts WHERE (did = ? OR handle = ?) AND status <> 'deleted'"
+                      identifier (str/lower-case (request/string! identifier "identifier"))))
+      (errors/raise! 400 "AccountNotFound" "Identity was not found")))
 (defn password! [value]
   (when-not (and (string? value) (<= 8 (count value) 1024))
     (errors/raise! 400 "InvalidPassword" "Password must contain 8 to 1024 characters"))
@@ -96,7 +103,8 @@
                                      identifier identifier identifier))
              matches? (crypto/password-matches? password (or (:password_hash account) @dummy-password))
              app-password (when (and account (not matches?)) (app-passwords/find-password conn settings (:did account) password))]
-         (when-not (and account (or matches? app-password) (= "active" (:status account)))
+         (when-not (and account (or matches? app-password)
+                        (or (= "active" (:status account)) (and matches? (= "deactivated" (:status account)))))
            (errors/raise! 401 "AuthenticationRequired" "Invalid identifier or password"))
          (merge (public-account account) (auth/issue! conn settings (:did account) nil (:id app-password))))))))
 
@@ -109,7 +117,7 @@
   (let [address (str/lower-case (request/string! (get body "email") "email"))]
     (db/transact! ds
       (fn [conn]
-        (when-let [account (first (db/query conn "SELECT * FROM accounts WHERE email = ? AND status = 'active' FOR UPDATE" address))]
+        (when-let [account (first (db/query conn "SELECT * FROM accounts WHERE email = ? AND status IN ('active', 'deactivated') FOR UPDATE" address))]
           (issue-email! conn account "reset-password")))))
   ;; Same result for known and unknown email addresses.
   nil)
@@ -139,3 +147,17 @@
            (db/execute! conn "UPDATE accounts SET password_hash = ? WHERE did = ?" hash (:did row))
            (db/execute! conn "DELETE FROM app_passwords WHERE did = ?" (:did row))
            (db/execute! conn "UPDATE sessions SET revoked = true WHERE did = ?" (:did row))))))))
+
+(defn deactivate! [conn account body]
+  (auth/require-primary! account)
+  (let [delete-after (get body "deleteAfter")]
+    (when (and (contains? body "deleteAfter") (not (formats/datetime? delete-after)))
+      (errors/invalid! "deleteAfter must be a valid datetime"))
+    (db/execute! conn "UPDATE accounts SET status = 'deactivated', delete_after = ? WHERE did = ?" delete-after (:did account))
+    (when (not= "deactivated" (:status account)) (events/account! conn (:did account) "deactivated"))))
+
+(defn activate! [conn account]
+  (auth/require-primary! account)
+  (when (= "deactivated" (:status account))
+    (db/execute! conn "UPDATE accounts SET status = 'active', delete_after = NULL WHERE did = ?" (:did account))
+    (events/account! conn (:did account) "active")))

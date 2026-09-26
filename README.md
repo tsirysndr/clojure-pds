@@ -109,6 +109,12 @@ Passwords use Argon2id. Access tokens expire after 15 minutes; sessions have a
 reset revokes all sessions and app passwords. Email confirmation/reset tokens expire after 30 minutes
 and are single-use. Signup queues confirmation if email delivery is configured.
 
+`deactivateAccount` hides repository content and blocks writes. Primary-password
+login, refresh, `getSession`, and `activateAccount` remain available; app sessions
+cannot manage activation. Identity metadata remains available while deactivated.
+State changes enter the durable event log in commit order. Optional `deleteAfter`
+is retained as a recommendation; it does not automatically delete the account.
+
 Primary-password sessions can create named app passwords using
 `com.atproto.server.createAppPassword` (optional `privileged: true`). The secret is
 returned once and only a purpose-keyed digest is stored. Use it with

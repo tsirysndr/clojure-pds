@@ -15,6 +15,7 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | `com.atproto.server` | `createAccount` | New hosted did:web accounts; no PLC, imports, invites, or phone verification |
 | `com.atproto.server` | `createSession`, `getSession`, `refreshSession`, `deleteSession` | Primary/app-password sessions, JWT type separation, single-use refresh, revocation |
 | `com.atproto.server` | `createAppPassword`, `listAppPasswords`, `revokeAppPassword` | One-time secrets, scoped sessions, privileged flag, metadata-only listing, immediate revocation |
+| `com.atproto.server` | `deactivateAccount`, `activateAccount` | Primary-session lifecycle; inactive content is hidden, identity remains resolvable, durable account events |
 | `com.atproto.server` | `requestEmailConfirmation`, `confirmEmail` | Durable email outbox, expiring one-use confirmation |
 | `com.atproto.server` | `requestPasswordReset`, `resetPassword` | Same public result for known/unknown addresses; reset revokes sessions |
 | `com.atproto.identity` | `resolveHandle` | Hosted accounts only |
@@ -73,7 +74,7 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
    validation against pinned official endpoint lexicons.
 2. did:plc provisioning, remote DID/handle resolution with SSRF protection,
    handle updates, signing/rotation key lifecycle, and migration.
-3. Invites, account deletion/deactivation/reactivation, email
+3. Invites, account deletion, email
    updates, administrative APIs, and broader account recovery controls.
 4. OAuth authorization server: metadata, PAR, PKCE, DPoP, client metadata/consent,
    refresh behavior, permission sets and scopes.
