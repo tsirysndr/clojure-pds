@@ -21,7 +21,11 @@ unknown record bodies and future extension fields remain unchanged. Validation
 runs where handlers read input, preserving their authentication order. Binary
 uploads and subscription frames retain their separate bounded protocol readers.
 The Node conformance suite compares input acceptance with `@atproto/lexicon`
-0.7.14. Full response/event schema conformance remains separate work.
+0.7.14. The integration runner also observes actual PDS output, checking successful
+responses for every implemented endpoint, all five repository stream message types
+and error frames against the local and pinned upstream validators. The suite fails
+if any endpoint or message type lacks successful coverage. This verifies produced
+responses and framing, not all possible values or external client/relay behavior.
 
 Refresh deliberately with `python3 scripts/vendor-lexicons.py` after reviewing
 its pinned revision and roots. No schema downloads occur at server runtime.

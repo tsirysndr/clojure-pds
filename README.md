@@ -358,8 +358,10 @@ a duplicate. Receipts are retained indefinitely; plan retention for larger syste
   request bodies and query parameters are validated when handlers read them,
   preserving authentication order. Defaults, required/nullable fields, formats,
   array parameters and nested unions are checked; extension fields remain allowed.
-  Binary uploads retain their bounded readers. Full response/event schema
-  conformance and dynamic Lexicon resolution remain unfinished.
+  Binary uploads retain their bounded readers. Integration tests check actual
+  responses for every implemented endpoint and all repository event variants
+  against local and pinned upstream validators. Dynamic Lexicon resolution and
+  external client/relay conformance remain unfinished.
 - MSTs match upstream root fixtures but are rebuilt per commit, O(n). Large repos
   need incremental updates. Historical blocks are retained; exports contain the
   current graph. CAR imports are buffered and replace the full current record set;

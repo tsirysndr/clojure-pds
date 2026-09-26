@@ -133,8 +133,19 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
   Generated input cases are checked against pinned `@atproto/lexicon` 0.7.14;
   HTTP tests verify auth ordering, invalid optional fields, nullable compare-and-swap
   and that rejected requests leave accounts, sessions, records, blocks, events
-  and email unchanged. Binary inputs keep the existing bounded readers. Full
-  response/event schema conformance and dynamic Lexicon resolution remain pending.
+  and email unchanged. Binary inputs keep the existing bounded readers.
+- The integration runner observes actual successful PDS responses and outgoing
+  WebSocket frames without changing production handlers. Local schema checks and
+  the pinned upstream validator check JSON bodies, media types, empty procedure
+  responses, frame envelopes, native bytes/CID links, all five message variants
+  and error payloads. Required coverage includes all 58 implemented endpoints and
+  `#commit`, `#sync`, `#identity`, `#account`, `#info`, plus error frames. Negative
+  checker tests ensure missing fields, null optional values, wrong content types
+  and malformed envelopes fail. HTTP/WebSocket tests additionally connect a
+  reactivation sync checkpoint to its repository head/revision and verify session
+  revocation. Test fixtures stay local and temporary oracle files are deleted.
+  This is schema coverage of produced samples; it does not establish external
+  relay/client interoperability or exhaust all account states and value combinations.
 - P-256 and secp256k1 signatures enforce the 64-byte low-S format using Bouncy Castle;
   verification runs upstream signature vectors. Repositories currently sign with P-256.
 - MST height/prefix vectors and before/after commit root fixtures match upstream.
@@ -272,8 +283,8 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
 
 ## Remaining work for a full PDS
 
-1. Dynamic schema resolution, catalog expansion as endpoints are added, and full
-   response/event schema conformance against pinned official Lexicons.
+1. Dynamic schema resolution and expanded behavioral conformance/catalog coverage
+   as endpoints and protocol features are added.
 2. Bounded identity caching,
    signing/rotation key lifecycle, conflicted-operation administration, and migration.
 3. Remaining administrative APIs, record/blob takedowns, and broader account recovery controls.

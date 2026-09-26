@@ -60,8 +60,9 @@ implemented. See [the compatibility matrix](COMPATIBILITY.md) for exact coverage
 verification evidence, and limits. Full PDS compatibility is not achieved yet.
 
 Next implementation series: identity/key lifecycle, migration,
-then extend Lexicon response/event conformance and administration, and relay conformance.
-Implemented endpoints now have pinned JSON-input and query-parameter validation. OAuth
+then extend dynamic Lexicon resolution and administration, and relay conformance.
+Implemented endpoints now have pinned input validation and observed output/event
+schema checks with required endpoint/message coverage. OAuth
 and service proxying remain required before a full client integration can be
 claimed. Preserve atomic feature commits and test each protocol boundary.
 
