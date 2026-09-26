@@ -8,6 +8,7 @@
             [pds.errors :as errors]
             [pds.events :as events]
             [pds.invites :as invites]
+            [pds.oauth.permissions :as permissions]
             [pds.handle-registry :as handles]
             [pds.identity :as identity]
             [pds.plc :as plc]
@@ -44,6 +45,7 @@
   (cond-> {:did (:did account) :handle (:handle account) :email (:email account)
            :emailConfirmed (:email_confirmed account) :emailAuthFactor (boolean (:email_auth_factor account))
            :active (= "active" (:status account))}
+    (not (permissions/email? account)) (dissoc :email :emailConfirmed :emailAuthFactor)
     (not= "active" (:status account)) (assoc :status (if (= "taken_down" (:status account)) "takendown" (:status account)))))
 (defn did-document
   ([settings account public-key]

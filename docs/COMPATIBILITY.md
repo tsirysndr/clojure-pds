@@ -294,21 +294,21 @@ External service interoperability and OAuth remain pending.
 2. Bounded identity caching,
    signing/rotation key lifecycle, conflicted-operation administration, and migration.
 3. Remaining administrative APIs, record/blob takedowns, and broader account recovery controls.
-4. OAuth authorization server: discovery metadata, browser authorization/consent,
-   refresh behavior, permission sets and scopes. [DPoP verification and persistent
-   replay tracking, client metadata/JWKS, redirect validation, and confidential-client
-   authentication, durable PAR/PKCE and browser consent state](OAUTH.md)
-   are implemented as foundations; OAuth routes and
-   resource-server authentication are not enabled yet. Optional [TOTP verification and
-   recovery storage and WebAuthn passkey verification](ACCOUNT-SECURITY.md) are
-   implemented; browser enrollment/removal and passkey session integration remain pending.
+4. OAuth authorization server: discovery metadata, public revocation and session
+   management, granular permissions/sets and reference-client interoperability.
+   [DPoP replay protection, metadata/JWKS, confidential clients, PAR/PKCE, browser
+   signup/consent, token rotation and transitional resource authorization](OAUTH.md)
+   are implemented; browser authorization and token routes remain unmounted.
+   Optional [TOTP and passkeys](ACCOUNT-SECURITY.md) include browser enrollment,
+   removal and OAuth login integration; hardware/browser ceremony verification
+   and broader recovery controls remain pending.
 5. Relay notification and external relay interoperability,
    event retention/compaction, and remaining record/blob takedown semantics.
 6. Remaining migration private-state APIs, streaming proxy transfers, and external
    AppView/labeler/client/relay end-to-end tests.
 7. Streaming repository import, S3 orphan and historical-block reclamation,
    incremental MST mutation, streaming, quotas and bulk blob-backend migration.
-8. PostgreSQL connection pooling, account-specific abuse controls, metrics/logging, CORS,
+8. PostgreSQL connection pooling, account-specific abuse controls, metrics/logging,
    operational deployment/TLS and backup/restore drills. Push CI is configured;
    its first GitHub execution still requires a push.
 

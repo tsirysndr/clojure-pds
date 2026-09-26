@@ -5,6 +5,8 @@
             [pds.errors :as errors]
             [pds.identity :as identity]
             [pds.net :as net]
+            [pds.oauth.permissions :as permissions]
+            [pds.oauth.resource :as oauth-resource]
             [pds.protocol.syntax :as syntax]
             [pds.request :as request]
             [pds.service-auth :as service-auth]
@@ -77,7 +79,8 @@
   (let [config (merge (settings {}) supplied-settings)
         resolver (identity/resolver config) permits (Semaphore. (int (:proxy-max-concurrent config)))]
     (fn [r]
-      (let [uri (:uri r) method (when (str/starts-with? uri "/xrpc/") (subs uri 6))
+      (let [r (assoc r ::permissions/proxy true)
+            uri (:uri r) method (when (str/starts-with? uri "/xrpc/") (subs uri 6))
             target (or (get-in r [:headers "atproto-proxy"])
                        (if (or (= method "com.atproto.moderation.createReport") (some-> method (str/starts-with? "tools.ozone.")))
                          (:proxy-labeler-service config) (:proxy-appview-service config)))]
@@ -89,7 +92,7 @@
             ;; Clients may offer h2c while sending an ordinary HTTP/1.1 request.
             ;; Ignore transport upgrade offers; never forward hop-by-hop headers.
             (when (or (some #{"websocket"} (map str/trim (str/split (str/lower-case (get-in r [:headers "upgrade"] "")) #",")))
-                      (get-in r [:headers "dpop"]))
+                      (and (get-in r [:headers "dpop"]) (not (oauth-resource/dpop? r))))
               (errors/invalid! "WebSocket upgrades and DPoP passthrough are not supported"))
             (when-not (.tryAcquire permits) (errors/raise! 503 "ProxyBusy" "Proxy concurrency limit reached"))
             (try

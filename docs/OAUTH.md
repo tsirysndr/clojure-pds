@@ -1,9 +1,9 @@
 # OAuth implementation series
 
-OAuth login and OAuth-authorized XRPC access are not enabled yet. Legacy session
-endpoints retain their existing behavior. The following foundations are
-implemented for the authorization server and resource server; they do not by
-themselves establish OAuth compatibility.
+OAuth browser login and token endpoints are not published yet. DPoP resource
+authentication is connected to XRPC for grants issued by the tested authorization
+components. Legacy session endpoints retain their existing behavior. These
+components do not by themselves establish complete OAuth compatibility.
 
 ## Proof verification and durable replay protection
 
@@ -23,8 +23,8 @@ JSON depth and trailing-data checks are inherited from the bounded request parse
 
 HTTP target matching omits query/fragment components and normalizes scheme/host,
 default ports, unreserved percent escapes and dot segments. Repeated slashes,
-reserved escapes, path case and nondefault ports retain their meaning. Future
-HTTP adapters must construct the target from the configured public origin and
+reserved escapes, path case and nondefault ports retain their meaning.
+HTTP adapters construct the target from the configured public origin and
 request path, never an untrusted Host or forwarding header.
 
 Server nonces use purpose-separated HMAC-SHA-256 with the master key and public
@@ -155,7 +155,7 @@ declared by the client. The current validator supports `atproto` and the three
 transitional scopes; chat additionally requires `transition:generic`. Fine-grained
 permissions and permission sets remain pending and are rejected rather than
 authorized implicitly. Login hints and supported prompt values are preserved for
-the forthcoming authorization interface.
+the browser authorization interface.
 
 Migration 026 reserves each PKCE challenge across all clients for 24 hours. The
 reservation and PAR row commit atomically; failed inserts leave neither behind.
@@ -223,7 +223,7 @@ PostgreSQL tests cover cookie/interaction substitution, CSRF rotation, primary-o
 login, hints, email-factor delivery and transactional consumption, lifecycle changes,
 expiration, concurrent decisions, metadata changes and failed PAR/code inserts.
 The browser adapter and pages below implement this flow. OAuth routes remain
-unmounted while resource authorization and session management are completed.
+unmounted while session management and discovery are completed.
 
 ## Opaque access and refresh tokens
 
@@ -262,7 +262,7 @@ beyond the original authorization; omitting scope retains the original grant.
 `access-grant!` checks token/session expiry, revocation and account version inside
 a caller-owned transaction. It is a storage primitive, **not resource request
 authentication**: DPoP `ath`, client metadata revalidation and permission checks
-still belong in the forthcoming resource middleware. The standalone token HTTP
+are enforced by the resource middleware below. The standalone token HTTP
 adapter provides bounded form parsing, CORS, no-store responses and nonce headers;
 it remains unmounted until the full authorization/resource flow is ready.
 
@@ -318,15 +318,60 @@ The account-creation prompt follows the UX semantics in
 [Initiating User Registration](https://openid.net/specs/openid-connect-prompt-create-1_0.html).
 This does not add OpenID Connect or ID tokens to the AT Protocol OAuth profile.
 
+## DPoP resource authentication and transitional permissions
+
+`pds.oauth.resource/wrap` is mounted around the XRPC router. It requires the
+`DPoP` authorization scheme for OAuth access tokens; opaque tokens cannot be used
+as legacy Bearer credentials. Proofs must match the access-token hash (`ath`),
+session key, exact HTTP method and configured public origin plus request path.
+Host and forwarding headers cannot override that origin. OAuth responses from this
+middleware include a current server nonce and no-store headers; authentication failures use
+the DPoP `WWW-Authenticate` challenge. XRPC preflight responses allow Authorization,
+DPoP and supported proxy headers, without credentialed cookie CORS.
+
+The middleware validates the stored grant and proof before resolving fresh client
+metadata. It then rechecks the grant and commits proof consumption before calling
+the endpoint, so failed mutations or insufficient permissions never restore a used
+proof. Removing the bound client key or changing its authentication method
+permanently revokes the session. Metadata outages fail closed with 503. No database
+transaction spans metadata resolution.
+
+Protected endpoints reload the grant in their own transaction, retaining account
+and session locks through the mutation. Revocation, expiration or account security
+changes between middleware and endpoint execution are rejected. The internal
+verified context is bound to the request method/path and cannot be supplied through
+HTTP input. OAuth accounts have their own scope field and never gain a legacy
+primary-password or privileged app-password identity.
+
+The currently advertised scopes are enforced as follows:
+
+| Scope | Resource behavior |
+| --- | --- |
+| `atproto` | Identity-only grants may call `getSession`; no write or proxy authority |
+| `transition:generic` | Record writes, blob uploads, and permitted service-auth/proxy calls |
+| `transition:email` | Adds email, confirmation and email-factor fields to `getSession` |
+| `transition:chat.bsky` | Adds all `chat.bsky.*` service methods, together with `transition:generic` |
+
+Account management, identity changes and repository imports are not granted by
+these scopes. Unrecognized protected PDS endpoints require an explicit permission
+policy. Service tokens require an explicit method; methodless OAuth delegation
+would bypass the separate chat grant. Existing protected service-method restrictions
+remain enforced. Proxying rechecks authorization after remote DID resolution and
+forwards a newly signed service token, never the OAuth token, DPoP proof or cookies.
+
+PostgreSQL and real HTTP/TLS tests cover nonce retries, wrong key/token/method/URL,
+replay after errors, concurrent requests, email filtering, writes, blob upload,
+account restrictions, key removal/restoration, metadata outages, lifecycle races,
+expiration and service/proxy scope enforcement. Granular permissions and permission
+sets are still pending; they are not accepted by PAR yet.
+
 ## Remaining steps
 
-1. Integrate the completed browser adapter with resource authentication and mount
-   the OAuth endpoints together; verify full browser and reference-client flows.
-2. Public token/session revocation and management, plus bounded expired-grant cleanup.
-3. Resource-server authentication, permission scopes/sets, service proxy and
-   getServiceAuth authorization, nonce headers, and end-to-end reference clients.
-4. Mount the completed routes, publish authorization/resource discovery metadata,
-   and verify the full login/signup/refresh/resource flow with reference clients.
+1. Public token/session revocation and owner management, plus bounded expired-grant cleanup.
+2. Granular permission scopes and dynamically resolved permission sets, including
+   permission-aware consent and enforcement in each resource operation.
+3. Mount authorization endpoints and publish authorization/resource discovery
+   metadata, then verify full browser and reference-client flows.
 
 Sources: [AT Protocol OAuth profile](https://atproto.com/specs/oauth),
 [RFC 9449 DPoP](https://www.rfc-editor.org/rfc/rfc9449.html),

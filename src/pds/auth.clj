@@ -4,6 +4,7 @@
             [pds.crypto :as crypto]
             [pds.db :as db]
             [pds.errors :as errors]
+            [pds.oauth.resource :as oauth-resource]
             [pds.protocol.codec :as codec])
   (:import [java.security MessageDigest]
            [java.time Instant]
@@ -77,7 +78,9 @@
 (defn authenticate!
   ([conn settings request] (authenticate! conn settings request {}))
   ([conn settings request {:keys [allow-deactivated? allow-taken-down?]}]
-  (let [claims (verify-jwt settings "at+jwt" (bearer request))
+  (if (oauth-resource/dpop? request)
+    (oauth-resource/authenticate! conn request)
+    (let [claims (verify-jwt settings "at+jwt" (bearer request))
         session (first (db/query conn "SELECT a.*, s.app_password_id, p.privileged FROM sessions s JOIN accounts a ON a.did = s.did
                                         LEFT JOIN app_passwords p ON p.id = s.app_password_id
                                         WHERE s.id = ? AND s.did = ? AND NOT s.revoked
@@ -89,7 +92,7 @@
                             (or (and allow-deactivated? (= "deactivated" (:status session)))
                                 (and allow-taken-down? (= "taken_down" (:status session)))))))
       (invalid-token!))
-    (assoc session :session-id (UUID/fromString (get claims "sid")) :access-scope (access-scope session)))))
+    (assoc session :session-id (UUID/fromString (get claims "sid")) :access-scope (access-scope session))))))
 
 (defn refresh! [ds settings request]
   (let [token (bearer request) claims (verify-jwt settings "refresh+jwt" token)

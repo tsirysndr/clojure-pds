@@ -31,14 +31,16 @@
       :resolver (client/resolver {:oauth-client-fetch (fn [_ _] (metadata/response @doc))})})))
 (defn credentials [{:keys [client-key]}]
   (if client-key (auth/params client-key) {"client_id" metadata/client-id}))
-(defn approved [{:keys [settings key resolver] :as env}]
-  (let [verifier (crypto/token) params (merge (parameters/params) (credentials env) {"code_challenge" (crypto/digest-token verifier)})
+(defn approved
+  ([env] (approved env {}))
+  ([{:keys [settings key resolver] :as env} overrides]
+  (let [verifier (crypto/token) params (merge (parameters/params) overrides (credentials env) {"code_challenge" (crypto/digest-token verifier)})
         pushed (par/push! fixture/*ds* resolver settings params (par-test/dpop-proof key))
         started (interaction/start! fixture/*ds* metadata/client-id (:request_uri pushed))
         view (interaction/inspect! fixture/*ds* (:id started) (:browser started))
         logged-in (interaction/authenticate! fixture/*ds* settings (:id started) (:browser started) (:csrf view) owner/credentials)
         result (interaction/decide! fixture/*ds* resolver settings (:id started) (:browser started) (:csrf logged-in) true)]
-    {"grant_type" "authorization_code" "code" (get (owner/fields result) "code") "code_verifier" verifier "redirect_uri" metadata/redirect}))
+    {"grant_type" "authorization_code" "code" (get (owner/fields result) "code") "code_verifier" verifier "redirect_uri" metadata/redirect})))
 (defn issue [{:keys [settings key resolver] :as env} params]
   (tokens/issue! fixture/*ds* resolver settings (merge (credentials env) params) (proof/sign key (proof/claims))))
 (defn refresh-params [response] {"grant_type" "refresh_token" "refresh_token" (:refresh_token response)})

@@ -10,6 +10,8 @@
             [pds.firehose :as firehose]
             [pds.proxy :as proxy]
             [pds.security.web :as security-web]
+            [pds.oauth.client :as oauth-client]
+            [pds.oauth.resource :as oauth-resource]
             [pds.rate-limit :as rate-limit]))
 
 (def version "0.1.0-dev")
@@ -20,6 +22,7 @@
   (let [banner (slurp (io/resource "pds/banner.txt") :encoding "UTF-8")]
     (rate-limit/wrap
      (security-web/wrap
+      (oauth-resource/wrap
       (xrpc/router
       (merge (when ds (server-api/routes ds config))
              (when ds (identity-api/routes ds config))
@@ -42,5 +45,6 @@
                                       :inviteCodeRequired (boolean (:invite-required config))
                                       :blobUploadLimit blob-api/max-size
                                       :availableUserDomains (if (and ds (:signup-enabled config)) [(str "." (:user-domain config))] [])}))}})
-      (if ds (proxy/handler ds config) (fn [_] (xrpc/error-response 404 "MethodNotImplemented" "Endpoint is not implemented")))) ds config)
+      (if ds (proxy/handler ds config) (fn [_] (xrpc/error-response 404 "MethodNotImplemented" "Endpoint is not implemented"))))
+      ds config (when ds (oauth-client/resolver config))) ds config)
      (or (:rate-limiter config) (rate-limit/memory-limiter))))))

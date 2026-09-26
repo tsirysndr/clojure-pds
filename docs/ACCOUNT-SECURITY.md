@@ -149,8 +149,8 @@ No CDN or React runtime is required. Visual references:
 
 ## Remaining work
 
-- Mounting the implemented OAuth authorization/consent adapter with complete
-  resource authentication; full browser ceremony tests.
+- Mounting the implemented OAuth authorization/consent adapter with discovery and
+  session management; full browser ceremony tests.
 - Username-less discoverable login, QR provisioning, and recovery when all
   authenticators and recovery codes are lost.
 

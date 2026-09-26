@@ -6,6 +6,7 @@
             [pds.db :as db]
             [pds.errors :as errors]
             [pds.identity :as identity]
+            [pds.oauth.permissions :as permissions]
             [pds.protocol.codec :as codec]
             [pds.protocol.syntax :as syntax]
             [pds.request :as request])
@@ -65,11 +66,13 @@
       {:audience audience :method method :expires expires})))
 
 (defn authorize! [account method]
+  (when (:oauth-scope account) (permissions/rpc! account method))
   (let [method (some-> method str/lower-case)]
     (when (and (= "taken_down" (:status account)) (not= "com.atproto.server.createaccount" method))
       (errors/raise! 400 "InvalidToken" "Taken-down accounts may only authorize account migration"))
     (when (protected-methods method) (errors/invalid! "This method cannot use service authentication"))
     (when (and (privileged-methods method)
+               (nil? (:oauth-scope account))
                (not (#{"com.atproto.access" "com.atproto.appPassPrivileged"} (:access-scope account))))
       (errors/invalid! "A primary or privileged app-password session is required for this method"))))
 
