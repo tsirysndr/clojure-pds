@@ -161,3 +161,30 @@
   (when (= "deactivated" (:status account))
     (db/execute! conn "UPDATE accounts SET status = 'active', delete_after = NULL WHERE did = ?" (:did account))
     (events/account! conn (:did account) "active")))
+
+(defn request-deletion! [conn settings account]
+  (auth/require-primary! account)
+  (require-email! settings)
+  (issue-email! conn account "delete-account"))
+
+(defn delete! [ds body]
+  ;; The upstream endpoint authenticates with both primary password and a
+  ;; one-use email token; a Bearer session is not required for the final step.
+  (let [did (request/string! (get body "did") "did")]
+    (db/transact! ds
+      (fn [conn]
+        (let [account (first (db/query conn "SELECT * FROM accounts WHERE did = ? AND status <> 'deleted' FOR UPDATE" did))]
+          (when-not (and account (crypto/password-matches? (get body "password") (:password_hash account)))
+            (errors/raise! 401 "AuthenticationRequired" "Invalid DID or password"))
+          (consume-token! conn "delete-account" (get body "token") did (:email account))
+          (db/execute! conn "INSERT INTO blob_delete_jobs(object_bucket, object_key)
+                            SELECT object_bucket, object_key FROM blobs WHERE did = ? AND storage_backend = 's3'
+                            ON CONFLICT (object_bucket, object_key) DO NOTHING" did)
+          (doseq [table ["sessions" "app_passwords" "account_tokens" "blobs" "repositories"]]
+            (db/execute! conn (str "DELETE FROM " table " WHERE did = ?") did))
+          (db/execute! conn "DELETE FROM email_outbox WHERE payload->>'to' = ?" (:email account))
+          (db/execute! conn "DELETE FROM repo_events WHERE did = ? AND event_type = 'commit'" did)
+          ;; Reserve the DID/handle permanently while erasing credentials/email.
+          (db/execute! conn "UPDATE accounts SET status = 'deleted', email = NULL, password_hash = NULL,
+                              email_confirmed = false, delete_after = NULL WHERE did = ?" did)
+          (events/account! conn did "deleted"))))))

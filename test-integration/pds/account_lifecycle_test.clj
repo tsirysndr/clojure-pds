@@ -3,6 +3,8 @@
             [pds.accounts :as accounts]
             [pds.app :as app]
             [pds.auth :as auth]
+            [pds.blob-cleanup :as blob-cleanup]
+            [pds.blobs :as blobs]
             [pds.db :as db]
             [pds.db-test :as fixture]
             [pds.http :as http]
@@ -85,3 +87,52 @@
               "A record commit cannot appear after the deactivation event"))
         (db/transact! fixture/*ds*
           #(accounts/activate! % (auth/authenticate! % settings request {:allow-deactivated? true})))))))
+
+(deftest email-backed-deletion-and-durable-object-cleanup
+  (let [settings (api/settings)
+        alice (accounts/create! fixture/*ds* settings {"handle" "alice.example.com" "email" "alice@example.com" "password" "test-password"})
+        bob (accounts/create! fixture/*ds* settings {"handle" "bob.example.com" "email" "bob@example.com" "password" "test-password"})
+        did (:did alice) access (:accessJwt alice) data (byte-array [1 2 3])
+        store (reify blobs/ObjectStore
+                (put-object! [_ _ _ _ _] {:object-key "alice/blob" :object-bucket "test-bucket"})
+                (get-object! [_ _ _ _] data))
+        stored (db/transact! fixture/*ds* #(blobs/store! % {:blob-store store} did data "image/png"))
+        _ (db/transact! fixture/*ds* #(blobs/store! % {} (:did bob) data "image/png"))
+        server (http/start! settings (app/handler settings fixture/*ds*)) port (:port server)]
+    (try
+      (with-open [client (HttpClient/newHttpClient)]
+        (let [call #(api/xrpc client port %1 %2 %3 %4)
+              app-password (get-in (call "POST" "com.atproto.server.createAppPassword" {"name" "app"} access) [:body "password"])
+              app-login (call "POST" "com.atproto.server.createSession" {"identifier" did "password" app-password} nil)]
+          (is (= 403 (:status (call "POST" "com.atproto.server.requestAccountDelete" nil (get-in app-login [:body "accessJwt"])))))
+          (is (= 200 (:status (call "POST" "com.atproto.server.deactivateAccount" {} access))))
+          (is (= 200 (:status (call "POST" "com.atproto.server.requestAccountDelete" nil access))))
+          (let [token (api/email-token "Confirm account deletion")
+                body {"did" did "password" "test-password" "token" token}]
+            (is (= 401 (:status (call "POST" "com.atproto.server.deleteAccount" (assoc body "password" app-password) nil))))
+            (is (= 400 (:status (call "POST" "com.atproto.server.deleteAccount" (assoc body "did" (:did bob)) nil))))
+            (is (= 400 (:status (call "POST" "com.atproto.server.deleteAccount" (assoc body "token" "invalid") nil))))
+            (is (= 200 (:status (call "POST" "com.atproto.server.deleteAccount" body nil))))
+            (is (= 401 (:status (call "POST" "com.atproto.server.deleteAccount" body nil)))))
+          (is (= "deleted" (get-in (call "GET" (str "com.atproto.sync.getRepoStatus?did=" did) nil nil) [:body "status"])))
+          (is (= 401 (:status (call "GET" "com.atproto.server.getSession" nil access))))
+          (is (= 401 (:status (call "POST" "com.atproto.server.refreshSession" nil (:refreshJwt alice)))))
+          (is (= 401 (:status (call "POST" "com.atproto.server.createSession" {"identifier" did "password" "test-password"} nil))))
+          (is (= 400 (:status (call "GET" (str "com.atproto.sync.getBlob?did=" did "&cid=" (:cid stored)) nil nil))))
+          (is (= 200 (:status (call "GET" (str "com.atproto.sync.getBlob?did=" (:did bob) "&cid=" (:cid stored)) nil nil))))
+          (with-open [conn (db/connection fixture/*ds*)]
+            (let [account (first (db/query conn "SELECT * FROM accounts WHERE did = ?" did))]
+              (is (= "deleted" (:status account)))
+              (is (nil? (:email account))) (is (nil? (:password_hash account))))
+            (doseq [table ["repositories" "records" "blobs" "sessions" "app_passwords" "account_tokens"]]
+              (is (empty? (db/query conn (str "SELECT * FROM " table " WHERE did = ?") did))))
+            (is (= 1 (:count (first (db/query conn "SELECT count(*) AS count FROM blob_delete_jobs"))))))
+          (let [broken (reify blobs/ObjectDeletion (delete-object! [_ _ _] (throw (ex-info "private provider details" {}))))]
+            (is (= :retry (blob-cleanup/delete-one! fixture/*ds* broken))))
+          (db/transact! fixture/*ds* #(db/execute! % "UPDATE blob_delete_jobs SET available_at = now()"))
+          (let [deleted (atom []) healthy (reify blobs/ObjectDeletion (delete-object! [_ bucket key] (swap! deleted conj [bucket key])))
+                workers [(future (blob-cleanup/delete-one! fixture/*ds* healthy)) (future (blob-cleanup/delete-one! fixture/*ds* healthy))]]
+            (is (= #{:deleted nil} (set (mapv deref workers))))
+            (is (= [["test-bucket" "alice/blob"]] @deleted)))
+          (with-open [conn (db/connection fixture/*ds*)] (is (empty? (db/query conn "SELECT * FROM blob_delete_jobs"))))))
+      (finally ((:stop! server))))))

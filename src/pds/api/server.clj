@@ -30,6 +30,10 @@
    (empty-route (authenticated ds settings {:allow-deactivated? true} (fn [conn account r] (accounts/deactivate! conn account (request/json-body r)))))
    "/xrpc/com.atproto.server.activateAccount"
    (empty-route (authenticated ds settings {:allow-deactivated? true} (fn [conn account _] (accounts/activate! conn account))))
+   "/xrpc/com.atproto.server.requestAccountDelete"
+   (empty-route (authenticated ds settings {:allow-deactivated? true} (fn [conn account _] (accounts/request-deletion! conn settings account))))
+   "/xrpc/com.atproto.server.deleteAccount"
+   (empty-route #(accounts/delete! ds (request/json-body %)))
    "/xrpc/com.atproto.server.createAppPassword"
    (json-route :post (authenticated ds settings (fn [conn account r] (app-passwords/create! conn settings account (request/json-body r)))))
    "/xrpc/com.atproto.server.listAppPasswords"

@@ -115,6 +115,13 @@ cannot manage activation. Identity metadata remains available while deactivated.
 State changes enter the durable event log in commit order. Optional `deleteAfter`
 is retained as a recommendation; it does not automatically delete the account.
 
+`requestAccountDelete` sends a one-use deletion token. `deleteAccount` accepts the
+DID, primary password and token, removes sessions and hosted content metadata,
+erases email/password data, and records a `deleted` tombstone. The DID/handle stay
+reserved. PostgreSQL blob bytes are removed transactionally; S3 bytes use a durable
+retry queue. Shared/historical repository-block reclamation is tracked separately
+on the storage roadmap.
+
 Primary-password sessions can create named app passwords using
 `com.atproto.server.createAppPassword` (optional `privileged: true`). The secret is
 returned once and only a purpose-keyed digest is stored. Use it with

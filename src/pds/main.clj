@@ -2,6 +2,7 @@
   (:require [pds.app :as app]
             [pds.accounts :as accounts]
             [pds.auth :as auth]
+            [pds.blob-cleanup :as blob-cleanup]
             [pds.config :as config]
             [pds.db :as db]
             [pds.email :as email]
@@ -29,14 +30,17 @@
                                    (finally (when (instance? java.io.Closeable limiter)
                                               (.close ^java.io.Closeable limiter)))))]
     (try
-      (let [stop-email! (email/start! ds email-config)]
+      (let [stop-email! (email/start! ds email-config)
+            stop-cleanup! (try (blob-cleanup/start! ds blob-store)
+                               (catch Throwable t (stop-email!) (throw t)))]
         (try
           (let [{:keys [port stop!]} (http/start! settings (app/handler settings ds))
                 stopped (promise)
                 once (atom false)
                 stop-all! (fn [] (when (compare-and-set! once false true)
                                    (try (stop!)
-                                        (finally (try (stop-email!) (finally (stop-dependencies!)))))))
+                                        (finally (try (stop-email!)
+                                                      (finally (try (stop-cleanup!) (finally (stop-dependencies!)))))))))
                 hook (Thread. ^Runnable (fn [] (try (stop-all!) (finally (deliver stopped true)))))
                 runtime (Runtime/getRuntime)]
             (try
@@ -46,5 +50,5 @@
               (finally
                 (stop-all!)
                 (try (.removeShutdownHook runtime hook) (catch IllegalStateException _)))))
-          (catch Throwable e (stop-email!) (throw e))))
+          (catch Throwable e (try (stop-email!) (finally (stop-cleanup!))) (throw e))))
       (finally (stop-dependencies!)))))

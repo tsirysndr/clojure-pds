@@ -14,7 +14,7 @@
            [java.net.http HttpClient HttpRequest HttpRequest$BodyPublishers HttpResponse$BodyHandlers]
            [java.util UUID]
            [software.amazon.awssdk.services.s3 S3Client]
-           [software.amazon.awssdk.services.s3.model CreateBucketRequest DeleteObjectRequest]))
+           [software.amazon.awssdk.services.s3.model CreateBucketRequest]))
 
 (use-fixtures :each fixture/isolated-database)
 
@@ -59,8 +59,7 @@
                   ;; Reopen the S3 client to verify reads use persisted locators.
                   (with-open [reopened (s3/open-store (assoc config :prefix "changed-prefix"))]
                     (is (= (vec data) (vec (:content (blobs/read! conn {:blob-store reopened} (:did alice) cid))))))
-                  (.deleteObject ^S3Client (:client store) ^DeleteObjectRequest
-                                 (-> (DeleteObjectRequest/builder) (.bucket bucket) (.key (:object_key row)) .build))))
+                  (blobs/delete-object! store bucket (:object_key row))))
               (let [missing (api/xrpc client port "GET" get-path nil nil)]
                 (is (= 503 (:status missing)))
                 (is (= "BlobUnavailable" (get-in missing [:body "error"]))))

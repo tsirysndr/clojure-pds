@@ -102,11 +102,12 @@
    "/xrpc/com.atproto.sync.getRepoStatus"
    (query-route ds (fn [conn params]
                     (let [did (get params "did")
-                          account (first (db/query conn "SELECT a.status, r.rev FROM accounts a JOIN repositories r ON a.did = r.did WHERE a.did = ?"
+                          account (first (db/query conn "SELECT a.status, r.rev FROM accounts a LEFT JOIN repositories r ON a.did = r.did WHERE a.did = ?"
                                                    (request/string! did "did")))]
                       (when-not account (errors/raise! 400 "RepoNotFound" "Repository was not found"))
-                      (cond-> {:did did :active (= "active" (:status account)) :rev (:rev account)}
-                        (not= "active" (:status account)) (assoc :status (if (= "taken_down" (:status account)) "takendown" "deactivated"))))))
+                      (cond-> {:did did :active (= "active" (:status account))}
+                        (:rev account) (assoc :rev (:rev account))
+                        (not= "active" (:status account)) (assoc :status (if (= "taken_down" (:status account)) "takendown" (:status account)))))))
    "/xrpc/com.atproto.sync.listRepos"
    (query-route ds (fn [conn params]
                     (let [limit (request/limit! params 500 1000) cursor (get params "cursor")

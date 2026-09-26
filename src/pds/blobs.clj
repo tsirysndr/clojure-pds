@@ -11,6 +11,9 @@
   (get-object! [store bucket key size]
     "Read at most size+1 bytes. The caller verifies length and content hash."))
 
+(defprotocol ObjectDeletion
+  (delete-object! [store bucket key] "Idempotently remove an object."))
+
 (defn unavailable! [] (errors/raise! 503 "BlobUnavailable" "Blob storage is unavailable"))
 
 (defn metadata [conn did cid]

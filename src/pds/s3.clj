@@ -12,7 +12,7 @@
            [software.amazon.awssdk.http.urlconnection UrlConnectionHttpClient]
            [software.amazon.awssdk.regions Region]
            [software.amazon.awssdk.services.s3 S3Client S3ClientBuilder S3Configuration]
-           [software.amazon.awssdk.services.s3.model GetObjectRequest PutObjectRequest]))
+           [software.amazon.awssdk.services.s3.model GetObjectRequest PutObjectRequest DeleteObjectRequest]))
 
 (defn- config-error! [message] (throw (ex-info message {})))
 
@@ -73,6 +73,9 @@
         (let [data (.readNBytes stream (int (inc size)))]
           (when (> (alength data) size) (.abort stream))
           data))))
+  blobs/ObjectDeletion
+  (delete-object! [_ bucket key]
+    (.deleteObject client ^DeleteObjectRequest (-> (DeleteObjectRequest/builder) (.bucket bucket) (.key key) .build)))
   java.io.Closeable
   (close [_]
     (try (.close client)
