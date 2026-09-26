@@ -1,9 +1,9 @@
 # Optional account authentication
 
-Authenticator-app TOTP and passkey verification/persistence are implemented.
-Browser management/enrollment pages and passkey session integration are still being built. There is no public
-TOTP enrollment endpoint yet; internal enrollment functions must not be mounted
-without recent primary authentication and same-origin/CSRF protection.
+Optional authenticator-app TOTP and passkeys can be managed at `/account`.
+The login, verification and settings screens use locally compiled Tailwind CSS,
+with the compact card layout of the selfhosted.social and Witchcraft PDS OAuth
+screens, a purple `#8338EC` accent, and system light/dark colors.
 
 ## Authenticator applications
 
@@ -98,15 +98,57 @@ hardware passkey integration. Integration tests now require Node (CI pins Node 2
 Management functions must be called behind recent primary or user-verified passkey
 authentication, any configured additional factor, and browser CSRF checks. The
 assertion verifier returns a principal; it creates no session itself and does not
-bypass an enabled TOTP/email factor. Those browser/session controllers are next.
+bypass an enabled TOTP/email factor. The browser controller consumes that principal
+and establishes the session in the same transaction.
+
+## Browser security settings
+
+Migration 030 adds persistent, hashed browser sessions. `/account/session` issues
+an anonymous cookie; successful primary authentication rotates both cookie and
+CSRF token. An enabled TOTP/email factor must be verified before settings become
+available, including after passkey authentication. Settings sessions expire after
+five minutes; security mutations retain that original deadline and revoke other
+browser sessions through the account security version. App passwords cannot be
+used for owner authentication.
+
+HTTPS uses a `__Host-` cookie with Secure, HttpOnly and SameSite=Lax. Local HTTP
+uses a separate development cookie name. Every mutation requires the configured
+public origin, JSON, and a session-bound CSRF token. Responses disallow caching,
+framing and external scripts/styles. Private state is never saved in localStorage.
+Invalid TOTP attempts and invalid passkey proofs commit their attempt/replay state.
+
+The browser supports password and identifier-first passkey login, passkey naming,
+registration and removal, manual authenticator setup, confirmation, one-time
+recovery-code display, authenticator removal and switching away from email 2FA.
+Registration requests user verification and discoverable credentials. Password
+visibility is optional; password/code fields are cleared after submission.
+
+PostgreSQL tests cover browser session rotation, expiry, security-version
+revocation, CSRF/origin and cookie enforcement, enrollment, recovery-code login,
+passkey login with an additional factor, and durable failed-attempt limits.
+The login has also been visually compared with the deployed reference screen.
+Real hardware ceremonies and complete browser automation remain to be verified.
+
+## Building the interface
+
+The server serves committed assets; Node is only needed to rebuild CSS:
+
+```sh
+npm ci --prefix scripts/ui --ignore-scripts
+npm run --prefix scripts/ui build
+```
+
+Edit `resources/security/index.html`, `resources/security/app.js` and
+`scripts/ui/input.css`, then commit the generated `resources/security/style.css`.
+No CDN or React runtime is required. Visual references:
+[Witchcraft sign-in](https://pds.witchcraft.systems/account/sign-in),
+[selfhosted.social sign-in](https://selfhosted.social/account/sign-in).
 
 ## Remaining work
 
-- Browser settings with recent primary authentication, CSRF protection, TOTP
-  provisioning, recovery-code display and secure removal for both methods.
-- Passkey/OAuth/management integration, full browser ceremony tests and recovery
-  behavior when authenticators are lost; username-less discoverable login.
-  These browser-facing features are not enabled yet.
+- OAuth authorization/consent integration and complete browser ceremony tests.
+- Username-less discoverable login, QR provisioning, and recovery when all
+  authenticators and recovery codes are lost.
 
 References: [RFC 6238](https://www.rfc-editor.org/rfc/rfc6238.html),
 [RFC 4226](https://www.rfc-editor.org/rfc/rfc4226.html),

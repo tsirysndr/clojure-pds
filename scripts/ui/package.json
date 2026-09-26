@@ -1,0 +1,7 @@
+{
+  "name": "pds-account-ui",
+  "private": true,
+  "type": "module",
+  "scripts": {"build": "tailwindcss -i input.css -o ../../resources/security/style.css --minify"},
+  "devDependencies": {"@tailwindcss/cli": "4.3.3", "tailwindcss": "4.3.3"}
+}

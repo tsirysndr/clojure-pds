@@ -60,7 +60,11 @@ creates and drops its own randomly named schema; the role needs schema privilege
 
 Integration tests require Node (CI pins Node 24) for independent passkey signatures.
 See [account authentication progress](docs/ACCOUNT-SECURITY.md) for TOTP/passkey
-coverage and remaining browser integration.
+coverage and remaining OAuth integration. Visit `/account` to sign in and manage
+optional passkeys and Google Authenticator-compatible two-factor authentication.
+The Tailwind interface uses the selfhosted/Witchcraft PDS card style with purple
+accents and system light/dark themes; its stylesheet is bundled locally. See the
+[UI build instructions](docs/ACCOUNT-SECURITY.md#building-the-interface) when editing it.
 
 The test runner discovers `*_test.clj` files using `clojure.test`. Dependencies and
 upstream conformance fixtures are pinned. `:repl` includes source and test paths;
