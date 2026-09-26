@@ -1,6 +1,6 @@
 # PDS compatibility checkpoint
 
-Last verified: 2026-09-26. This is a development implementation, not a complete
+Last verified: 2026-09-27. This is a development implementation, not a complete
 AT Protocol PDS. Passing internal/fixture tests does not establish full network
 interoperability. Run `bash scripts/test-redis.sh --with-s3` for the complete
 Clojure suite and `node --test examples/email-worker/handler.test.mjs` for the Worker
@@ -18,7 +18,7 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | `com.atproto.admin` | `disableInviteCodes`, `disableAccountInvites`, `enableAccountInvites` | Optional Basic admin credentials; code invalidation and future-grant policy |
 | `com.atproto.admin` | `getAccountInfo`, `getSubjectStatus`, `updateSubjectStatus` | Private account inspection and repoRef account takedowns; activation state preserved; record/blob subjects pending |
 | `com.atproto.server` | `createSession`, `getSession`, `refreshSession`, `deleteSession` | Primary/app-password sessions, JWT type separation, single-use refresh, revocation |
-| `com.atproto.server` | `getServiceAuth` | Repository-key JWTs, exact audience/service reference, method and expiration checks, primary/app-password privilege policy; authenticated proxying pending |
+| `com.atproto.server` | `getServiceAuth` | Repository-key JWTs, exact audience/service reference, method and expiration checks, primary/app-password privilege policy; shared proxy privilege policy |
 | `com.atproto.server` | `createAppPassword`, `listAppPasswords`, `revokeAppPassword` | One-time secrets, scoped sessions, privileged flag, metadata-only listing, immediate revocation |
 | `com.atproto.server` | `deactivateAccount`, `activateAccount` | Primary-session lifecycle; private inactive content; prepared destinations require repository import and freshly verified remote credentials; durable identity/account/sync publication |
 | `com.atproto.server` | `checkAccountStatus` | Account-scoped activation, repository and blob counters; fresh DID credential validation, inactive primary sessions, no-store responses |
@@ -42,6 +42,12 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 
 Additional routes: plain-text banner at `/`, liveness at `/xrpc/_health`, and hosted
 identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
+
+Unknown XRPC routes also support [authenticated service proxying](PROXY.md) to
+explicit DID service references or configured AppView/labeler defaults. Local
+routes retain precedence. Real HTTP/TLS fixtures verify authentication, scoped
+upstream JWT signatures, raw forwarding, network boundaries and failure handling.
+External service interoperability and OAuth remain pending.
 
 ## Protocol and storage evidence
 
@@ -292,8 +298,8 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
    refresh behavior, permission sets and scopes.
 5. Relay notification and external relay interoperability,
    event retention/compaction, and remaining record/blob takedown semantics.
-6. Migration status/private-state APIs, authenticated proxying to AppViews/labelers, and external
-   client/relay end-to-end tests.
+6. Remaining migration private-state APIs, streaming proxy transfers, and external
+   AppView/labeler/client/relay end-to-end tests.
 7. Streaming repository import, S3 orphan and historical-block reclamation,
    incremental MST mutation, streaming, quotas and bulk blob-backend migration.
 8. PostgreSQL connection pooling, account-specific abuse controls, metrics/logging, CORS,

@@ -16,7 +16,7 @@
            [org.bouncycastle.util BigIntegers]))
 
 ;; Match the reference PDS's case-insensitive policy at the pinned revision in
-;; docs/COMPATIBILITY.md. Keep this policy shared with future proxy authorization.
+;; docs/COMPATIBILITY.md. This policy is shared with proxy authorization.
 (def protected-methods
   (set (map str/lower-case
             ["com.atproto.admin.sendEmail" "com.atproto.identity.requestPlcOperationSignature"

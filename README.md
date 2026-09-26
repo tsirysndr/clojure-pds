@@ -258,7 +258,7 @@ with 30 seconds of allowance for a future issue timestamp. Expiration is recheck
 after resolution and before consuming the proof. PostgreSQL stores a hash of each
 used nonce with its issuer, atomically with the protected mutation; rolled-back
 mutations retain retryability. Cleanup removes at most 1,000 expired entries per
-successful consumption. Proxy integration remains pending. Other existing HTTP
+successful consumption. Authenticated service proxying is described below. Other existing HTTP
 endpoints retain their current session authentication.
 
 Set `PDS_REQUIRE_INVITE_CODE=true` to require an invitation during signup;
@@ -317,8 +317,18 @@ returned once and only a purpose-keyed digest is stored. Use it with
 more passwords. `listAppPasswords` returns metadata only; `revokeAppPassword`
 deletes dependent access/refresh sessions immediately. These two endpoints also
 allow app sessions for their own account, matching upstream behavior. There is a
-limit of 100 app passwords per account. Privileged scope is preserved, but chat
-and service proxy endpoints are not implemented yet.
+limit of 100 app passwords per account. Privileged scope authorizes proxied chat
+methods through the shared service-authentication policy.
+
+## Service proxy
+
+Authenticated clients can send `atproto-proxy: <DID>#<service>` on unimplemented
+XRPC routes to select an external service. Configure `PDS_APPVIEW_SERVICE` and
+`PDS_LABELER_SERVICE` for default destinations. Each request receives a fresh,
+method-bound repository-key JWT; local session credentials stay on this PDS.
+GET, HEAD and bounded POST transfers are supported with guarded HTTPS, fresh
+DID resolution, concurrency limits and existing memory/Redis rate limits. See
+[proxy configuration and behavior](docs/PROXY.md) for limits and verification.
 
 ## Cloudflare Worker email
 
@@ -394,7 +404,7 @@ a duplicate. Receipts are retained indefinitely; plan retention for larger syste
 - Rate limits default to bounded, per-process memory with 120 requests/IP/minute.
   [Optional Redis](docs/REDIS.md) shares counters across instances. Untrusted
   forwarding headers are ignored; reverse proxies need an appropriate limit policy.
-- OAuth, relay integration, service proxying, and production
+- OAuth, external service/relay interoperability, and production
   operations remain on the roadmap. A reference Bluesky client/relay has not yet
   been used for end-to-end conformance testing.
 

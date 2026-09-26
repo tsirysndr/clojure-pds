@@ -8,6 +8,7 @@
             [pds.api.blob :as blob-api]
             [pds.api.sync :as sync-api]
             [pds.firehose :as firehose]
+            [pds.proxy :as proxy]
             [pds.rate-limit :as rate-limit]))
 
 (def version "0.1.0-dev")
@@ -38,5 +39,6 @@
                   (xrpc/response 200 {:did (:service-did config)
                                       :inviteCodeRequired (boolean (:invite-required config))
                                       :blobUploadLimit blob-api/max-size
-                                      :availableUserDomains (if (and ds (:signup-enabled config)) [(str "." (:user-domain config))] [])}))}}))
+                                      :availableUserDomains (if (and ds (:signup-enabled config)) [(str "." (:user-domain config))] [])}))}})
+      (if ds (proxy/handler ds config) (fn [_] (xrpc/error-response 404 "MethodNotImplemented" "Endpoint is not implemented"))))
      (or (:rate-limiter config) (rate-limit/memory-limiter))))))

@@ -41,7 +41,7 @@ runnable and update this document as features land.
 9. **Sync and federation (queries, proofs and WebSocket firehose implemented; external relay pending):** durable ordered event log, sync queries, WebSocket
    subscribeRepos with replay/backpressure, relay notification and takedowns.
    Acceptance: relay consumes commits and reconnects without losing events.
-10. **Service integration and migration (service tokens/replay protection, destination preparation, data transfer and verified activation implemented):** authenticated service proxy, service
+10. **Service integration and migration (authenticated buffered proxy, service tokens/replay protection, destination preparation, data transfer and verified activation implemented):** authenticated service proxy, service
     auth tokens, account migration/import/export and PLC operations.
     Acceptance: an external client reads and writes through this PDS and an
     account migrates between this implementation and a reference PDS.
@@ -62,9 +62,9 @@ verification evidence, and limits. Full PDS compatibility is not achieved yet.
 Next implementation series: identity/key lifecycle, migration,
 then extend dynamic Lexicon resolution and administration, and relay conformance.
 Implemented endpoints now have pinned input validation and observed output/event
-schema checks with required endpoint/message coverage. OAuth
-and service proxying remain required before a full client integration can be
-claimed. Preserve atomic feature commits and test each protocol boundary.
+schema checks with required endpoint/message coverage. Authenticated buffered
+service proxying is implemented; OAuth and external service interoperability
+remain required before a full client integration can be claimed. Preserve atomic feature commits and test each protocol boundary.
 
 - Plain Clojure namespaces, explicit dependencies, and pure functions for protocol
   logic; isolate network, clock, randomness and persistence at the edges.

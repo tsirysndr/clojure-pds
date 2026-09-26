@@ -85,7 +85,7 @@
        (->Client client uri-validator)
        (catch Throwable e (.stop client) (throw e))))))
 
-(defn- request! [^HttpClient client ^URI uri maximum timeout-ms method body]
+(defn- request! [^HttpClient client ^URI uri maximum timeout-ms method body headers]
   (let [done (CompletableFuture.)
         request (-> (.newRequest client uri) (.method method) (.timeout (long timeout-ms) TimeUnit/MILLISECONDS))
         listener (proxy [BufferingResponseListener] [(int maximum)]
@@ -98,7 +98,11 @@
                                                                              (.getValue ^org.eclipse.jetty.http.HttpField field)])) (.getHeaders response))
                                           :body (.getContent this)})))))]
     (try
-      (when body (.body request (BytesRequestContent. "application/json" (into-array (Class/forName "[B") [body]))))
+      (when body (.body request (BytesRequestContent. (get headers "content-type" "application/json") (into-array (Class/forName "[B") [body]))))
+      (.headers request (reify java.util.function.Consumer
+                          (accept [_ fields]
+                            (doseq [[name value] headers]
+                              (.put ^org.eclipse.jetty.http.HttpFields$Mutable fields ^String name ^String value)))))
       (.send request listener)
       (.get done (long timeout-ms) TimeUnit/MILLISECONDS)
       (catch Exception e (.abort request e) (throw e)))))
@@ -112,7 +116,7 @@
      (loop [uri ((:uri-validator client) url) hops 0]
        (let [remaining (quot (- deadline (System/nanoTime)) 1000000)]
          (when-not (pos? remaining) (throw (java.util.concurrent.TimeoutException. "Outbound request deadline")))
-         (let [{:keys [status headers] :as response} (request! (:http client) uri maximum remaining "GET" nil)]
+         (let [{:keys [status headers] :as response} (request! (:http client) uri maximum remaining "GET" nil {})]
            (when-let [encoding (get headers "content-encoding")]
              (when-not (= "identity" (str/lower-case encoding))
                (throw (ex-info "Encoded response is unsupported" {:network-error :encoding}))))
@@ -132,8 +136,27 @@
    (when-not (and (bytes? body) (<= (alength ^bytes body) 65536))
      (throw (ex-info "Outbound JSON body exceeds 65536 bytes" {:network-error :body})))
    (let [uri ((:uri-validator client) url)
-         response (request! (:http client) uri maximum timeout-ms "POST" body)
+         response (request! (:http client) uri maximum timeout-ms "POST" body {})
          encoding (get-in response [:headers "content-encoding"])]
      (when (and encoding (not= "identity" (str/lower-case encoding)))
        (throw (ex-info "Encoded response is unsupported" {:network-error :encoding})))
      response)))
+
+(defn exchange!
+  "One bounded HTTPS exchange. Callers supply an explicit header allowlist and
+  replacement credentials. No redirects, cookies, decompression or retries."
+  [client url {:keys [method headers body maximum timeout-ms]
+               :or {headers {} maximum 10485760 timeout-ms 10000}}]
+  (when-not (and (#{"GET" "HEAD" "POST"} method) (<= 1 maximum 67108864) (<= 1 timeout-ms 60000)
+                 (or (nil? body) (and (= method "POST") (bytes? body) (<= (alength ^bytes body) 67108864)))
+                 (every? (fn [[name value]]
+                           (and (string? name) (re-matches #"[a-z0-9!#$%&'*+.^_`|~-]+" name)
+                                (string? value) (<= (count value) 8192) (re-matches #"[\t\x20-\x7e]*" value))) headers)
+                 (not-any? #(contains? headers %) ["host" "connection" "transfer-encoding" "content-length" "cookie" "proxy-authorization"]))
+    (throw (ex-info "Invalid outbound exchange" {:network-error :request})))
+  (let [uri ((:uri-validator client) url)
+        response (request! (:http client) uri maximum timeout-ms method body (assoc headers "accept-encoding" "identity"))
+        encoding (get-in response [:headers "content-encoding"])]
+    (when (and encoding (not= "identity" (str/lower-case encoding)))
+      (throw (ex-info "Encoded response is unsupported" {:network-error :encoding})))
+    response))

@@ -26,7 +26,9 @@
         no-body? (or (= "HEAD" (.getMethod request)) (#{204 304} status))]
     (.setStatus response status)
     (doseq [[k v] headers] (.put (.getHeaders response) ^String k ^String v))
-    (when-not (#{204 304} status) (.put (.getHeaders response) "Content-Length" (str (alength data))))
+    (when-not (or (#{204 304} status)
+                  (and (= "HEAD" (.getMethod request)) (.contains (.getHeaders response) "Content-Length")))
+      (.put (.getHeaders response) "Content-Length" (str (alength data))))
     (.write response true (when-not no-body? (ByteBuffer/wrap data)) callback)))
 
 (defn- endpoint [^ExecutorService executor sessions {:keys [on-open send-timeout-ms] :or {send-timeout-ms 5000}}]

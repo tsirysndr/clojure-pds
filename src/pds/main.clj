@@ -14,6 +14,7 @@
             [pds.identity :as identity]
             [pds.net :as net]
             [pds.plc-provision :as provision]
+            [pds.proxy :as proxy]
             [pds.redis :as redis]
             [pds.s3 :as s3]))
 
@@ -25,6 +26,7 @@
                         (admin/settings (System/getenv)) (invites/settings (System/getenv))
                         (firehose/settings (System/getenv))
                         (identity/settings (System/getenv))
+                        (proxy/settings (System/getenv))
                         (blob-cleanup/settings (System/getenv))
                         (auth/settings (System/getenv)) {:email-enabled (boolean email-config)})
         ds (db/datasource (db/settings))

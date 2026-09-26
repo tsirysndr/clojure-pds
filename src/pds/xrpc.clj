@@ -13,7 +13,8 @@
 (defn router
   "Dispatch explicit routes. Handlers accept a request map and return a response.
   HEAD has GET semantics; the transport is responsible for suppressing its body."
-  [routes]
+  ([routes] (router routes (fn [_] (error-response 404 "MethodNotImplemented" "Endpoint is not implemented"))))
+  ([routes fallback]
   (let [routes (into {} (map (fn [[uri route]]
                               [uri (assoc route ::endpoint/context (endpoint/context uri (:method route)))])) routes)]
     (fn [{:keys [uri request-method] :as request}]
@@ -24,14 +25,15 @@
             (handler (assoc request ::endpoint/context (::endpoint/context route)))
             (assoc-in (error-response 405 "MethodNotAllowed" "HTTP method is not supported")
                       [:headers "Allow"] (if (= method :get) "GET, HEAD" "POST")))
-          (error-response 404 "MethodNotImplemented" "Endpoint is not implemented"))
+          (fallback request))
         (catch clojure.lang.ExceptionInfo e
           (if (:xrpc (ex-data e))
-            (let [{:keys [status error www-authenticate]} (ex-data e)]
+            (let [{:keys [status error www-authenticate allow]} (ex-data e)]
               (cond-> (error-response status error (.getMessage e))
+                allow (assoc-in [:headers "Allow"] allow)
                 (= status 401) (assoc-in [:headers "WWW-Authenticate"] (or www-authenticate "Bearer"))))
             (error-response 500 "InternalServerError" "An internal server error occurred")))
         (catch Exception _
           ;; Do not expose exception messages (which may contain credentials).
           (binding [*out* *err*] (println "XRPC handler failed"))
-          (error-response 500 "InternalServerError" "An internal server error occurred"))))))
+          (error-response 500 "InternalServerError" "An internal server error occurred")))))))
