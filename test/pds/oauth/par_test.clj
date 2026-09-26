@@ -32,6 +32,7 @@
         approved (par/parameters! resolved (assoc input "client_assertion" "sensitive" "arbitrary" "discard" "login_hint" "alice.example.com"))]
     (is (= (get input "state") (get approved "state")))
     (is (= "alice.example.com" (get approved "login_hint")))
+    (is (= "create" (get (par/parameters! resolved (assoc input "prompt" "create")) "prompt")))
     (is (not (contains? approved "client_assertion")))
     (is (not (contains? approved "client_id")))
     (is (not (contains? approved "arbitrary")))

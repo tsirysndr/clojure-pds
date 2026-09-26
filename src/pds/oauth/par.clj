@@ -21,7 +21,7 @@
     (http/fail! "invalid_request" "Nested requests and verifiers are not accepted at PAR"))
   (when-not (= "query" (get params "response_mode" "query")) (http/fail! "invalid_request" "Unsupported response mode"))
   (when (contains? params "prompt")
-    (when-not (#{"login" "consent" "select_account"} (get params "prompt")) (http/fail! "invalid_request" "Unsupported prompt")))
+    (when-not (#{"login" "consent" "select_account" "create"} (get params "prompt")) (http/fail! "invalid_request" "Unsupported prompt")))
   (doseq [[key maximum required?] [["state" 1024 true] ["login_hint" 2048 false]]]
     (when (or required? (contains? params key))
       (let [value (get params key)]
