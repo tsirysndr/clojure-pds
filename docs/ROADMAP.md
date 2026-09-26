@@ -38,7 +38,7 @@ runnable and update this document as features land.
 8. **Blob APIs (buffered upload/download implemented):** streaming upload/download, limits, ownership, record references,
    list/missing blobs and garbage collection. Acceptance: binary round trips,
    interrupted upload cleanup and no cross-account access leaks.
-9. **Sync and federation (query/export subset implemented):** durable ordered event log, sync queries, WebSocket
+9. **Sync and federation (queries/export/block/proof subset implemented):** durable ordered event log, sync queries, WebSocket
    subscribeRepos with replay/backpressure, relay notification and takedowns.
    Acceptance: relay consumes commits and reconnects without losing events.
 10. **Service integration and migration:** authenticated service proxy, service

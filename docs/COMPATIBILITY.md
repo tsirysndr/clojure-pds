@@ -29,6 +29,7 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | `com.atproto.repo` | `getRecord`, `listRecords`, `describeRepo` | Current records; keyset pagination and reverse order |
 | `com.atproto.repo` | `uploadBlob` | Authenticated, maximum 5 MiB, account ownership |
 | `com.atproto.sync` | `getRepo`, `getLatestCommit`, `getRepoStatus`, `listRepos` | Full CAR export and local repository metadata; no incremental export optimization |
+| `com.atproto.sync` | `getBlocks`, `getRecord` | Repository-owned historical blocks; signed MST inclusion/absence proofs; rootless block CARs |
 | `com.atproto.sync` | `getBlob`, `listBlobs` | Binary round trip and account-scoped keyset listing; `since` is rejected |
 
 Additional routes: plain-text banner at `/`, liveness at `/xrpc/_health`, and hosted
@@ -51,11 +52,17 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
 - P-256 and secp256k1 signatures enforce the 64-byte low-S format using Bouncy Castle;
   verification runs upstream signature vectors. Repositories currently sign with P-256.
 - MST height/prefix vectors and before/after commit root fixtures match upstream.
-  CAR decoding verifies each block's content hash. Full repository import and
+  `bash scripts/test-conformance.sh` additionally uses pinned `@atproto/repo`
+  0.10.14 to verify a signed export, inclusion/absence proofs, false-claim rejection,
+  and rootless CARs obtained over HTTP. This covers repository serialization and
+  proofs, not relay/client federation. CAR decoding verifies each block's content hash. Full repository import and
   untrusted MST traversal validation are not yet implemented.
 - PostgreSQL migrations are locked, transactional, and checksummed. Tests verify
   rollback, persistence across connections, binary data, signed commits, atomic
   batches, concurrent swap conflicts, and isolation between accounts.
+  A transactional ownership migration traverses retained commit/MST history;
+  it does not grant ownership from arbitrary record links. Public block requests
+  cannot retrieve blocks belonging only to a different account.
 - Signing keys use AES-256-GCM with account DID as associated data. Passwords use
   Argon2id. Sessions are persisted and checked on requests; reset/replay/logout
   revocation is tested. Machine-generated app passwords use keyed digests; tests
@@ -83,7 +90,7 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
 3. Remaining administrative APIs, record/blob takedowns, and broader account recovery controls.
 4. OAuth authorization server: metadata, PAR, PKCE, DPoP, client metadata/consent,
    refresh behavior, permission sets and scopes.
-5. Sync block/proof APIs, commit event payloads, WebSocket subscribeRepos with
+5. Commit event payloads, WebSocket subscribeRepos with
    cursor replay/backpressure, relay notification, account/identity events and
    takedown semantics. `repo_events` stores commit metadata and account-status payloads;
    full commit payloads and identity events remain pending.

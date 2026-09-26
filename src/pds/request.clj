@@ -37,15 +37,19 @@
             value (json/read-str text)]
         (when-not (map? value) (errors/invalid! "Expected a JSON object")) value)
       (catch Exception _ (errors/invalid! "Invalid JSON object")))))
-(defn query-params [request]
+(defn query-params
+  ([request] (query-params request #{}))
+  ([request array-keys]
   (try
     (reduce (fn [result pair]
               (let [[k v] (str/split pair #"=" 2)
                     k (URLDecoder/decode k "UTF-8") v (URLDecoder/decode (or v "") "UTF-8")]
-                (when (contains? result k) (errors/invalid! "Duplicate query parameter"))
-                (assoc result k v)))
+                (if (contains? array-keys k)
+                  (update result k (fnil conj []) v)
+                  (do (when (contains? result k) (errors/invalid! "Duplicate query parameter"))
+                      (assoc result k v)))))
             {} (if (str/blank? (:query-string request)) [] (str/split (:query-string request) #"&")))
-    (catch Exception _ (errors/invalid! "Invalid query parameters"))))
+    (catch Exception _ (errors/invalid! "Invalid query parameters")))))
 (defn string! [value name]
   (when-not (and (string? value) (not (str/blank? value))) (errors/invalid! (str name " is required"))) value)
 (defn limit! [params default maximum]

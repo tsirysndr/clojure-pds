@@ -58,7 +58,7 @@
 (def migrations ["001-storage.sql" "002-email.sql" "003-sessions.sql" "004-repo-events.sql"
                  "005-blob-storage.sql" "006-app-passwords.sql" "007-account-lifecycle.sql"
                  "008-blob-deletion.sql" "009-email-security.sql" "010-invites.sql"
-                 "011-account-takedowns.sql"])
+                 "011-account-takedowns.sql" "012-repository-block-ownership.sql"])
 
 (defn migrate! [ds]
   (transact!
@@ -79,6 +79,9 @@
            (when-not (= checksum (:checksum applied))
              (throw (ex-info "An applied database migration was modified" {:migration name})))
            (do (execute! conn sql)
+               ;; Data backfill shares the SQL migration's transaction and lock.
+               (when (= name "012-repository-block-ownership.sql")
+                 ((requiring-resolve 'pds.block-index/backfill!) conn))
                (execute! conn "INSERT INTO schema_migrations(name, checksum) VALUES (?, ?)"
                          name checksum)))))
      true)))

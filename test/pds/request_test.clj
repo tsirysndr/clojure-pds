@@ -16,3 +16,10 @@
   (is (not (syntax/type-ref? "app.bsky.richtext.facet#")))
   (let [value {"$type" "app.bsky.richtext.facet#link" "uri" "https://example.com"}]
     (is (= value (codec/to-json (codec/decode (codec/encode (codec/from-json value))))))))
+
+(deftest declared-array-query-parameters
+  (is (= {"did" "did:web:a.test" "cids" ["one" "two"]}
+         (request/query-params {:query-string "did=did%3Aweb%3Aa.test&cids=one&cids=two"} #{"cids"})))
+  (is (thrown? Exception (request/query-params {:query-string "did=a&did=b"} #{"cids"})))
+  (is (thrown? Exception (request/query-params {:query-string "cids=a&cids=b"})))
+  (is (= {"cids" ["one"]} (request/query-params {:query-string "cids=one"} #{"cids"}))))

@@ -25,3 +25,22 @@
     (is (= (vec (get blocks root)) (vec (get-in decoded [:blocks root]))))
     (aset-byte data (dec (alength data)) (unchecked-byte 255))
     (is (thrown? Exception (car/decode data)))))
+
+(deftest rootless-block-cars
+  (let [record (codec/encode {"$type" "com.example.record"}) cid (codec/cid record)
+        decoded (car/decode (car/encode nil {cid record}))]
+    (is (= [] (:roots decoded)))
+    (is (= (vec record) (vec (get-in decoded [:blocks cid])))))
+  (is (= {:roots [] :blocks {}} (car/decode (car/encode nil {})))))
+
+(deftest inclusion-and-absence-proofs
+  (let [record (codec/encode {"$type" "com.example.record"}) cid (codec/cid record)
+        keys (mapv #(str "com.example.record/" %) (range 200))
+        tree (mst/build (zipmap keys (repeat cid))) blocks (assoc (:blocks tree) cid record)]
+    (doseq [key (conj keys "com.example.record/missing" "com.example.record/!" "com.example.record/zzz")]
+      (let [proof (mst/proof (:root tree) key blocks)]
+        (is (= (when (some #{key} keys) cid) (:cid proof)))
+        (is (< (count (:blocks proof)) (count blocks)))
+        ;; Every block needed to re-traverse the proof is included.
+        (is (= (:cid proof) (:cid (mst/proof (:root tree) key (:blocks proof)))))))
+    (is (thrown? Exception (mst/proof (:root tree) (first keys) {})))))

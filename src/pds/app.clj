@@ -5,6 +5,7 @@
             [pds.api.admin :as admin-api]
             [pds.api.repo :as repo-api]
             [pds.api.blob :as blob-api]
+            [pds.api.sync :as sync-api]
             [pds.rate-limit :as rate-limit]))
 
 (def version "0.1.0-dev")
@@ -19,6 +20,7 @@
              (when ds (admin-api/routes ds config))
              (when ds (repo-api/routes ds config))
              (when ds (blob-api/routes ds config))
+             (when ds (sync-api/routes ds config))
      {"/"
       {:method :get
        :handler (fn [_] {:status 200

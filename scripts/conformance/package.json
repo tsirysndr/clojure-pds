@@ -1,0 +1,9 @@
+{
+  "name": "clojure-pds-conformance",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@atproto/lex-data": "0.1.7",
+    "@atproto/repo": "0.10.14"
+  }
+}

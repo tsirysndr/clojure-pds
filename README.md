@@ -43,6 +43,7 @@ Stop with Ctrl-C. Configuration comes from exported environment variables;
 ```sh
 mise exec -- clojure -M:test        # unit, conformance-fixture, HTTP adapter tests
 bash scripts/test-postgres.sh      # all tests, isolated PostgreSQL 18 cluster
+bash scripts/test-conformance.sh   # plus pinned upstream repository/proof verifier (Node 22+)
 node --test examples/email-worker/handler.test.mjs
 mise exec -- clojure -M:repl        # Rebel Readline
 ```

@@ -1,5 +1,6 @@
 (ns pds.repo
   (:require [pds.crypto :as crypto]
+            [pds.block-index :as block-index]
             [pds.db :as db]
             [pds.errors :as errors]
             [pds.lexicon :as lexicon]
@@ -27,6 +28,8 @@
         signed (assoc unsigned "sig" (crypto/sign "ES256" private (codec/encode unsigned)))]
     (doseq [[_ data] blocks] (block! conn data))
     (let [head (block! conn (codec/encode signed))]
+      (doseq [cid (cons head (keys blocks))] (block-index/associate! conn (:did repo) cid))
+      (db/execute! conn "INSERT INTO repo_block_owners(did, cid) SELECT did, cid FROM records WHERE did = ? ON CONFLICT DO NOTHING" (:did repo))
       (db/execute! conn "UPDATE repositories SET head = ?, rev = ? WHERE did = ?" head rev (:did repo))
       ;; Commit order and sequence order agree across concurrent repositories.
       (db/query conn "SELECT pg_advisory_xact_lock(731946282)")

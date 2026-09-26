@@ -7,3 +7,4 @@
 /.rebel_readline_history
 *.log
 .DS_Store
+node_modules/

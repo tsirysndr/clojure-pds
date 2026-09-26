@@ -42,3 +42,32 @@
       (let [root (if (empty? entries) (store! {"l" nil "e" []})
                      (node! entries (apply max (map :height entries))))]
         {:root (:cid root) :blocks @blocks}))))
+
+(defn proof
+  "Read only the search path for key. Includes the record block when present;
+  the same path proves absence when no matching key exists. load-block returns
+  bytes by CID. Traversal never follows arbitrary links inside record values."
+  [root key load-block]
+  (letfn [(load! [cid]
+            (let [data (load-block cid)]
+              (when-not (and data (= cid (codec/cid data))) (codec/fail! "Missing or corrupt MST proof block"))
+              data))
+          (locate [node]
+            (loop [entries (get node "e") previous "" child (get node "l")]
+              (if-let [entry (first entries)]
+                (let [prefix (get entry "p")
+                      _ (when-not (and (integer? prefix) (<= 0 prefix (count previous)))
+                          (codec/fail! "Invalid MST prefix"))
+                      entry-key (str (subs previous 0 prefix) (codec/text (get entry "k")))
+                      order (compare key entry-key)]
+                  (cond (zero? order) [:record (:cid (get entry "v"))]
+                        (neg? order) [:child (:cid child)]
+                        :else (recur (next entries) entry-key (get entry "t"))))
+                [:child (:cid child)])))]
+    (loop [cid root blocks {}]
+      (when (or (contains? blocks cid) (>= (count blocks) 128)) (codec/fail! "Invalid MST traversal"))
+      (let [data (load! cid) blocks (assoc blocks cid data)
+            [kind next-cid] (locate (codec/decode data))]
+        (cond (= kind :record) {:cid next-cid :blocks (assoc blocks next-cid (load! next-cid))}
+              next-cid (recur next-cid blocks)
+              :else {:cid nil :blocks blocks})))))

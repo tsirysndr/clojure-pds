@@ -12,8 +12,8 @@
 
 (defn encode [root blocks]
   (let [out (ByteArrayOutputStream.)]
-    (frame! out (codec/encode {"version" 1 "roots" [(codec/link root)]}))
-    (doseq [id (cons root (sort (disj (set (keys blocks)) root)))]
+    (frame! out (codec/encode {"version" 1 "roots" (if root [(codec/link root)] [])}))
+    (doseq [id (concat (when root [root]) (sort (disj (set (keys blocks)) root)))]
       (let [data (get blocks id)]
         (when-not (and data (= id (codec/cid (aget (codec/cid-bytes id) 1) data)))
           (codec/fail! "Missing or corrupt CAR block"))
@@ -43,7 +43,7 @@
   (let [in (ByteArrayInputStream. bytes)
         header (codec/decode (frame in))
         roots (get header "roots")]
-    (when-not (and (= 1 (get header "version")) (vector? roots) (seq roots)
+    (when-not (and (= 1 (get header "version")) (vector? roots)
                    (every? #(instance? pds.protocol.codec.Link %) roots))
       (codec/fail! "Invalid CAR v1 header"))
     {:roots (mapv :cid roots)
