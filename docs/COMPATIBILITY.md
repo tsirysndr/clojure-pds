@@ -2,8 +2,9 @@
 
 Last verified: 2026-09-26. This is a development implementation, not a complete
 AT Protocol PDS. Passing internal/fixture tests does not establish full network
-interoperability. Current tests with local S3 and Redis: 48 Clojure tests, 1,386 assertions; one Worker
-contract test. PostgreSQL tests used version 18.6 and the mise-pinned JDK 25.0.3.
+interoperability. Run `bash scripts/test-redis.sh --with-s3` for the complete
+Clojure suite and `node --test examples/email-worker/handler.test.mjs` for the Worker
+contract. PostgreSQL tests use version 18.6 and the mise-pinned JDK 25.0.3.
 
 ## Implemented routes
 
@@ -18,6 +19,7 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | `com.atproto.server` | `deactivateAccount`, `activateAccount` | Primary-session lifecycle; inactive content is hidden, identity remains resolvable, durable account events |
 | `com.atproto.server` | `requestAccountDelete`, `deleteAccount` | One-use email token plus primary password; credential removal, tombstone and durable S3 cleanup |
 | `com.atproto.server` | `requestEmailConfirmation`, `confirmEmail` | Durable email outbox, expiring one-use confirmation |
+| `com.atproto.server` | `requestEmailUpdate`, `updateEmail` | Proof to current confirmed address, old-token invalidation, optional email authentication factor |
 | `com.atproto.server` | `requestPasswordReset`, `resetPassword` | Same public result for known/unknown addresses; reset revokes sessions |
 | `com.atproto.identity` | `resolveHandle` | Hosted accounts only |
 | `com.atproto.repo` | `createRecord`, `putRecord`, `deleteRecord`, `applyWrites` | Atomic signed commits; record/repo swap checks; batch maximum 200 |
@@ -75,8 +77,7 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
    validation against pinned official endpoint lexicons.
 2. did:plc provisioning, remote DID/handle resolution with SSRF protection,
    handle updates, signing/rotation key lifecycle, and migration.
-3. Invites, email
-   updates, administrative APIs, and broader account recovery controls.
+3. Invites, administrative APIs, and broader account recovery controls.
 4. OAuth authorization server: metadata, PAR, PKCE, DPoP, client metadata/consent,
    refresh behavior, permission sets and scopes.
 5. Sync block/proof APIs, commit event payloads, WebSocket subscribeRepos with

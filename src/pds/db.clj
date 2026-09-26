@@ -57,7 +57,7 @@
 
 (def migrations ["001-storage.sql" "002-email.sql" "003-sessions.sql" "004-repo-events.sql"
                  "005-blob-storage.sql" "006-app-passwords.sql" "007-account-lifecycle.sql"
-                 "008-blob-deletion.sql"])
+                 "008-blob-deletion.sql" "009-email-security.sql"])
 
 (defn migrate! [ds]
   (transact!

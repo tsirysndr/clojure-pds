@@ -44,6 +44,10 @@
    (empty-route (authenticated ds settings (fn [conn account _] (accounts/request-confirmation! conn settings account))))
    "/xrpc/com.atproto.server.confirmEmail"
    (empty-route (authenticated ds settings (fn [conn account r] (accounts/confirm! conn account (request/json-body r)))))
+   "/xrpc/com.atproto.server.requestEmailUpdate"
+   (json-route :post (authenticated ds settings (fn [conn account _] (accounts/request-email-update! conn settings account))))
+   "/xrpc/com.atproto.server.updateEmail"
+   (empty-route (authenticated ds settings (fn [conn account r] (accounts/update-email! conn settings account (request/json-body r)))))
    "/xrpc/com.atproto.server.requestPasswordReset"
    (empty-route #(accounts/request-reset! ds settings (request/json-body %)))
    "/xrpc/com.atproto.server.resetPassword"

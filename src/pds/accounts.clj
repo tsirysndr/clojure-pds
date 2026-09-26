@@ -30,7 +30,8 @@
 
 (defn public-account [account]
   (cond-> {:did (:did account) :handle (:handle account) :email (:email account)
-           :emailConfirmed (:email_confirmed account) :active (= "active" (:status account))}
+           :emailConfirmed (:email_confirmed account) :emailAuthFactor (boolean (:email_auth_factor account))
+           :active (= "active" (:status account))}
     (not= "active" (:status account)) (assoc :status (if (= "taken_down" (:status account)) "takendown" (:status account)))))
 (defn did-document [settings account public-key]
   {:id (:did account) :alsoKnownAs [(str "at://" (:handle account))]
@@ -57,12 +58,15 @@
   (when (empty? (db/query conn "SELECT 1 FROM account_tokens WHERE did = ? AND purpose = ? AND created_at > now() - interval '60 seconds'"
                           (:did account) purpose))
     (let [token (crypto/token)
-          subject (case purpose "confirm-email" "Confirm your PDS email" "reset-password" "Reset your PDS password" "delete-account" "Confirm account deletion")]
+          subject (case purpose "confirm-email" "Confirm your PDS email" "reset-password" "Reset your PDS password"
+                        "delete-account" "Confirm account deletion" "update-email" "Update your PDS email"
+                        "sign-in" "Sign in to your PDS account")
+          minutes (if (= purpose "sign-in") 10 30)]
       (db/execute! conn "DELETE FROM account_tokens WHERE did = ? AND purpose = ?" (:did account) purpose)
       (db/execute! conn "INSERT INTO account_tokens(token_hash, did, purpose, email, expires_at) VALUES (?, ?, ?, ?, ?)"
-                   (crypto/digest-token token) (:did account) purpose (:email account) (.plusSeconds (Instant/now) 1800))
+                   (crypto/digest-token token) (:did account) purpose (:email account) (.plusSeconds (Instant/now) (* 60 minutes)))
       (email/enqueue! conn {:to (:email account) :subject subject
-                           :text (str subject ".\n\nYour token is: " token "\n\nIt expires in 30 minutes. If you did not request this, ignore this email.")}))))
+                           :text (str subject ".\n\nYour token is: " token "\n\nIt expires in " minutes " minutes. If you did not request this, ignore this email.")}))))
 
 (defn create! [ds settings body]
   (when-not (:signup-enabled settings) (errors/raise! 403 "SignupDisabled" "Account registration is disabled"))
@@ -93,9 +97,11 @@
             (errors/raise! 400 "HandleNotAvailable" "Handle or email is already registered") (throw e)))))))
 
 (def dummy-password (delay (crypto/password-hash (crypto/token))))
+(declare consume-token! require-email!)
 (defn login! [ds settings body]
   (let [identifier (str/lower-case (request/string! (get body "identifier") "identifier"))
-        password (get body "password")]
+        password (get body "password")
+        result
     (db/transact!
      ds
      (fn [conn]
@@ -106,7 +112,16 @@
          (when-not (and account (or matches? app-password)
                         (or (= "active" (:status account)) (and matches? (= "deactivated" (:status account)))))
            (errors/raise! 401 "AuthenticationRequired" "Invalid identifier or password"))
-         (merge (public-account account) (auth/issue! conn settings (:did account) nil (:id app-password))))))))
+         (if (and matches? (:email_auth_factor account) (not (contains? body "authFactorToken")))
+           (do (require-email! settings) (issue-email! conn account "sign-in") ::factor-required)
+           (do
+             (when (and matches? (:email_auth_factor account))
+               (consume-token! conn "sign-in" (get body "authFactorToken") (:did account) (:email account)))
+             (merge (public-account account) (auth/issue! conn settings (:did account) nil (:id app-password))))))))]
+    ;; Commit the challenge/outbox before returning the challenge-required error.
+    (if (= ::factor-required result)
+      (errors/raise! 401 "AuthFactorTokenRequired" "Check your email for a sign-in token")
+      result)))
 
 (defn require-email! [settings]
   (when-not (:email-enabled settings) (errors/raise! 503 "EmailUnavailable" "Email delivery is not configured")))
@@ -186,5 +201,37 @@
           (db/execute! conn "DELETE FROM repo_events WHERE did = ? AND event_type = 'commit'" did)
           ;; Reserve the DID/handle permanently while erasing credentials/email.
           (db/execute! conn "UPDATE accounts SET status = 'deleted', email = NULL, password_hash = NULL,
-                              email_confirmed = false, delete_after = NULL WHERE did = ?" did)
+                              email_confirmed = false, email_auth_factor = false, delete_after = NULL WHERE did = ?" did)
           (events/account! conn did "deleted"))))))
+
+(defn request-email-update! [conn settings account]
+  (auth/require-primary! account)
+  (when (:email_confirmed account)
+    (require-email! settings)
+    (issue-email! conn account "update-email"))
+  {:tokenRequired (boolean (:email_confirmed account))})
+
+(defn update-email! [conn settings account body]
+  (auth/require-primary! account)
+  (require-email! settings)
+  (let [address (str/lower-case (request/string! (get body "email") "email"))
+        changed? (not= address (:email account))
+        factor (get body "emailAuthFactor" (if changed? false (:email_auth_factor account)))]
+    (when-not (email/address? address) (errors/invalid! "Invalid email address"))
+    (when-not (boolean? factor) (errors/invalid! "emailAuthFactor must be a boolean"))
+    (when (and factor (or changed? (not (:email_confirmed account))))
+      (errors/invalid! "Confirm the email address before enabling email authentication"))
+    (when (:email_confirmed account)
+      (when-not (contains? body "token") (errors/raise! 400 "TokenRequired" "An email-update token is required"))
+      (consume-token! conn "update-email" (get body "token") (:did account) (:email account)))
+    (try
+      (db/execute! conn "UPDATE accounts SET email = ?, email_confirmed = ?, email_auth_factor = ? WHERE did = ?"
+                   address (and (not changed?) (:email_confirmed account)) factor (:did account))
+      (catch java.sql.SQLException e
+        (if (= "23505" (.getSQLState e)) (errors/invalid! "Email is unavailable") (throw e))))
+    (when (or changed? (not= factor (:email_auth_factor account)))
+      (db/execute! conn "DELETE FROM account_tokens WHERE did = ?" (:did account))
+      (db/execute! conn "DELETE FROM email_outbox WHERE payload->>'to' = ?" (:email account))
+      (db/execute! conn "UPDATE sessions SET revoked = true WHERE did = ? AND id <> ?" (:did account) (:session-id account)))
+    (when changed?
+      (issue-email! conn (assoc account :email address :email_confirmed false :email_auth_factor false) "confirm-email"))))

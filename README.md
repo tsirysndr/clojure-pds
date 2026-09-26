@@ -115,6 +115,16 @@ cannot manage activation. Identity metadata remains available while deactivated.
 State changes enter the durable event log in commit order. Optional `deleteAfter`
 is retained as a recommendation; it does not automatically delete the account.
 
+Email changes require a primary session. `requestEmailUpdate` sends a proof token
+to the current address when it is confirmed; `updateEmail` consumes that proof,
+invalidates old-address recovery tokens and other sessions, then queues confirmation
+for the new address. The current session remains available to finish verification.
+Confirmed addresses can enable `emailAuthFactor` through the same proof flow.
+Primary login then returns `AuthFactorTokenRequired` and queues a ten-minute,
+one-use token; repeat login with `authFactorToken`. App passwords remain usable
+without repeating the email factor. Turning the factor off requires fresh email
+proof. Challenges and their outbox entries commit before the challenge response.
+
 `requestAccountDelete` sends a one-use deletion token. `deleteAccount` accepts the
 DID, primary password and token, removes sessions and hosted content metadata,
 erases email/password data, and records a `deleted` tombstone. The DID/handle stay
