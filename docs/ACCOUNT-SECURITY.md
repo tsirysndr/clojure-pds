@@ -1,7 +1,7 @@
 # Optional account authentication
 
-Authenticator-app TOTP verification and persistence are implemented. Passkeys and
-browser management/enrollment pages are still being built. There is no public
+Authenticator-app TOTP and passkey verification/persistence are implemented.
+Browser management/enrollment pages and passkey session integration are still being built. There is no public
 TOTP enrollment endpoint yet; internal enrollment functions must not be mounted
 without recent primary authentication and same-origin/CSRF protection.
 
@@ -51,14 +51,62 @@ Tests cover encrypted storage, inactive enrollment, credential-change/expiry
 invalidation, replay races, throttling, rollback, one-use recovery, legacy HTTP
 and OAuth login, session revocation, password reset and deletion.
 
+## Passkey ceremonies
+
+`pds.security.passkeys` uses Yubico Java WebAuthn Server 2.9.0, with explicit
+stable dependency pins replacing its open version ranges. Registration requests
+require discoverable credentials and user verification, and request no attestation.
+ES256, Ed25519 and RS256 are supported. The relying-party ID comes from the host
+of the configured public URL; its exact origin is the only permitted origin.
+No subdomain or port relaxation is enabled. HTTPS is required, with localhost HTTP
+permitted for development. Cross-origin framed ceremonies are rejected explicitly.
+This is public passkey support, without a vendor or hardware-attestation trust policy.
+
+Migration 029 stores a random 32-byte account user handle, credential IDs and public
+COSE keys, names, counters, transport hints and backup flags. No private credential
+key leaves the authenticator or is stored by the server. Identifier-first login is
+implemented; username-less autofill is not yet implemented. Account handles can
+change without changing the opaque authenticator user handle.
+
+Challenges last five minutes. The server stores the full generated options, the
+account security version and hashes of a random ceremony ID and browser binding.
+Client-supplied options cannot replace the saved request. All operations require
+transactions, with account locking before challenge/credential changes. Each
+account may have up to eight pending ceremonies and 20 registered credentials.
+Expired challenges are reclaimed in bounded batches. Cryptographically invalid
+responses return an error and consume the challenge when the caller commits it.
+Wrong browser bindings cannot consume another browser's challenge. Successful
+verification and its protected session/credential write must share a transaction.
+
+Assertions verify account ownership, user presence/verification, origin, RP ID,
+challenge, signature, and credential counter. Nonzero counters must increase;
+authenticators that consistently use zero counters are supported, including synced
+passkeys. Backup eligibility cannot change, while backup state updates after valid
+assertions. Registration/removal advances the account security version, revokes
+legacy sessions and removes app passwords. Pending challenges fail after account
+credential/status changes even if a value is changed back. Deletion erases the
+account's credentials, user handle and challenges.
+
+Independent Node crypto fixtures generate real registration/assertion responses
+for all three algorithms. PostgreSQL tests exercise origin/RP/type/challenge
+substitution, missing verification/presence, invalid signatures, cross-account
+credentials, malformed inputs, browser binding, expiry, concurrent replay,
+transaction rollback, counter/backup state, challenge caps, removal and deletion.
+These are software-authenticator tests, not evidence of a completed browser or
+hardware passkey integration. Integration tests now require Node (CI pins Node 24).
+
+Management functions must be called behind recent primary or user-verified passkey
+authentication, any configured additional factor, and browser CSRF checks. The
+assertion verifier returns a principal; it creates no session itself and does not
+bypass an enabled TOTP/email factor. Those browser/session controllers are next.
+
 ## Remaining work
 
-- WebAuthn passkey registration and sign-in with required user verification,
-  exact RP/origin validation, durable challenges and credential lifecycle.
 - Browser settings with recent primary authentication, CSRF protection, TOTP
   provisioning, recovery-code display and secure removal for both methods.
 - Passkey/OAuth/management integration, full browser ceremony tests and recovery
-  behavior when authenticators are lost. These features are not enabled yet.
+  behavior when authenticators are lost; username-less discoverable login.
+  These browser-facing features are not enabled yet.
 
 References: [RFC 6238](https://www.rfc-editor.org/rfc/rfc6238.html),
 [RFC 4226](https://www.rfc-editor.org/rfc/rfc4226.html),

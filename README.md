@@ -58,6 +58,10 @@ existing database. Alternatively set `PDS_TEST_DATABASE_URL` and database
 credentials, then run `mise exec -- clojure -M:integration`. Each integration test
 creates and drops its own randomly named schema; the role needs schema privileges.
 
+Integration tests require Node (CI pins Node 24) for independent passkey signatures.
+See [account authentication progress](docs/ACCOUNT-SECURITY.md) for TOTP/passkey
+coverage and remaining browser integration.
+
 The test runner discovers `*_test.clj` files using `clojure.test`. Dependencies and
 upstream conformance fixtures are pinned. `:repl` includes source and test paths;
 Rebel stays out of runtime dependencies. Exit with Ctrl-D. Use `clojure`, not `clj`,

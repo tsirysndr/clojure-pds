@@ -32,8 +32,9 @@ runnable and update this document as features land.
    refresh rotation/revocation, app passwords, invites, email verification/reset,
    account activation/deactivation/deletion and administrative authorization.
    Optional [authenticator security](ACCOUNT-SECURITY.md): TOTP storage, confirmation,
-   recovery codes and legacy/OAuth verification are implemented. Passkeys (WebAuthn),
-   secure browser enrollment/removal and complete browser ceremonies remain pending.
+   recovery codes and legacy/OAuth verification are implemented, as are WebAuthn
+   passkey registration/assertion primitives. Secure browser enrollment/removal,
+   passkey login integration and complete browser ceremonies remain pending.
    Acceptance: expiry, replay, cross-account authorization and restart tests.
 7. **OAuth (DPoP/client-auth, PAR/PKCE and durable consent state implemented):** authorization-server metadata, PAR, PKCE, DPoP, client metadata,
    consent, token binding and scoped permissions. Acceptance: reference clients

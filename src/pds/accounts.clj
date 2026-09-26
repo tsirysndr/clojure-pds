@@ -288,7 +288,7 @@
                             ON CONFLICT (object_bucket, object_key) DO UPDATE
                             SET did = excluded.did, cid = excluded.cid, status = 'pending', attempts = 0,
                                 available_at = now(), last_error = NULL" did)
-          (doseq [table ["sessions" "app_passwords" "account_tokens" "account_totp" "blobs" "account_imports" "plc_identities" "repositories"]]
+          (doseq [table ["sessions" "app_passwords" "account_tokens" "account_totp" "webauthn_challenges" "account_webauthn_users" "blobs" "account_imports" "plc_identities" "repositories"]]
             (db/execute! conn (str "DELETE FROM " table " WHERE did = ?") did))
           (db/execute! conn "DELETE FROM email_outbox WHERE payload->>'to' = ?" (:email account))
           (db/execute! conn "DELETE FROM repo_events WHERE did = ? AND event_type IN ('commit', 'sync')" did)

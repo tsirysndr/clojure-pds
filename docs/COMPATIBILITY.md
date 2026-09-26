@@ -300,8 +300,8 @@ External service interoperability and OAuth remain pending.
    authentication, durable PAR/PKCE and browser consent state](OAUTH.md)
    are implemented as foundations; OAuth routes and
    resource-server authentication are not enabled yet. Optional [TOTP verification and
-   recovery storage](ACCOUNT-SECURITY.md) are implemented; passkeys and browser
-   enrollment/removal remain pending.
+   recovery storage and WebAuthn passkey verification](ACCOUNT-SECURITY.md) are
+   implemented; browser enrollment/removal and passkey session integration remain pending.
 5. Relay notification and external relay interoperability,
    event retention/compaction, and remaining record/blob takedown semantics.
 6. Remaining migration private-state APIs, streaming proxy transfers, and external
