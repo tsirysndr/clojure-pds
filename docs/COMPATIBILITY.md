@@ -52,9 +52,12 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
   mixed DNS answers, redirect revalidation, byte bounds, cookie isolation, and
   certificate/hostname verification. PostgreSQL/HTTP tests cover hosted, remote,
   deleted and service identities. Resolution uses no application cache yet;
-  `refreshIdentity` fetches fresh data. PLC directory responses are trusted over
-  verified HTTPS. PLC provisioning verifies the signed audit log; general remote
-  resolution still trusts the directory's DID document response.
+  `refreshIdentity` fetches fresh data. PLC resolution, including hosted accounts,
+  verifies the signed audit log and derives its canonical DID document. Tests cover
+  recovery/nullification, forged metadata, tombstones, and external migration
+  replacing a stale local key/endpoint. Invalid audits fail without local fallback.
+  Directory timestamps, completeness and freshness remain trusted over verified
+  HTTPS. A read-only live lookup of `bsky.app` passed through this resolver.
 - PLC operations use canonical DAG-CBOR, string CID links, deterministic low-S
   signatures, a 7500-byte specification bound, and strict unpadded base64url.
   Tests cover modern and legacy genesis hashes, old-key authorization of updates,
@@ -163,7 +166,7 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
 
 1. Expand the Lexicon catalog, dynamic schema resolution, and complete input/output
    validation against pinned official endpoint lexicons.
-2. Integrating PLC audit verification into general resolution, bounded identity caching,
+2. Bounded identity caching,
    signing/rotation key lifecycle, conflicted-operation administration, and migration.
 3. Remaining administrative APIs, record/blob takedowns, and broader account recovery controls.
 4. OAuth authorization server: metadata, PAR, PKCE, DPoP, client metadata/consent,

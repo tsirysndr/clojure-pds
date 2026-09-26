@@ -4,6 +4,8 @@
             [clojure.test :refer [deftest is]]
             [pds.crypto :as crypto]
             [pds.identity :as identity]
+            [pds.plc :as plc]
+            [pds.plc-test :as plc-test]
             [pds.protocol.codec :as codec])
   (:import [java.util.concurrent Semaphore]))
 
@@ -61,14 +63,15 @@
   (is (= {:plc-url "https://plc.example.com"} (identity/settings {"PDS_PLC_URL" "https://plc.example.com/"}))))
 
 (deftest did-resolution-and-bidirectional-handles
-  (let [doc (atom {"id" alice "alsoKnownAs" ["https://not-a-handle.example.com" "at://alice.example.com/path" "at://ALICE.example.com" "at://bob.example.com"]})
+  (let [alice "did:web:alice.example.com"
+        doc (atom {"id" alice "alsoKnownAs" ["https://not-a-handle.example.com" "at://alice.example.com/path" "at://ALICE.example.com" "at://bob.example.com"]})
         calls (atom [])
         handle-did (atom alice)
         r (identity/resolver {:plc-url "https://plc.example.com"
                               :txt-lookup (fn [name] (swap! calls conj name) [(str "did=" @handle-did)])
                               :fetch (fn [url _] (swap! calls conj url) (response (json/write-str @doc)))})]
     (is (= {:did alice :handle "alice.example.com" :didDoc @doc} (identity/resolve-identity! r alice)))
-    (is (= ["https://plc.example.com/did:plc:ewvi7nxzyoun6zhxrhs64oiz" "_atproto.alice.example.com."] @calls))
+    (is (= ["https://alice.example.com/.well-known/did.json" "_atproto.alice.example.com."] @calls))
     (reset! calls [])
     (reset! handle-did bob)
     (is (= "handle.invalid" (:handle (identity/resolve-identity! r alice))))
@@ -84,6 +87,35 @@
                               :fetch (fn [_ _] (is false "Hosted identity does not require outbound I/O"))})]
     (is (= {:did (get doc "id") :handle "local.pds.localhost" :didDoc doc}
            (identity/resolve-identity! r "LOCAL.pds.localhost")))))
+
+(deftest plc-resolution-verifies-audit-history-recovery-and-tombstones
+  (let [rotation (crypto/keypair "ES256K") recovery (crypto/keypair "ES256")
+        genesis (plc/sign-operation (plc-test/unsigned [recovery rotation] rotation) rotation)
+        did (plc/genesis-did genesis)
+        update (plc-test/update-op genesis rotation {"alsoKnownAs" ["at://disputed.example.com"]})
+        recovered (plc-test/update-op genesis recovery {"alsoKnownAs" ["at://recovered.example.com"]})
+        row #(plc-test/row did %1 %2 %3)
+        entries [(row genesis "2026-01-01T00:00:00Z" false)
+                 (row update "2026-01-01T01:00:00Z" true)
+                 (row recovered "2026-01-01T02:00:00Z" false)]
+        audit (atom entries) calls (atom [])
+        resolver (identity/resolver {:plc-url "https://directory.example.com"
+                                     :txt-lookup (fn [_] [(str "did=" did)])
+                                     :fetch (fn [url options] (swap! calls conj [url options])
+                                              (response (json/write-str @audit)))})]
+    (is (= "recovered.example.com" (:handle (identity/resolve-identity! resolver did))))
+    (is (= (plc/did-document (plc/operation-data did recovered)) (identity/resolve-did! resolver did)))
+    (is (every? #(= [(str "https://directory.example.com/" did "/log/audit")
+                     {:maximum (* 4 1024 1024) :timeout-ms 5000 :redirects 0}] %) @calls))
+    (doseq [bad [(assoc-in entries [1 "nullified"] false)
+                 (assoc-in entries [2 "operation" "alsoKnownAs"] ["at://forged.example.com"])
+                 (subvec entries 1)
+                 (assoc-in entries [0 "did"] alice)
+                 (plc/did-document (plc/operation-data did recovered))]]
+      (reset! audit bad)
+      (is (= "DidResolutionFailed" (error #(identity/resolve-did! resolver did)))))
+    (reset! audit (conj entries (row (plc-test/tombstone recovered recovery) "2026-01-01T03:00:00Z" false)))
+    (is (= "DidDeactivated" (error #(identity/resolve-did! resolver did))))))
 
 (deftest did-key-and-service-selection
   (doseq [algorithm ["ES256" "ES256K"]]

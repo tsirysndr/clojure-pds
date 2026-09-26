@@ -114,8 +114,13 @@ Remote handles use DNS TXT first and HTTPS fallback. `resolveIdentity` and
 `refreshIdentity` return a bidirectionally verified handle, or `handle.invalid`.
 Set `PDS_PLC_URL` to an HTTPS directory origin (default `https://plc.directory`).
 Remote requests use public addresses, verified TLS, bounded bodies and deadlines;
-local identities resolve directly from PostgreSQL. Resolution is currently
-uncached, with at most 32 concurrent identity requests per server instance.
+local web identities resolve directly from PostgreSQL. PLC resolution fetches and
+verifies the directory's full signed audit history, then derives the current DID
+document, including for hosted accounts. External migration, recovery and rotation
+therefore supersede the local snapshot. Invalid audits fail without a stale local
+fallback; timestamps and history freshness still rely on the directory. Audits
+are bounded to 4 MiB and 10,000 operations, with redirects disabled. Resolution is
+currently uncached, with at most 32 concurrent identity requests per server instance.
 Portable account migration remains unfinished. The default localhost identities
 are development-only.
 

@@ -4,6 +4,7 @@
             [pds.dns :as dns]
             [pds.errors :as errors]
             [pds.net :as net]
+            [pds.plc :as plc]
             [pds.protocol.codec :as codec]
             [pds.protocol.syntax :as syntax]
             [pds.request :as request])
@@ -72,15 +73,21 @@
   (or ((:local-document resolver) did)
       (do
         (when-not (supported-did? did) (errors/raise! 400 "DidNotFound" "Unsupported DID"))
-        (let [url (if (str/starts-with? did "did:plc:") (str (:plc-url resolver) "/" did)
+        (let [plc? (str/starts-with? did "did:plc:")
+              url (if plc? (str (:plc-url resolver) "/" did "/log/audit")
                       (str "https://" (subs did 8) "/.well-known/did.json"))
-              {:keys [status body]} (fetch! resolver url {:maximum 1048576 :timeout-ms 5000} "DidResolutionFailed")]
+              options (if plc? {:maximum (* 4 1024 1024) :timeout-ms 5000 :redirects 0}
+                               {:maximum 1048576 :timeout-ms 5000})
+              {:keys [status body]} (fetch! resolver url options "DidResolutionFailed")]
           (when (= 404 status) (errors/raise! 400 "DidNotFound" "DID was not found"))
           (when (= 410 status) (errors/raise! 400 "DidDeactivated" "DID is deactivated"))
           (when-not (= 200 status) (errors/raise! 502 "DidResolutionFailed" "DID endpoint returned an unexpected status"))
-          (let [document (try (request/json-body {:headers {"content-type" "application/json"}
-                                                  :body (ByteArrayInputStream. body)})
-                              (catch Exception _ (errors/raise! 502 "DidResolutionFailed" "Invalid DID document")))]
+          (let [document (try (if plc?
+                               (plc/did-document (:data (plc/verify-audit! did (request/json-value body))))
+                               (request/json-body {:headers {"content-type" "application/json"}
+                                                   :body (ByteArrayInputStream. body)}))
+                              (catch Exception _ (errors/raise! 502 "DidResolutionFailed" "Invalid DID document or PLC audit")))]
+            (when (and plc? (nil? document)) (errors/raise! 400 "DidDeactivated" "PLC DID is tombstoned"))
             (when-not (= did (get document "id")) (errors/raise! 502 "DidResolutionFailed" "DID document identifier mismatch"))
             document)))))
 

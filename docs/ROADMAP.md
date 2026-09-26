@@ -86,8 +86,10 @@ claimed. Preserve atomic feature commits and test each protocol boundary.
   fields. Recommended public DID credentials and email-authorized PLC operation
   signatures are exposed for migration. Signed submissions enforce local credential
   constraints and reconcile through the durable identity queue. Local key rotation,
-  migration and conflicted-operation administration remain pending;
-  general PLC resolution still trusts the directory's HTTPS document response.
+  migration and conflicted-operation administration remain pending. General PLC
+  resolution verifies audit history and derives the current document, including
+  for hosted accounts. It does not fall back to a stale local snapshot. Directory
+  timestamps and history completeness/freshness remain trusted assertions.
 - Track conformance honestly: unsupported features stay unsupported until their
   invariants are implemented. Health indicates process liveness, not federation
   readiness.

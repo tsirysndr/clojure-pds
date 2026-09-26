@@ -1,30 +1,37 @@
 (ns pds.identity-api-test
   (:require [clojure.data.json :as json]
             [clojure.test :refer [deftest is use-fixtures]]
+            [pds.accounts :as accounts]
             [pds.app :as app]
             [pds.crypto :as crypto]
             [pds.db :as db]
             [pds.db-test :as fixture]
             [pds.http :as http]
             [pds.identity :as identity]
+            [pds.plc :as plc]
+            [pds.plc-directory :as directory]
+            [pds.plc-directory-test :as directory-test]
+            [pds.plc-provision-test :as provision-test]
+            [pds.plc-test :as plc-test]
             [pds.protocol.codec :as codec]
             [pds.server-api-test :as api])
   (:import [java.net.http HttpClient]))
 (use-fixtures :each fixture/isolated-database)
 
 (deftest hosted-and-remote-identity-routes
-  (let [remote "did:plc:ewvi7nxzyoun6zhxrhs64oiz"
-        key (crypto/keypair "ES256K")
-        document (atom {"id" remote "alsoKnownAs" ["at://remote.example.com"]
-                       "verificationMethod" [{"id" "#atproto" "type" "Multikey" "controller" remote
-                                              "publicKeyMultibase" (crypto/multikey "ES256K" (:public key))}]
-                       "service" [{"id" "#atproto_pds" "type" "AtprotoPersonalDataServer" "serviceEndpoint" "https://remote-pds.example.com"}]})
+  (let [key (crypto/keypair "ES256K")
+        genesis (plc/sign-operation (assoc (plc-test/unsigned [key] key)
+                                          "alsoKnownAs" ["at://remote.example.com"]
+                                          "services" {"atproto_pds" {"type" "AtprotoPersonalDataServer" "endpoint" "https://remote-pds.example.com"}}) key)
+        remote (plc/genesis-did genesis)
+        document (plc/did-document (plc/operation-data remote genesis))
+        audit (atom [(plc-test/row remote genesis "2026-01-01T00:00:00Z" false)])
         outbound (atom [])
         settings (merge (api/settings)
                         {:plc-url "https://directory.example.com"
                          :txt-lookup (fn [name] (swap! outbound conj name) [(str "did=" remote)])
                          :fetch (fn [url _] (swap! outbound conj url)
-                                  {:status 200 :body (codec/utf8 (json/write-str @document))})})
+                                  {:status 200 :body (codec/utf8 (json/write-str @audit))})})
         server (http/start! settings (app/handler settings fixture/*ds*))]
     (try
       (with-open [client (HttpClient/newHttpClient)]
@@ -44,11 +51,12 @@
           (is (empty? @outbound) "Hosted identities and the service document use PostgreSQL without network calls")
           (let [resolved (call "GET" "com.atproto.identity.resolveIdentity?identifier=remote.example.com" nil)]
             (is (= 200 (:status resolved)))
-            (is (= {"did" remote "handle" "remote.example.com" "didDoc" @document} (:body resolved)))
+            (is (= {"did" remote "handle" "remote.example.com" "didDoc" document} (:body resolved)))
             (is (= "ES256K" (:algorithm (identity/signing-key (get-in resolved [:body "didDoc"])))))
             (is (= "https://remote-pds.example.com" (identity/pds-endpoint (get-in resolved [:body "didDoc"])))))
-          (is (some #{(str "https://directory.example.com/" remote)} @outbound))
-          (swap! document assoc "alsoKnownAs" ["at://handle.invalid" "at://remote.example.com"])
+          (is (some #{(str "https://directory.example.com/" remote "/log/audit")} @outbound))
+          (swap! audit conj (plc-test/row remote (plc-test/update-op genesis key {"alsoKnownAs" ["at://handle.invalid" "at://remote.example.com"]})
+                                        "2026-01-01T01:00:00Z" false))
           (is (= "handle.invalid" (get-in (call "POST" "com.atproto.identity.refreshIdentity" {"identifier" remote}) [:body "handle"])))
           (doseq [endpoint ["com.atproto.identity.resolveHandle" "com.atproto.identity.resolveHandle?handle=alice.example.com&handle=bob.example.com"
                             "com.atproto.identity.resolveDid?did=bad" "com.atproto.identity.resolveIdentity?identifier=bad"]]
@@ -62,3 +70,38 @@
             (is (= "HandleNotFound" (get-in (call "GET" "com.atproto.identity.resolveHandle?handle=alice.example.com" nil) [:body "error"])))
             (is (= before @outbound) "Deleted hosted identities cannot fall through to outbound resolution"))))
       (finally ((:stop! server))))))
+
+(deftest hosted-plc-resolution-observes-external-migration-and-fails-closed
+  (directory-test/with-directory
+    (fn [{:keys [client origin audit-body]}]
+      (let [settings (provision-test/settings client origin)
+            account (accounts/create! fixture/*ds* settings (provision-test/signup)) did (:did account)
+            row (first (provision-test/rows "SELECT * FROM plc_identities WHERE did = ?" did))
+            genesis (codec/decode (:operation row))
+            signer {:algorithm "ES256K" :private (crypto/unseal (:master-key settings) (str did ":plc-rotation") (:rotation_key row))}
+            replacement (crypto/keypair "ES256")
+            moved (plc-test/update-op genesis signer
+                    {"alsoKnownAs" ["at://moved.example.net"]
+                     "verificationMethods" {"atproto" (plc/did-key replacement)}
+                     "services" {"atproto_pds" {"type" "AtprotoPersonalDataServer" "endpoint" "https://destination.example.net"}}})
+            server (http/start! (assoc settings :txt-lookup (fn [_] [(str "did=" did)]))
+                                (app/handler (assoc settings :txt-lookup (fn [_] [(str "did=" did)])) fixture/*ds*))]
+        (try
+          (directory/ensure-operation! client origin did moved)
+          (with-open [http (HttpClient/newHttpClient)]
+            (let [resolve #(api/xrpc http (:port server) "GET" (str "com.atproto.identity.resolveDid?did=" did) nil nil)
+                  response (resolve) document (get-in response [:body "didDoc"])]
+              (is (= 200 (:status response)))
+              (is (= (plc/did-document (plc/operation-data did moved)) document))
+              (is (= "https://destination.example.net" (identity/pds-endpoint document)))
+              (is (= (vec (:public replacement)) (vec (:public (identity/signing-key document)))))
+              (is (= (:operation_cid row) (:operation_cid (first (provision-test/rows "SELECT operation_cid FROM plc_identities WHERE did = ?" did))))
+                  "Resolving current remote state does not silently mutate local keys")
+              (is (= "moved.example.net" (get-in (api/xrpc http (:port server) "POST" "com.atproto.identity.refreshIdentity"
+                                                                 {"identifier" did} nil) [:body "handle"])))
+              (reset! audit-body (json/write-str (plc/did-document (plc/operation-data did genesis))))
+              (is (= "DidResolutionFailed" (get-in (resolve) [:body "error"])) "Invalid audit cannot fall back to a local snapshot")
+              (reset! audit-body nil)
+              (directory/ensure-operation! client origin did (plc-test/tombstone moved signer))
+              (is (= "DidDeactivated" (get-in (resolve) [:body "error"])))))
+          (finally ((:stop! server))))))))
