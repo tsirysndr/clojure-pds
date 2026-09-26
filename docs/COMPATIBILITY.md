@@ -50,7 +50,18 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
   certificate/hostname verification. PostgreSQL/HTTP tests cover hosted, remote,
   deleted and service identities. Resolution uses no application cache yet;
   `refreshIdentity` fetches fresh data. PLC directory responses are trusted over
-  verified HTTPS; PLC operation-chain verification and provisioning remain pending.
+  verified HTTPS. PLC operation and audit verification primitives are implemented
+  but are not yet wired into directory resolution/provisioning.
+- PLC operations use canonical DAG-CBOR, string CID links, deterministic low-S
+  signatures, a 7500-byte specification bound, and strict unpadded base64url.
+  Tests cover modern and legacy genesis hashes, old-key authorization of updates,
+  rotation, tombstones, and recovery with higher-priority keys within 72 hours.
+  Audit verification recomputes nullification flags; directory timestamps remain
+  trusted assertions. Pinned `@did-plc/lib` 0.0.4 verifies our chains and recovery,
+  and Clojure verifies reference-generated chains on both curves. Generation uses
+  `@atproto/crypto` 0.5.5 because the PLC package's old P-256 signer predates mandatory
+  low-S signatures. A read-only smoke check also verified the four-operation public
+  audit log for `did:plc:z72i7hdynmk6r22z27h6tvur`; no operation was submitted.
 - Canonical CBOR encoding and CID generation match upstream bytes/hashes. Decoding
   rejects noncanonical forms, invalid UTF-8, duplicate keys, floats, trailing data,
   and oversized/deep blocks. JSON request depth is bounded before parsing.
@@ -107,7 +118,7 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
 
 1. Expand the Lexicon catalog, dynamic schema resolution, and complete input/output
    validation against pinned official endpoint lexicons.
-2. did:plc provisioning, PLC operation-chain verification, bounded identity caching,
+2. did:plc provisioning, integrating PLC audit verification, bounded identity caching,
    handle updates, signing/rotation key lifecycle, and migration.
 3. Remaining administrative APIs, record/blob takedowns, and broader account recovery controls.
 4. OAuth authorization server: metadata, PAR, PKCE, DPoP, client metadata/consent,

@@ -77,6 +77,11 @@ claimed. Preserve atomic feature commits and test each protocol boundary.
   and deadlines, and manual redirect validation. Cookies and transparent
   decompression are disabled. Tests exercise real HTTP/TLS sockets, redirects,
   mixed DNS answers and certificate failures before identity endpoints use it.
+- Pure PLC operations support both curves, legacy genesis verification, canonical
+  chain verification and audit recovery rules. Tests exchange signed operations
+  with the pinned reference library. Directory submission, durable provisioning
+  and account key ownership are the next integration steps; resolving a PLC DID
+  currently still trusts the directory's HTTPS document response.
 - Track conformance honestly: unsupported features stay unsupported until their
   invariants are implemented. Health indicates process liveness, not federation
   readiness.

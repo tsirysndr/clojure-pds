@@ -3,8 +3,10 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@atproto/crypto": "0.5.5",
     "@atproto/lex-cbor": "0.1.6",
     "@atproto/lex-data": "0.1.7",
-    "@atproto/repo": "0.10.14"
+    "@atproto/repo": "0.10.14",
+    "@did-plc/lib": "0.0.4"
   }
 }
