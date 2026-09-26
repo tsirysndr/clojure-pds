@@ -56,6 +56,12 @@ jobs:
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           version: 0.11.6
+      - name: Verify compiled account UI assets
+        run: |
+          npm ci --prefix scripts/ui --ignore-scripts
+          npm run --prefix scripts/ui build
+          git diff --exit-code -- resources/security/style.css
+          node --check resources/security/app.js
       - name: Install pinned upstream conformance tools
         run: npm ci --prefix scripts/conformance --ignore-scripts
       - name: Run Clojure, PostgreSQL, Redis, S3 and upstream conformance tests
