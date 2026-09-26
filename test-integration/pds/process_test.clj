@@ -18,8 +18,17 @@
                  "PDS_HOST" "127.0.0.1" "PDS_PORT" "0" "PDS_HOSTNAME" "localhost"
                  "PDS_PUBLIC_URL" "http://localhost:3000" "PDS_USER_DOMAIN" "pds.localhost"
                  "PDS_ENABLE_SIGNUP" "false"})
-    (.put env "PDS_BLOB_BACKEND" "postgres")
-    (.put env "PDS_RATE_LIMIT_BACKEND" "memory")
+    (.putAll env (if-let [endpoint (System/getenv "PDS_TEST_S3_ENDPOINT")]
+                   {"PDS_BLOB_BACKEND" "s3" "PDS_S3_ENDPOINT" endpoint "PDS_S3_BUCKET" "startup-test"
+                    "PDS_S3_ACCESS_KEY_ID" "test-access" "PDS_S3_SECRET_ACCESS_KEY" "test-secret"
+                    "PDS_S3_REGION" "us-east-1" "PDS_S3_FORCE_PATH_STYLE" "true" "PDS_S3_PREFIX" "blobs"}
+                   {"PDS_BLOB_BACKEND" "postgres"}))
+    (.putAll env (if-let [url (System/getenv "PDS_TEST_REDIS_URL")]
+                   {"PDS_RATE_LIMIT_BACKEND" "redis" "PDS_REDIS_URL" url "PDS_REDIS_PREFIX" "startup-test"}
+                   {"PDS_RATE_LIMIT_BACKEND" "memory"}))
+    (.put env "PDS_RATE_LIMIT_REQUESTS" "120")
+    (.put env "PDS_RATE_LIMIT_WINDOW_SECONDS" "60")
+    (.remove env "PDS_S3_SESSION_TOKEN")
     (.redirectErrorStream builder true)
     (let [process (.start builder)
           reader (io/reader (.getInputStream process))

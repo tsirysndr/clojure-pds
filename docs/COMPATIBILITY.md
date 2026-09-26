@@ -2,7 +2,7 @@
 
 Last verified: 2026-09-26. This is a development implementation, not a complete
 AT Protocol PDS. Passing internal/fixture tests does not establish full network
-interoperability. Current tests with local S3 and Redis: 47 Clojure tests, 1,345 assertions; one Worker
+interoperability. Current tests with local S3 and Redis: 48 Clojure tests, 1,386 assertions; one Worker
 contract test. PostgreSQL tests used version 18.6 and the mise-pinned JDK 25.0.3.
 
 ## Implemented routes
