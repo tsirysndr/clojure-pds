@@ -72,6 +72,11 @@ claimed. Preserve atomic feature commits and test each protocol boundary.
 - PostgreSQL is the storage backend. Migrations are transactional, serialized by
   an advisory lock, and checked for changes using SHA-256. Integration tests use
   an isolated PostgreSQL cluster and disposable schemas.
+- Remote identity fetches use a shared Jetty client with HTTPS certificate and
+  hostname verification, validated public socket addresses, bounded responses
+  and deadlines, and manual redirect validation. Cookies and transparent
+  decompression are disabled. Tests exercise real HTTP/TLS sockets, redirects,
+  mixed DNS answers and certificate failures before identity endpoints use it.
 - Track conformance honestly: unsupported features stay unsupported until their
   invariants are implemented. Health indicates process liveness, not federation
   readiness.

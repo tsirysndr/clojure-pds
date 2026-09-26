@@ -1,0 +1,123 @@
+(ns pds.net
+  (:require [clojure.string :as str])
+  (:import [java.net URI InetAddress InetSocketAddress]
+           [java.util.concurrent CompletableFuture TimeUnit]
+           [org.eclipse.jetty.client HttpClient BufferingResponseListener Result]
+           [org.eclipse.jetty.http HttpCookieStore$Empty]
+           [org.eclipse.jetty.util Promise SocketAddressResolver SocketAddressResolver$Async]))
+
+(defn- in-prefix? [^bytes address ^bytes prefix bits]
+  (and (= (alength address) (alength prefix))
+       (every? (fn [i]
+                 (let [mask (bit-and 255 (bit-shift-left 255 (- 8 (min 8 (- bits (* 8 i))))))]
+                   (= (bit-and mask (aget address i)) (bit-and mask (aget prefix i)))))
+               (range (quot (+ bits 7) 8)))))
+
+(def blocked-prefixes
+  (mapv (fn [[ip bits]] [(.getAddress (InetAddress/getByName ip)) bits])
+        [["0.0.0.0" 8] ["10.0.0.0" 8] ["100.64.0.0" 10] ["127.0.0.0" 8]
+         ["169.254.0.0" 16] ["172.16.0.0" 12] ["192.0.0.0" 24] ["192.0.2.0" 24]
+         ["192.88.99.0" 24] ["192.168.0.0" 16] ["198.18.0.0" 15] ["198.51.100.0" 24]
+         ["203.0.113.0" 24] ["224.0.0.0" 4] ["240.0.0.0" 4]
+         ["2001::" 23] ["2001:db8::" 32] ["2002::" 16] ["3fff::" 20]]))
+
+(defn public-address? [^InetAddress address]
+  (let [bytes (.getAddress address)]
+    (and (not (.isAnyLocalAddress address)) (not (.isLoopbackAddress address))
+         (not (.isLinkLocalAddress address)) (not (.isSiteLocalAddress address)) (not (.isMulticastAddress address))
+         (or (= 4 (alength bytes)) (in-prefix? bytes (.getAddress (InetAddress/getByName "2000::")) 3))
+         (not-any? (fn [[prefix bits]] (in-prefix? bytes prefix bits)) blocked-prefixes))))
+
+(defn https-uri! [value]
+  (let [uri (try (URI/create value) (catch Exception _ nil))]
+    (when-not (and uri (= "https" (.getScheme uri)) (seq (.getHost uri))
+                   (nil? (.getUserInfo uri)) (nil? (.getFragment uri))
+                   (<= (count value) 8192) (or (= -1 (.getPort uri)) (<= 1 (.getPort uri) 65535)))
+      (throw (ex-info "Expected an absolute HTTPS URL without credentials or fragment" {:network-error :url})))
+    uri))
+
+(defn guarded-resolver [^SocketAddressResolver delegate allowed?]
+  (reify SocketAddressResolver
+    (resolve [_ host port context promise]
+      (.resolve delegate host port context
+        (reify Promise
+          (succeeded [_ addresses]
+            (if (and (seq addresses) (every? #(and (not (.isUnresolved ^InetSocketAddress %))
+                                                                  (allowed? (.getAddress ^InetSocketAddress %))) addresses))
+              ;; Hand the *resolved* socket addresses directly to the connector:
+              ;; no second DNS lookup occurs between validation and connection.
+              (.succeeded ^Promise promise
+                (mapv (fn [^InetSocketAddress address]
+                        ;; Keep the original hostname for SNI/certificate checks
+                        ;; while binding the socket to the validated IP bytes.
+                        (InetSocketAddress. (InetAddress/getByAddress host (.getAddress (.getAddress address))) port)) addresses))
+              (.failed ^Promise promise (ex-info "Destination address is not public" {:network-error :address}))))
+          (failed [_ error] (.failed ^Promise promise error)))))))
+
+(defrecord Client [^HttpClient http uri-validator]
+  java.io.Closeable
+  (close [_] (.stop http)))
+
+(defn open-client
+  ([] (open-client {}))
+  ([{:keys [resolver address-policy uri-validator ssl-context]
+     :or {address-policy public-address? uri-validator https-uri!}}]
+   ;; Overrides are dependency injection for isolated tests, never environment
+   ;; flags. Production callers use the secure zero-argument constructor.
+   (let [client (doto (HttpClient.) (.setFollowRedirects false)
+                  (.setAddressResolutionTimeout 2000) (.setConnectTimeout 3000)
+                  (.setIdleTimeout 5000) (.setMaxResponseHeadersSize 16384)
+                  (.setMaxConnectionsPerDestination 4) (.setMaxRequestsQueuedPerDestination 16)
+                  (.setMaxDestinations 256) (.setDestinationIdleTimeout 30000)
+                  (.setHttpCookieStore (HttpCookieStore$Empty.)))]
+     (try
+       (when ssl-context (.setSslContextFactory client ssl-context))
+       (.setSocketAddressResolver client
+         (guarded-resolver
+           (or resolver (reify SocketAddressResolver
+                          (resolve [_ host port context promise]
+                            (.resolve (SocketAddressResolver$Async. (.getExecutor client) (.getScheduler client) 2000)
+                                      host port context promise)))) address-policy))
+       (.start client)
+       ;; Never enable transparent compression: callers bound the actual bytes
+       ;; received, and reject encoded payloads instead of decompressing bombs.
+       (.clear (.getContentDecoderFactories client))
+       (->Client client uri-validator)
+       (catch Throwable e (.stop client) (throw e))))))
+
+(defn- request! [^HttpClient client ^URI uri maximum timeout-ms]
+  (let [done (CompletableFuture.)
+        request (-> (.newRequest client uri) (.timeout (long timeout-ms) TimeUnit/MILLISECONDS))
+        listener (proxy [BufferingResponseListener] [(int maximum)]
+                   (onComplete [^Result result]
+                     (if (.isFailed result)
+                       (.completeExceptionally done (.getFailure result))
+                       (let [response (.getResponse result)]
+                         (.complete done {:status (.getStatus response)
+                                          :headers (into {} (map (fn [field] [(str/lower-case (.getName ^org.eclipse.jetty.http.HttpField field))
+                                                                             (.getValue ^org.eclipse.jetty.http.HttpField field)])) (.getHeaders response))
+                                          :body (.getContent this)})))))]
+    (try
+      (.send request listener)
+      (.get done (long timeout-ms) TimeUnit/MILLISECONDS)
+      (catch Exception e (.abort request e) (throw e)))))
+
+(defn fetch!
+  "Bounded public GET. Every redirect is validated and every new connection uses
+  the guarded DNS resolver. No cookie jar, ambient credentials, or automatic redirects."
+  ([client url] (fetch! client url {}))
+  ([client url {:keys [maximum timeout-ms redirects] :or {maximum 1048576 timeout-ms 10000 redirects 3}}]
+   (let [deadline (+ (System/nanoTime) (* 1000000 timeout-ms))]
+     (loop [uri ((:uri-validator client) url) hops 0]
+       (let [remaining (quot (- deadline (System/nanoTime)) 1000000)]
+         (when-not (pos? remaining) (throw (java.util.concurrent.TimeoutException. "Outbound request deadline")))
+         (let [{:keys [status headers] :as response} (request! (:http client) uri maximum remaining)]
+           (when-let [encoding (get headers "content-encoding")]
+             (when-not (= "identity" (str/lower-case encoding))
+               (throw (ex-info "Encoded response is unsupported" {:network-error :encoding}))))
+           (if (#{301 302 303 307 308} status)
+             (do (when (>= hops redirects) (throw (ex-info "Redirect limit exceeded" {:network-error :redirect})))
+                 (let [location (get headers "location")]
+                   (when-not location (throw (ex-info "Redirect has no location" {:network-error :redirect})))
+                   (recur ((:uri-validator client) (str (.resolve ^URI uri ^String location))) (inc hops))))
+             response)))))))
