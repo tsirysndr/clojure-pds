@@ -19,6 +19,7 @@
                  "PDS_PUBLIC_URL" "http://localhost:3000" "PDS_USER_DOMAIN" "pds.localhost"
                  "PDS_ENABLE_SIGNUP" "false"})
     (.put env "PDS_BLOB_BACKEND" "postgres")
+    (.put env "PDS_RATE_LIMIT_BACKEND" "memory")
     (.redirectErrorStream builder true)
     (let [process (.start builder)
           reader (io/reader (.getInputStream process))

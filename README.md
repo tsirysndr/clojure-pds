@@ -80,6 +80,9 @@ to avoid wrapping Rebel in a second readline tool.
 | `PDS_DATABASE_USER` | `pds` | Database role |
 | `PDS_DATABASE_PASSWORD` | empty | Database password |
 | `PDS_BLOB_BACKEND` | `postgres` | `postgres` or `s3`; [S3 settings](docs/S3.md) |
+| `PDS_RATE_LIMIT_BACKEND` | `memory` | `memory` or `redis`; [Redis settings](docs/REDIS.md) |
+| `PDS_RATE_LIMIT_REQUESTS` | `120` | Requests per IP per window |
+| `PDS_RATE_LIMIT_WINDOW_SECONDS` | `60` | Fixed window duration |
 | `PDS_EMAIL_WORKER_URL` | unset | Email Worker HTTPS endpoint |
 | `PDS_EMAIL_WORKER_TOKEN` | unset | Worker shared secret |
 | `PDS_EMAIL_FROM` | unset | Verified sending address |
@@ -147,8 +150,9 @@ a duplicate. Receipts are retained indefinitely; plan retention for larger syste
   default or a [configurable S3-compatible backend](docs/S3.md). PostgreSQL always
   holds ownership and metadata. Streaming, MIME sniffing, and unreferenced-blob
   cleanup are unfinished.
-- Rate limits are bounded, per-process, 120 requests/IP/minute. A deployment needs
-  shared proxy limits; untrusted forwarding headers are ignored.
+- Rate limits default to bounded, per-process memory with 120 requests/IP/minute.
+  [Optional Redis](docs/REDIS.md) shares counters across instances. Untrusted
+  forwarding headers are ignored; reverse proxies need an appropriate limit policy.
 - OAuth, WebSocket sync, relay integration, service proxying, and production
   operations remain on the roadmap. A reference Bluesky client/relay has not yet
   been used for end-to-end conformance testing.

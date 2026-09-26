@@ -53,12 +53,13 @@ runnable and update this document as features land.
 ## Architecture decisions
 
 Current checkpoint: PostgreSQL persistence, configurable Cloudflare Worker email,
+optional S3-compatible blob storage, optional Redis rate limits (in-memory default),
 protocol codecs/identifiers, signed repositories, hosted did:web accounts,
-rotating sessions, email recovery, record APIs, CAR exports, and blobs are
+rotating sessions, email recovery, schema-validated record APIs, CAR exports, and blobs are
 implemented. See [the compatibility matrix](COMPATIBILITY.md) for exact coverage,
 verification evidence, and limits. Full PDS compatibility is not achieved yet.
 
-Next implementation series: complete Lexicon validation and hosted account
+Next implementation series: extend Lexicon endpoint validation and hosted account
 lifecycle, remote identity/PLC, then streaming sync and relay conformance. OAuth
 and service proxying remain required before a full client integration can be
 claimed. Preserve atomic feature commits and test each protocol boundary.

@@ -2,7 +2,7 @@
 
 Last verified: 2026-09-26. This is a development implementation, not a complete
 AT Protocol PDS. Passing internal/fixture tests does not establish full network
-interoperability. Current tests with local S3 emulator: 43 Clojure tests, 1,313 assertions; one Worker
+interoperability. Current tests with local S3 and Redis: 47 Clojure tests, 1,345 assertions; one Worker
 contract test. PostgreSQL tests used version 18.6 and the mise-pinned JDK 25.0.3.
 
 ## Implemented routes
@@ -59,6 +59,9 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
   ownership, duplicate uploads, missing objects and failed PUT rollback; fault
   tests cover corrupted content. Live provider behavior remains unverified.
 - A child-JVM test runs `pds.main`, checks HTTP health, and verifies graceful shutdown.
+- Rate limiting defaults to bounded in-memory counters. Optional Redis uses atomic
+  expiring counters; real Redis 8.2.3 tests cover concurrent budgets shared by two
+  clients, expiry, reopen, isolation and failures. Forwarding headers remain ignored.
 
 ## Remaining work for a full PDS
 
@@ -77,7 +80,7 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
    client/relay end-to-end tests.
 7. Repository import, blob missing/list-since behavior, garbage collection,
    incremental MST mutation, streaming, quotas and bulk blob-backend migration.
-8. Connection pooling, distributed abuse controls, metrics/logging, CORS,
+8. PostgreSQL connection pooling, account-specific abuse controls, metrics/logging, CORS,
    operational deployment/TLS, backup/restore drills and CI.
 
 ## Source pins

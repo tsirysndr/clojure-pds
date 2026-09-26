@@ -6,20 +6,28 @@
             [pds.db :as db]
             [pds.email :as email]
             [pds.http :as http]
+            [pds.redis :as redis]
             [pds.s3 :as s3]))
 
 (defn -main [& _]
   (let [email-config (email/settings)
         blob-config (s3/settings (System/getenv))
+        rate-config (redis/settings (System/getenv))
         settings (merge (config/load-config) (accounts/settings (System/getenv))
                         (auth/settings (System/getenv)) {:email-enabled (boolean email-config)})
         ds (db/datasource (db/settings))
         _ (db/migrate! ds)
         blob-store (s3/open-store blob-config)
-        settings (assoc settings :blob-store blob-store)
-        blob-closed? (atom false)
-        stop-blob! #(when (and blob-store (compare-and-set! blob-closed? false true))
-                      (.close ^java.io.Closeable blob-store))]
+        limiter (try (redis/open-limiter rate-config)
+                     (catch Throwable t
+                       (when blob-store (.close ^java.io.Closeable blob-store))
+                       (throw t)))
+        settings (assoc settings :blob-store blob-store :rate-limiter limiter)
+        dependencies-closed? (atom false)
+        stop-dependencies! #(when (compare-and-set! dependencies-closed? false true)
+                              (try (when blob-store (.close ^java.io.Closeable blob-store))
+                                   (finally (when (instance? java.io.Closeable limiter)
+                                              (.close ^java.io.Closeable limiter)))))]
     (try
       (let [stop-email! (email/start! ds email-config)]
         (try
@@ -28,7 +36,7 @@
                 once (atom false)
                 stop-all! (fn [] (when (compare-and-set! once false true)
                                    (try (stop!)
-                                        (finally (try (stop-email!) (finally (stop-blob!)))))))
+                                        (finally (try (stop-email!) (finally (stop-dependencies!)))))))
                 hook (Thread. ^Runnable (fn [] (try (stop-all!) (finally (deliver stopped true)))))
                 runtime (Runtime/getRuntime)]
             (try
@@ -39,4 +47,4 @@
                 (stop-all!)
                 (try (.removeShutdownHook runtime hook) (catch IllegalStateException _)))))
           (catch Throwable e (stop-email!) (throw e))))
-      (finally (stop-blob!)))))
+      (finally (stop-dependencies!)))))

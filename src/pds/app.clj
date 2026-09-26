@@ -29,4 +29,5 @@
        :handler (fn [_]
                   (xrpc/response 200 {:did (:service-did config)
                                       :blobUploadLimit blob-api/max-size
-                                      :availableUserDomains (if (and ds (:signup-enabled config)) [(str "." (:user-domain config))] [])}))}}))))))
+                                      :availableUserDomains (if (and ds (:signup-enabled config)) [(str "." (:user-domain config))] [])}))}}))
+     (or (:rate-limiter config) (rate-limit/memory-limiter))))))

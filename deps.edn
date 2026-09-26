@@ -7,7 +7,8 @@
                                   :exclusions [software.amazon.awssdk/apache5-client
                                                software.amazon.awssdk/apache-client
                                                software.amazon.awssdk/netty-nio-client]}
-        software.amazon.awssdk/url-connection-client {:mvn/version "2.55.6"}}
+        software.amazon.awssdk/url-connection-client {:mvn/version "2.55.6"}
+        redis.clients/jedis {:mvn/version "8.0.1"}}
  :aliases
  {:run {:main-opts ["-m" "pds.main"]}
   :repl {:extra-paths ["test"]
