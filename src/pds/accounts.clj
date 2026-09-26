@@ -89,7 +89,7 @@
          (fn [conn]
            (db/execute! conn "INSERT INTO accounts(did, handle, email, password_hash) VALUES (?, ?, ?, ?)" did handle address hash)
            (invites/consume! conn settings (get body "inviteCode") did)
-           (repo/initialize! conn settings did)
+           (repo/initialize! conn settings did handle)
            (let [account (resolve-account conn did)]
              (when (:email-enabled settings) (issue-email! conn account "confirm-email"))
              (merge (public-account account) (auth/issue! conn settings did nil)

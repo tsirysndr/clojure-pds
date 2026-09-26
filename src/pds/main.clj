@@ -8,6 +8,7 @@
             [pds.db :as db]
             [pds.email :as email]
             [pds.http :as http]
+            [pds.firehose :as firehose]
             [pds.invites :as invites]
             [pds.redis :as redis]
             [pds.s3 :as s3]))
@@ -18,6 +19,7 @@
         rate-config (redis/settings (System/getenv))
         settings (merge (config/load-config) (accounts/settings (System/getenv))
                         (admin/settings (System/getenv)) (invites/settings (System/getenv))
+                        (firehose/settings (System/getenv))
                         (auth/settings (System/getenv)) {:email-enabled (boolean email-config)})
         ds (db/datasource (db/settings))
         _ (db/migrate! ds)

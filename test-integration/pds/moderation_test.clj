@@ -68,6 +68,6 @@
           (is (= 200 (:status (call "POST" "com.atproto.server.createAccount" (invites-test/signup "invited" code) nil))))
           (with-open [conn (db/connection fixture/*ds*)]
             (let [events (mapv #(codec/decode (:payload %)) (db/query conn "SELECT payload FROM repo_events WHERE did = ? AND event_type = 'account' ORDER BY seq" did))]
-              (is (= ["takendown" "deactivated" nil "deactivated" "takendown" "deactivated" nil]
+              (is (= [nil "takendown" "deactivated" nil "deactivated" "takendown" "deactivated" nil]
                      (mapv #(get % "status") events)))))))
       (finally ((:stop! server))))))

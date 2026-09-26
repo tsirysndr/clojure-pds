@@ -209,7 +209,16 @@ a duplicate. Receipts are retained indefinitely; plan retention for larger syste
   inductive verification. Records are limited to 1,000,000 encoded bytes and
   commit proofs to 2,000,000 bytes; oversized batches roll back. The upstream
   conformance suite verifies signatures and reconstructs previous MST roots.
-  Public WebSocket delivery remains unfinished.
+  `com.atproto.sync.subscribeRepos` delivers these events over binary WebSockets.
+  Without a cursor it starts live; `cursor=0` replays the backfill window, and a
+  nonzero cursor resumes after the last processed sequence (matching the reference
+  PDS). The default window is 24 hours, configured with
+  `PDS_FIREHOSE_BACKFILL_SECONDS`. Old cursors receive `OutdatedCursor`; future
+  cursors fail. Account availability is checked before each content frame.
+  `PDS_FIREHOSE_MAX_CLIENTS` defaults to 64 per process and
+  `PDS_FIREHOSE_MAX_BACKLOG` to 1,000 new events. Sends have a five-second deadline
+  and only one message in flight. Configure your HTTPS proxy to pass WebSocket
+  upgrades. The replay window currently limits queries, not physical event retention.
 - Blob uploads are buffered and capped at 5 MiB. Bytes use PostgreSQL `bytea` by
   default or a [configurable S3-compatible backend](docs/S3.md). PostgreSQL always
   holds ownership and metadata. Streaming, MIME sniffing, and unreferenced-blob
@@ -217,7 +226,7 @@ a duplicate. Receipts are retained indefinitely; plan retention for larger syste
 - Rate limits default to bounded, per-process memory with 120 requests/IP/minute.
   [Optional Redis](docs/REDIS.md) shares counters across instances. Untrusted
   forwarding headers are ignored; reverse proxies need an appropriate limit policy.
-- OAuth, WebSocket sync, relay integration, service proxying, and production
+- OAuth, relay integration, service proxying, and production
   operations remain on the roadmap. A reference Bluesky client/relay has not yet
   been used for end-to-end conformance testing.
 

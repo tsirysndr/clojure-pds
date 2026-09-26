@@ -50,6 +50,13 @@
               (fn []
                 (try (on-open {:send! send! :ping! ping! :open? #(.isOpen ^Session session)
                                :close! #(.close ^Session session (int %1) ^String %2 org.eclipse.jetty.websocket.api.Callback/NOOP)})
+                     (when (.isOpen ^Session session)
+                       (let [closed (CompletableFuture.)]
+                         (.close ^Session session 1000 "Stream ended"
+                           (reify org.eclipse.jetty.websocket.api.Callback
+                             (succeed [_] (.complete closed true))
+                             (fail [_ error] (.completeExceptionally closed error))))
+                         (.get closed (long send-timeout-ms) TimeUnit/MILLISECONDS)))
                      (catch InterruptedException _ (.interrupt (Thread/currentThread)))
                      (catch Exception _ (.disconnect ^Session session))
                      (finally (swap! sessions disj session) (.disconnect ^Session session))))))))

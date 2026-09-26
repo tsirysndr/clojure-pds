@@ -40,13 +40,18 @@
             relevant (reduce (fn [all cid] (assoc all cid (:content (first (db/query conn "SELECT content FROM repo_blocks WHERE cid = ?" cid)))))
                              (assoc proof head (codec/encode signed)) record-cids)
             previous (when (:head repo) (codec/decode (:content (first (db/query conn "SELECT content FROM repo_blocks WHERE cid = ?" (:head repo))))))]
+        (when-let [handle (:announce-handle repo)]
+          (events/append! conn (:did repo) "identity" {"did" (:did repo) "handle" handle})
+          (events/account! conn (:did repo) "active"))
         (events/commit! conn (:did repo) head rev (:rev repo) (get previous "data") ops relevant))
       {:cid head :rev rev}))))
-(defn initialize! [conn settings did]
+(defn initialize!
+  ([conn settings did] (initialize! conn settings did nil))
+  ([conn settings did handle]
   (let [{:keys [private public]} (crypto/keypair)]
     (db/execute! conn "INSERT INTO repositories(did, signing_key, public_key) VALUES (?, ?, ?)"
                  did (crypto/seal (:master-key settings) did private) public)
-    (commit! conn settings (state conn did))))
+    (commit! conn settings (assoc (state conn did) :announce-handle handle)))))
 
 (defn path! [collection rkey]
   (when-not (and (syntax/nsid? collection) (syntax/record-key? rkey))

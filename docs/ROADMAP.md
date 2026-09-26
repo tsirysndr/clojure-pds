@@ -38,7 +38,7 @@ runnable and update this document as features land.
 8. **Blob APIs (buffered upload/download implemented):** streaming upload/download, limits, ownership, record references,
    list/missing blobs and garbage collection. Acceptance: binary round trips,
    interrupted upload cleanup and no cross-account access leaks.
-9. **Sync and federation (queries/export/block/proof subset implemented):** durable ordered event log, sync queries, WebSocket
+9. **Sync and federation (queries, proofs and WebSocket firehose implemented; external relay pending):** durable ordered event log, sync queries, WebSocket
    subscribeRepos with replay/backpressure, relay notification and takedowns.
    Acceptance: relay consumes commits and reconnects without losing events.
 10. **Service integration and migration:** authenticated service proxy, service
@@ -66,9 +66,9 @@ claimed. Preserve atomic feature commits and test each protocol boundary.
 
 - Plain Clojure namespaces, explicit dependencies, and pure functions for protocol
   logic; isolate network, clock, randomness and persistence at the edges.
-- Begin with a small JDK HTTP adapter around Ring-shaped request/response maps.
-  Replace/extend the adapter when WebSocket streaming lands; protocol handlers
-  must remain independent of the transport.
+- Jetty serves HTTP and WebSocket upgrades through Ring-shaped request/response
+  maps. Blocking handlers and stream workers use owned virtual threads. A stream
+  worker waits for each send callback with a deadline before producing another frame.
 - PostgreSQL is the storage backend. Migrations are transactional, serialized by
   an advisory lock, and checked for changes using SHA-256. Integration tests use
   an isolated PostgreSQL cluster and disposable schemas.

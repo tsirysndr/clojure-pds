@@ -173,3 +173,15 @@
     (when-not (and (zero? (.available in)) (Arrays/equals data (encode value)))
       (fail! "CBOR must use canonical encoding without trailing bytes"))
     value)))
+
+(defn decode-pair
+  "Decode the two concatenated canonical CBOR values of an event-stream frame."
+  [^bytes data maximum]
+  (when (> (alength data) maximum) (fail! "CBOR frame exceeds the decoding limit"))
+  (let [in (DataInputStream. (ByteArrayInputStream. data))
+        a (decode-value in 0) b (decode-value in 0)
+        out (ByteArrayOutputStream.)]
+    (.write out ^bytes (encode a)) (.write out ^bytes (encode b))
+    (when-not (and (zero? (.available in)) (Arrays/equals data (.toByteArray out)))
+      (fail! "Invalid canonical CBOR pair"))
+    [a b]))

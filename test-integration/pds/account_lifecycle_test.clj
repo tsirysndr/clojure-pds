@@ -53,7 +53,7 @@
           (is (= 200 (:status (call "POST" "com.atproto.repo.putRecord" record token))))
           (is (true? (get-in (call "GET" "com.atproto.server.getSession" nil token) [:body "active"])))
           (with-open [conn (db/connection fixture/*ds*)]
-            (is (= ["account" "account"] (mapv :event_type (db/query conn "SELECT event_type FROM repo_events WHERE event_type = 'account' ORDER BY seq"))))
+            (is (= ["account" "account" "account"] (mapv :event_type (db/query conn "SELECT event_type FROM repo_events WHERE event_type = 'account' ORDER BY seq"))))
             (is (nil? (:delete_after (first (db/query conn "SELECT delete_after FROM accounts WHERE did = ?" did))))))))
       (finally ((:stop! server))))))
 

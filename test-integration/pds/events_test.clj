@@ -28,7 +28,7 @@
                  (mapv #(write :put % (+ 100 %)) (range 20))]]
     (doseq [batch batches] (apply! batch))
     (with-open [conn (db/connection fixture/*ds*)]
-      (let [rows (db/query conn "SELECT * FROM repo_events WHERE did = ? ORDER BY seq" did)
+      (let [rows (db/query conn "SELECT * FROM repo_events WHERE did = ? AND event_type = 'commit' ORDER BY seq" did)
             payloads (mapv #(codec/decode (:payload %) 5000000) rows)
             key (:public_key (first (db/query conn "SELECT public_key FROM repositories WHERE did = ?" did)))]
         (is (= 6 (count rows)))

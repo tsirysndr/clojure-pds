@@ -42,3 +42,22 @@
             (is (map? (deref (:closed connection) 5000 nil)))
             (finally (.abort ^WebSocket (:socket connection))))))
       (finally ((:stop! server))))))
+
+(deftest stalled-send-has-a-deadline
+  (let [executor (java.util.concurrent.Executors/newVirtualThreadPerTaskExecutor)
+        disconnected (promise) sends (atom 0)
+        session (reify org.eclipse.jetty.websocket.api.Session
+                  (setIdleTimeout [_ _])
+                  (setMaxOutgoingFrames [_ _])
+                  (sendBinary [_ _ _] (swap! sends inc))
+                  (isOpen [_] true)
+                  (disconnect [_] (deliver disconnected true)))
+        endpoint (#'http/endpoint executor (atom #{})
+                   {:send-timeout-ms 30 :on-open (fn [{:keys [send!]}]
+                                                 (send! (byte-array [1]))
+                                                 (send! (byte-array [2])))})]
+    (try
+      (.onWebSocketOpen ^org.eclipse.jetty.websocket.api.Session$Listener endpoint session)
+      (is (true? (deref disconnected 2000 false)))
+      (is (= 1 @sends) "A stalled send prevents further buffering")
+      (finally (.shutdownNow executor) (.awaitTermination executor 2 TimeUnit/SECONDS)))))
