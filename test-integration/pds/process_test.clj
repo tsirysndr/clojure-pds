@@ -18,6 +18,7 @@
                  "PDS_HOST" "127.0.0.1" "PDS_PORT" "0" "PDS_HOSTNAME" "localhost"
                  "PDS_PUBLIC_URL" "http://localhost:3000" "PDS_USER_DOMAIN" "pds.localhost"
                  "PDS_ENABLE_SIGNUP" "false"})
+    (.put env "PDS_BLOB_BACKEND" "postgres")
     (.redirectErrorStream builder true)
     (let [process (.start builder)
           reader (io/reader (.getInputStream process))

@@ -2,7 +2,7 @@
 
 Last verified: 2026-09-26. This is a development implementation, not a complete
 AT Protocol PDS. Passing internal/fixture tests does not establish full network
-interoperability. Current tests: 38 Clojure tests, 1,256 assertions; one Worker
+interoperability. Current tests with local S3 emulator: 43 Clojure tests, 1,313 assertions; one Worker
 contract test. PostgreSQL tests used version 18.6 and the mise-pinned JDK 25.0.3.
 
 ## Implemented routes
@@ -54,6 +54,10 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
 - Email tests verify the HTTP contract, retry classes, backoff, concurrent claims,
   expired leases, attempt exhaustion, transactional rollback, and payload cleanup.
   Worker tests use mocked bindings; deployment and provider delivery are unverified.
+- Blob bytes can use PostgreSQL or configurable S3-compatible storage. An upgrade
+  test preserves existing blobs. Moto-backed HTTP tests cover binary round trips,
+  ownership, duplicate uploads, missing objects and failed PUT rollback; fault
+  tests cover corrupted content. Live provider behavior remains unverified.
 - A child-JVM test runs `pds.main`, checks HTTP health, and verifies graceful shutdown.
 
 ## Remaining work for a full PDS
@@ -72,7 +76,7 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
 6. Service auth JWTs, authenticated proxying to AppViews/labelers, and external
    client/relay end-to-end tests.
 7. Repository import, blob missing/list-since behavior, garbage collection,
-   incremental MST mutation, streaming, quotas and object storage.
+   incremental MST mutation, streaming, quotas and bulk blob-backend migration.
 8. Connection pooling, distributed abuse controls, metrics/logging, CORS,
    operational deployment/TLS, backup/restore drills and CI.
 

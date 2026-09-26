@@ -79,6 +79,7 @@ to avoid wrapping Rebel in a second readline tool.
 | `PDS_DATABASE_URL` | `jdbc:postgresql://127.0.0.1:5432/clojure_pds` | PostgreSQL JDBC URL |
 | `PDS_DATABASE_USER` | `pds` | Database role |
 | `PDS_DATABASE_PASSWORD` | empty | Database password |
+| `PDS_BLOB_BACKEND` | `postgres` | `postgres` or `s3`; [S3 settings](docs/S3.md) |
 | `PDS_EMAIL_WORKER_URL` | unset | Email Worker HTTPS endpoint |
 | `PDS_EMAIL_WORKER_TOKEN` | unset | Worker shared secret |
 | `PDS_EMAIL_FROM` | unset | Verified sending address |
@@ -142,9 +143,10 @@ a duplicate. Receipts are retained indefinitely; plan retention for larger syste
 - MSTs match upstream root fixtures but are rebuilt per commit, O(n). Large repos
   need incremental updates. Historical blocks are retained; exports contain the
   current graph. CAR import and garbage collection are unfinished.
-- Blob uploads are buffered, capped at 5 MiB, and stored as PostgreSQL `bytea`.
-  Record writes check ownership, size, and MIME metadata. Streaming, object storage,
-  MIME sniffing, and unreferenced-blob cleanup are unfinished.
+- Blob uploads are buffered and capped at 5 MiB. Bytes use PostgreSQL `bytea` by
+  default or a [configurable S3-compatible backend](docs/S3.md). PostgreSQL always
+  holds ownership and metadata. Streaming, MIME sniffing, and unreferenced-blob
+  cleanup are unfinished.
 - Rate limits are bounded, per-process, 120 requests/IP/minute. A deployment needs
   shared proxy limits; untrusted forwarding headers are ignored.
 - OAuth, WebSocket sync, relay integration, service proxying, and production
@@ -152,4 +154,4 @@ a duplicate. Receipts are retained indefinitely; plan retention for larger syste
   been used for end-to-end conformance testing.
 
 No project license has been selected. Vendored conformance fixtures retain their
-upstream CC0 license.
+upstream CC0 license; vendored Lexicons retain their upstream MIT/Apache notices.
