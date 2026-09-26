@@ -52,10 +52,54 @@ application rollback, bounded cleanup, and replay rejection by a fresh JVM.
 Node's independent crypto implementation checks signatures and thumbprints and
 generates both ECDSA signature forms for the Clojure verifier.
 
+## Client metadata and redirect policy
+
+`pds.oauth.client/resolve!` fetches the client metadata URL using the shared guarded
+HTTPS client. Client IDs require HTTPS without a port, credentials or fragment;
+the optional development convention is described below. Metadata and JWKS fetches
+accept only HTTP 200 JSON objects, reject encoded responses and redirects, and
+carry no ambient cookies or authorization. Each body is limited to 64 KiB; each
+exchange has a five-second deadline, with ten seconds shared by the two possible
+fetches. Sixteen resolutions may run concurrently per resolver. No database
+transaction is held across these requests. Resolution is uncached so removed
+client keys are not retained by a metadata cache.
+
+Validation binds the document's exact `client_id`, requires authorization-code
+support, the `atproto` scope and DPoP, and supports public clients (`none`) and
+confidential clients (`private_key_jwt`). The default application type is `web`.
+Only the supported authorization-code/refresh grants and ES256 client assertion
+algorithm are accepted. Confidential clients publish either inline JWKS or an
+HTTPS JWKS URL. Public P-256 keys are validated and thumbprinted; duplicate key IDs,
+private key material and unusable keysets are rejected. Extra unsupported public
+keys may coexist with usable ES256 keys. Documents, scopes, redirect lists and
+keysets have explicit size/count limits.
+
+Web redirects use HTTPS, omit explicit default ports and match a registered URI
+exactly, including path and query. Native clients may use a same-origin HTTPS
+callback or a custom scheme equal to their client hostname in reverse order,
+followed by a single slash. Optional metadata display fields are validated, but
+remain untrusted: the future consent interface must not present an arbitrary
+client name or logo as verified identity.
+
+`http://localhost` (also `/`, without a port) produces virtual public-client
+metadata with no HTTP fetch. Optional `scope` and repeated `redirect_uri` query
+parameters configure it. Defaults allow `http://127.0.0.1/` and `http://[::1]/`.
+Only those literal loopback hosts may be used; the callback port may vary, while
+host, path and query must match. A callback hostname of `localhost` is not a
+substitute for a loopback literal. OAuth parameter decoding rejects malformed
+percent escapes, invalid UTF-8 and duplicate scalar parameters, with a 16 KiB and
+64-field bound.
+
+Unit and real TLS tests cover web/native/development clients, invalid client IDs,
+redirect substitution, metadata/JWKS changes, body limits, status/MIME failures,
+private socket addresses, certificate hostname failures, cookie suppression,
+redirect rejection and permit release. These primitives do not yet authenticate
+client assertion JWTs or enable OAuth endpoints.
+
 ## Remaining steps
 
-1. Client metadata and JWKS fetching/validation, public and confidential client
-   policy, client assertion verification, and development/native redirect rules.
+1. Confidential-client assertion verification, durable assertion replay tracking,
+   and session binding to the authenticated client key.
 2. Authorization server/resource metadata and CORS, pushed requests, mandatory
    PKCE with challenge reuse prevention, and client/DPoP binding.
 3. Browser authorization, primary-account login, CSRF protection, consent and
