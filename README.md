@@ -1,7 +1,6 @@
 # clojure-pds
 
-An AT Protocol Personal Data Server in Clojure with PostgreSQL persistence.
-Built in atomic feature commits. **In development: not yet a fully federating PDS.**
+An AT Protocol Personal Data Server in Clojure with PostgreSQL persistence. **In development: not yet a fully federating PDS.**
 
 Implemented: hosted did:web/PLC accounts, sessions, email confirmation/password reset,
 signed repositories, record APIs, verified CAR import/export, and binary blobs. See the
