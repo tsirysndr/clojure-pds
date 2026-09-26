@@ -220,6 +220,16 @@ Uploads to either PostgreSQL or S3 remove the matching CID from this list.
 Inactive accounts' repositories and blobs remain hidden from public reads.
 This endpoint checks database metadata; it does not probe S3 for lost objects.
 
+`GET /xrpc/com.atproto.server.checkAccountStatus` reports the authenticated
+account's activation state, repository head/revision, owned block count, indexed
+record count, distinct referenced blob count and stored blob count. Primary
+sessions work while inactive; active app sessions may also read their own status.
+`validDid` uses fresh remote resolution to check the signing key, PDS endpoint and
+PLC rotation authority. Resolution failure returns `false` without hiding transfer
+counts. It does not attest to handle binding or completed blob transfer, so use
+`listMissingBlobs` as well. Counts include retained historical blocks and uploaded
+unreferenced blobs; `privateStateValues` is currently zero. Responses are not cached.
+
 `GET /xrpc/com.atproto.server.getServiceAuth` issues a short-lived service JWT for
 the authenticated account. Supply `aud` as a service DID or `did#serviceId` reference
 (encode `#` as `%23` in the query), and preferably `lxm` as the exact target method.

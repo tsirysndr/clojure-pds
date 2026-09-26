@@ -1,6 +1,7 @@
 (ns pds.api.server
   (:require [clojure.string :as str]
             [pds.accounts :as accounts]
+            [pds.account-status :as account-status]
             [pds.app-passwords :as app-passwords]
             [pds.auth :as auth]
             [pds.db :as db]
@@ -41,6 +42,11 @@
    (empty-route #(auth/delete-session! ds settings %))
    "/xrpc/com.atproto.server.getSession"
    (json-route :get (authenticated ds settings {:allow-deactivated? true} (fn [_ account _] (accounts/public-account account))))
+   "/xrpc/com.atproto.server.checkAccountStatus"
+   {:method :get :handler (fn [r]
+                           (identity/bounded-call! resolver
+                             #(assoc-in (xrpc/response 200 (account-status/check! ds settings resolver r))
+                                        [:headers "Cache-Control"] "no-store")))}
    "/xrpc/com.atproto.server.getAccountInviteCodes"
    (json-route :get (authenticated ds settings (fn [conn account r] (invites/account-codes conn (:did account) (request/query-params r)))))
    "/xrpc/com.atproto.server.deactivateAccount"

@@ -21,6 +21,7 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | `com.atproto.server` | `getServiceAuth` | Repository-key JWTs, exact audience/service reference, method and expiration checks, primary/app-password privilege policy; authenticated proxying pending |
 | `com.atproto.server` | `createAppPassword`, `listAppPasswords`, `revokeAppPassword` | One-time secrets, scoped sessions, privileged flag, metadata-only listing, immediate revocation |
 | `com.atproto.server` | `deactivateAccount`, `activateAccount` | Primary-session lifecycle; private inactive content; prepared destinations require repository import and freshly verified remote credentials; durable identity/account/sync publication |
+| `com.atproto.server` | `checkAccountStatus` | Account-scoped activation, repository and blob counters; fresh DID credential validation, inactive primary sessions, no-store responses |
 | `com.atproto.server` | `requestAccountDelete`, `deleteAccount` | One-use email token plus primary password; credential removal, tombstone and durable S3 cleanup |
 | `com.atproto.server` | `requestEmailConfirmation`, `confirmEmail` | Durable email outbox, expiring one-use confirmation |
 | `com.atproto.server` | `requestEmailUpdate`, `updateEmail` | Proof to current confirmed address, old-token invalidation, optional email authentication factor |
@@ -199,8 +200,18 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
   writes, and atomically removes the import gate and publishes identity/account/sync
   events. Tests cover HTTP activation, wrong credentials, missing rotation authority,
   rollback, revoked sessions, concurrent imports and duplicate activation. Blob
-  completeness does not gate activation. `checkAccountStatus` and external reference
-  PDS migration testing remain pending; current tests use local HTTP/TLS fixtures.
+  completeness does not gate activation. External reference PDS migration testing
+  remains pending; current tests use local HTTP/TLS fixtures.
+- Migration status tests follow a prepared account through signed repository
+  import, blob upload, credential transfer, activation and deactivation over HTTP.
+  Counters are account scoped: owned blocks (including history), indexed records,
+  distinct expected blob CIDs and uploaded blob metadata (including unreferenced
+  blobs). Private state is not implemented and reports zero. `validDid` checks
+  fresh remote signing key/PDS credentials and PLC rotation authority, independently
+  of handle binding, account activation and content completeness. Lookup failures
+  return false; authorization is checked again after network I/O, and credential
+  changes invalidate the earlier verdict. Tests cover active app-password reads,
+  cross-account query parameters, inactive restrictions and revoked sessions.
 - Blob bytes can use PostgreSQL or configurable S3-compatible storage. An upgrade
   test preserves existing blobs. Moto-backed HTTP tests cover binary round trips,
   ownership, duplicate uploads, missing objects and failed PUT rollback; fault
