@@ -16,7 +16,8 @@
             [pds.protocol.formats :as formats]
             [pds.protocol.syntax :as syntax]
             [pds.repo :as repo]
-            [pds.request :as request])
+            [pds.request :as request]
+            [pds.security.factors :as factors])
   (:import [java.net URI]
            [java.time Instant]))
 
@@ -129,7 +130,7 @@
             (errors/raise! 503 "RegistrationPending" "Identity registration is pending; retry signup with the same credentials, or sign in after it completes"))
           ;; Activation can finish on another worker before this transaction.
           ;; Do not bypass a password/email/factor change made since reservation.
-          (when-not (and (= address (:email account)) (not (:email_auth_factor account))
+          (when-not (and (= address (:email account)) (not (:email_auth_factor account)) (not (factors/enabled? conn did))
                          (crypto/password-matches? (get body "password") (:password_hash account)))
             (errors/raise! 401 "AuthenticationRequired" "Account credentials changed; sign in to continue"))
           (merge (public-account account) (auth/issue! conn settings did nil)
@@ -185,16 +186,27 @@
          (when-not (and account (or matches? app-password)
                         (or (= "active" (:status account)) (and matches? (= "deactivated" (:status account)))))
            (errors/raise! 401 "AuthenticationRequired" "Invalid identifier or password"))
-         (if (and matches? (:email_auth_factor account) (not (contains? body "authFactorToken")))
+         (cond
+           (and matches? (factors/enabled? conn (:did account)))
+           (if-not (contains? body "authFactorToken")
+             {:error "AuthFactorTokenRequired" :status 401}
+             (let [factor (factors/verify! conn settings (:did account) (get body "authFactorToken"))]
+               (if (:error factor) factor
+                 (merge (public-account account) (auth/issue! conn settings (:did account) nil)))))
+
+           (and matches? (:email_auth_factor account) (not (contains? body "authFactorToken")))
            (do (require-email! settings) (issue-email! conn account "sign-in") ::factor-required)
+
+           :else
            (do
              (when (and matches? (:email_auth_factor account))
                (consume-token! conn "sign-in" (get body "authFactorToken") (:did account) (:email account)))
              (merge (public-account account) (auth/issue! conn settings (:did account) nil (:id app-password))))))))]
-    ;; Commit the challenge/outbox before returning the challenge-required error.
-    (if (= ::factor-required result)
-      (errors/raise! 401 "AuthFactorTokenRequired" "Check your email for a sign-in token")
-      result)))
+    ;; Commit challenges and failed TOTP attempt accounting before raising.
+    (cond
+      (= ::factor-required result) (errors/raise! 401 "AuthFactorTokenRequired" "Check your email for a sign-in token")
+      (:error result) (errors/raise! (:status result) (:error result) "An authenticator or recovery code is required")
+      :else result)))
 
 (defn require-email! [settings]
   (when-not (:email-enabled settings) (errors/raise! 503 "EmailUnavailable" "Email delivery is not configured")))
@@ -276,7 +288,7 @@
                             ON CONFLICT (object_bucket, object_key) DO UPDATE
                             SET did = excluded.did, cid = excluded.cid, status = 'pending', attempts = 0,
                                 available_at = now(), last_error = NULL" did)
-          (doseq [table ["sessions" "app_passwords" "account_tokens" "blobs" "account_imports" "plc_identities" "repositories"]]
+          (doseq [table ["sessions" "app_passwords" "account_tokens" "account_totp" "blobs" "account_imports" "plc_identities" "repositories"]]
             (db/execute! conn (str "DELETE FROM " table " WHERE did = ?") did))
           (db/execute! conn "DELETE FROM email_outbox WHERE payload->>'to' = ?" (:email account))
           (db/execute! conn "DELETE FROM repo_events WHERE did = ? AND event_type IN ('commit', 'sync')" did)
@@ -300,6 +312,8 @@
         factor (get body "emailAuthFactor" (if changed? false (:email_auth_factor account)))]
     (when-not (email/address? address) (errors/invalid! "Invalid email address"))
     (when-not (boolean? factor) (errors/invalid! "emailAuthFactor must be a boolean"))
+    (when (and factor (factors/enabled? conn (:did account)))
+      (errors/invalid! "Disable the authenticator before enabling the email factor"))
     (when (and factor (or changed? (not (:email_confirmed account))))
       (errors/invalid! "Confirm the email address before enabling email authentication"))
     (when (:email_confirmed account)

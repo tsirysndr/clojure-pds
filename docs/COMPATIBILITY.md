@@ -299,8 +299,9 @@ External service interoperability and OAuth remain pending.
    replay tracking, client metadata/JWKS, redirect validation, and confidential-client
    authentication, durable PAR/PKCE and browser consent state](OAUTH.md)
    are implemented as foundations; OAuth routes and
-   resource-server authentication are not enabled yet. Optional passkeys and
-   authenticator-app TOTP, including enrollment/recovery and all login paths, remain pending.
+   resource-server authentication are not enabled yet. Optional [TOTP verification and
+   recovery storage](ACCOUNT-SECURITY.md) are implemented; passkeys and browser
+   enrollment/removal remain pending.
 5. Relay notification and external relay interoperability,
    event retention/compaction, and remaining record/blob takedown semantics.
 6. Remaining migration private-state APIs, streaming proxy transfers, and external

@@ -12,7 +12,8 @@
             [pds.oauth.dpop :as dpop]
             [pds.oauth.http :as http]
             [pds.oauth.par :as par]
-            [pds.protocol.codec :as codec])
+            [pds.protocol.codec :as codec]
+            [pds.security.factors :as factors])
   (:import [java.net URLEncoder]
            [java.security MessageDigest]
            [java.time Instant]))
@@ -95,15 +96,20 @@
         (when-not (and matches? (= "active" (:status account)) (hint-matches? (snapshot row) account))
           (errors/raise! 401 "AuthenticationRequired" "Invalid identifier or password"))
         (live! row)
-        (if (and (:email_auth_factor account) (not (contains? body "authFactorToken")))
-          (do (accounts/require-email! settings) (accounts/issue-email! conn account "sign-in")
-              {:factor-required true})
-          (do
-            (when (:email_auth_factor account)
-              (accounts/consume-token! conn "sign-in" (get body "authFactorToken") (:did account) (:email account)))
-            (db/execute! conn "UPDATE oauth_interactions SET did = ?, account_epoch = ?, csrf_nonce = ? WHERE interaction_hash = ?"
-                         (:did account) (:oauth_epoch account) (crypto/token) (:interaction_hash row))
-            (view (load! conn id browser false) browser)))))))
+        (let [totp? (factors/enabled? conn (:did account))
+              factor (cond
+                       (and (or totp? (:email_auth_factor account)) (not (contains? body "authFactorToken")))
+                       (do (when-not totp? (accounts/require-email! settings) (accounts/issue-email! conn account "sign-in"))
+                           {:factor-required true :factor-type (if totp? :totp :email)})
+                       totp? (factors/verify! conn settings (:did account) (get body "authFactorToken"))
+                       (:email_auth_factor account)
+                       (do (accounts/consume-token! conn "sign-in" (get body "authFactorToken") (:did account) (:email account)) nil))]
+          ;; Return failed TOTP proofs so PostgreSQL commits the attempt budget.
+          (if (or (:factor-required factor) (:error factor)) factor
+            (do
+              (db/execute! conn "UPDATE oauth_interactions SET did = ?, account_epoch = ?, csrf_nonce = ? WHERE interaction_hash = ?"
+                           (:did account) (:oauth_epoch account) (crypto/token) (:interaction_hash row))
+              (view (load! conn id browser false) browser))))))))
 
 (defn- callback [settings request result]
   ;; Append to the original registered URI without reserializing its path/query.

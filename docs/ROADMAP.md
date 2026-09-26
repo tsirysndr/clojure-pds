@@ -31,9 +31,9 @@ runnable and update this document as features land.
 6. **Sessions and account lifecycle (sessions/app passwords/email security/lifecycle/invites implemented):** password hashing, access/refresh tokens,
    refresh rotation/revocation, app passwords, invites, email verification/reset,
    account activation/deactivation/deletion and administrative authorization.
-   Optional passkeys (WebAuthn) and authenticator-app TOTP are requested and pending:
-   secure enrollment/removal, recovery codes, replay-resistant login, browser/OAuth
-   integration and protection against factor bypass in legacy login.
+   Optional [authenticator security](ACCOUNT-SECURITY.md): TOTP storage, confirmation,
+   recovery codes and legacy/OAuth verification are implemented. Passkeys (WebAuthn),
+   secure browser enrollment/removal and complete browser ceremonies remain pending.
    Acceptance: expiry, replay, cross-account authorization and restart tests.
 7. **OAuth (DPoP/client-auth, PAR/PKCE and durable consent state implemented):** authorization-server metadata, PAR, PKCE, DPoP, client metadata,
    consent, token binding and scoped permissions. Acceptance: reference clients

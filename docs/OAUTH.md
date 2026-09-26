@@ -198,7 +198,7 @@ HTTP adapter must deliver secrets in secure HttpOnly cookies, enforce same-origi
 POSTs and render only escaped content.
 
 Login accepts an active account's primary password, respects `login_hint`, and
-requires the configured email sign-in factor. App passwords cannot delegate new
+requires the configured email or TOTP sign-in factor. App passwords cannot delegate new
 OAuth authority. The email challenge/outbox commits before a factor-required result;
 factor consumption and authenticated interaction state commit together. No legacy
 session is created. Login and consent are distinct operations; automatic approval
@@ -229,7 +229,7 @@ Browser pages and routes remain unmounted while the complete OAuth flow is built
 
 1. Browser pages, secure cookies, same-origin POST validation and session management
    backed by the implemented interaction state machine. Add optional passkeys and
-   authenticator-app TOTP with enrollment, removal, recovery and login integration.
+   browser enrollment/removal for the implemented [TOTP verifier](ACCOUNT-SECURITY.md).
 2. Opaque DPoP-bound access/refresh tokens, refresh rotation/replay revocation,
    client key revalidation, revocation endpoints and session lifecycle integration.
 3. Resource-server authentication, permission scopes/sets, service proxy and

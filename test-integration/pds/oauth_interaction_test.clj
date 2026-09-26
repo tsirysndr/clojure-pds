@@ -88,8 +88,8 @@
 (deftest email-factor-commits-challenge-and-consumes-proof-with-authentication
   (let [settings (api/settings) _ (account! settings) state (start)]
     (mutate "UPDATE accounts SET email_confirmed = true, email_auth_factor = true WHERE did = ?" did)
-    (is (= {:factor-required true} (login settings state credentials)))
-    (is (= {:factor-required true} (login settings state credentials)))
+    (is (= {:factor-required true :factor-type :email} (login settings state credentials)))
+    (is (= {:factor-required true :factor-type :email} (login settings state credentials)))
     (is (= 1 (par/scalar "SELECT count(*) AS n FROM account_tokens WHERE purpose = 'sign-in'")))
     (is (= "EmailUnavailable" (error #(login (assoc settings :email-enabled false) state credentials))))
     (is (= "InvalidToken" (error #(login settings state (assoc credentials "authFactorToken" "wrong")))))
