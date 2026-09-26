@@ -7,6 +7,7 @@
             [pds.db :as db]
             [pds.email :as email]
             [pds.errors :as errors]
+            [pds.events :as events]
             [pds.handle-registry :as registry]
             [pds.handles :as handles]
             [pds.identity :as identity]
@@ -73,3 +74,67 @@
             (if (= "23505" (.getSQLState e))
               (errors/raise! 400 "HandleNotAvailable" "DID, handle or email is already registered")
               (throw e))))))))
+
+(defn- activation-snapshot! [conn settings request]
+  (let [account (auth/authenticate! conn settings request {:allow-deactivated? true}) did (:did account)]
+    (auth/require-primary! account)
+    {:account account :repo (repo/state conn did)
+     :import (first (db/query conn "SELECT repository_imported FROM account_imports WHERE did = ?" did))
+     :identity (first (db/query conn "SELECT directory_url, operation_cid, rotation_public FROM plc_identities WHERE did = ?" did))
+     :pending? (boolean (seq (db/query conn "SELECT 1 FROM handle_updates WHERE did = ?" did)))}))
+
+(defn- activation-version [snapshot]
+  [(select-keys (:account snapshot) [:did :handle :status])
+   (:head (:repo snapshot)) (vec (:public_key (:repo snapshot)))
+   (:import snapshot) (:pending? snapshot)
+   (update (:identity snapshot) :rotation_public #(when % (vec %)))])
+
+(defn activate!
+  "Activate a prepared destination only after a complete repository import and
+  fresh remote identity verification. Network I/O is outside database locks;
+  authorization and the snapshot are checked again before atomic publication."
+  [ds settings resolver request]
+  (let [snapshot (db/transact! ds
+                   (fn [conn]
+                     (let [snapshot (activation-snapshot! conn settings request)]
+                       (if (:import snapshot) snapshot
+                           (do (accounts/activate! conn (:account snapshot)) nil)))))]
+    (when snapshot
+      (when-not (get-in snapshot [:import :repository_imported])
+        (errors/raise! 400 "MigrationIncomplete" "Import a complete repository before activating this account"))
+      (when (:pending? snapshot) (errors/raise! 409 "IdentityUpdatePending" "Finish the pending identity update before activation"))
+      (let [account (:account snapshot) did (:did account)
+            audit (when (str/starts-with? did "did:plc:")
+                    (try (directory/audit! (:http-client settings) (get-in snapshot [:identity :directory_url]) did)
+                         (catch Exception _ (errors/raise! 503 "DirectoryUnavailable" "PLC audit could not be verified"))))
+            document (if (str/starts-with? did "did:plc:") (plc/did-document (:data audit))
+                         (identity/resolve-did! resolver did))
+            key (identity/signing-key document)]
+        (when-not (and (= did (get document "id"))
+                       (= "ES256" (:algorithm key))
+                       (= (vec (get-in snapshot [:repo :public_key])) (vec (:public key)))
+                       (= (:public-url settings) (identity/pds-endpoint document))
+                       (= (:handle account) (identity/claimed-handle document))
+                       (or (nil? audit)
+                           (some #{(plc/did-key {:algorithm "ES256K" :public (get-in snapshot [:identity :rotation_public])})}
+                                 (get-in audit [:data "rotationKeys"]))))
+          (errors/raise! 409 "IdentityMismatch" "DID credentials must match the destination key, handle and PDS endpoint"))
+        (when-not (handles/hosted? settings (:handle account))
+          (handles/verify-external! settings did (:handle account)))
+        (db/transact! ds
+          (fn [conn]
+            (let [current (activation-snapshot! conn settings request)]
+              ;; A concurrent successful activation is an idempotent retry.
+              (when (and (nil? (:import current)) (not= "active" (get-in current [:account :status])))
+                (errors/raise! 409 "InvalidSwap" "Account changed during identity verification; retry"))
+              (when (:import current)
+                (when-not (= (activation-version snapshot) (activation-version current))
+                  (errors/raise! 409 "InvalidSwap" "Account or repository changed during identity verification; retry"))
+                (when audit
+                  (let [operation (get (some #(when (= (:head audit) (get % "cid")) %) (:entries audit)) "operation")]
+                    (db/execute! conn "UPDATE plc_identities SET status = 'ready', operation = ?, operation_cid = ?, confirmed_at = now() WHERE did = ?"
+                                 (codec/encode operation) (:head audit) did)))
+                (db/execute! conn "DELETE FROM account_imports WHERE did = ?" did)
+                (events/append! conn did "identity" {"did" did "handle" (:handle account)})
+                (accounts/activate! conn (:account current))))))))
+    nil))

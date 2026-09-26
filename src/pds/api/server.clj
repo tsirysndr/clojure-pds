@@ -46,7 +46,7 @@
    "/xrpc/com.atproto.server.deactivateAccount"
    (empty-route (authenticated ds settings {:allow-deactivated? true} (fn [conn account r] (accounts/deactivate! conn account (request/json-body r)))))
    "/xrpc/com.atproto.server.activateAccount"
-   (empty-route (authenticated ds settings {:allow-deactivated? true} (fn [conn account _] (accounts/activate! conn account))))
+   (empty-route #(identity/bounded-call! resolver (fn [] (migration/activate! ds settings resolver %))))
    "/xrpc/com.atproto.server.requestAccountDelete"
    (empty-route (authenticated ds settings {:allow-deactivated? true} (fn [conn account _] (accounts/request-deletion! conn settings account))))
    "/xrpc/com.atproto.server.deleteAccount"

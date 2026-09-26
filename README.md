@@ -121,7 +121,7 @@ therefore supersede the local snapshot. Invalid audits fail without a stale loca
 fallback; timestamps and history freshness still rely on the directory. Audits
 are bounded to 4 MiB and 10,000 operations, with redirects disabled. Resolution is
 currently uncached, with at most 32 concurrent identity requests per server instance.
-Portable account migration remains unfinished. The default localhost identities
+External end-to-end migration conformance remains unverified. The default localhost identities
 are development-only.
 
 PLC signup persists separate encrypted repository and rotation keys, the signed
@@ -187,9 +187,16 @@ The returned primary session works while the account is deactivated. PLC account
 can obtain `getRecommendedDidCredentials`, have the source sign those credentials,
 and call `submitPlcOperation` here. Account preparation publishes no repository
 events and does not alter the remote DID. A source identity snapshot is retained
-for repository validation. **Final destination activation is unfinished:** owner
-and admin activation return `MigrationIncomplete` until verified activation lands.
-This is preparation and data-transfer support, not a completed migration flow.
+for repository validation. After importing the repository and transferring DID
+credentials, call `activateAccount` with the destination primary session. It
+freshly verifies the remote signing key, PDS endpoint and handle; PLC identities
+must also retain the destination's rotation key. Custom handles must still prove
+their DNS/HTTPS binding. Activation rechecks authorization and local state after
+network I/O, then publishes identity, active-account and sync events atomically.
+Missing repository import returns `MigrationIncomplete`; mismatched credentials
+return `IdentityMismatch`. Admin activation cannot bypass these checks. Blob
+transfer can continue after activation; use `listMissingBlobs` to verify it.
+This flow is tested against local HTTP/TLS fixtures, not an external reference PDS.
 
 `POST /xrpc/com.atproto.repo.importRepo` accepts a complete version-3 CAR with
 `Content-Type: application/vnd.ipld.car` and a primary access session. For prepared
