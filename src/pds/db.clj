@@ -60,7 +60,8 @@
                  "008-blob-deletion.sql" "009-email-security.sql" "010-invites.sql"
                  "011-account-takedowns.sql" "012-repository-block-ownership.sql" "013-event-payloads.sql"
                  "014-plc-provisioning.sql" "015-handle-updates.sql" "016-plc-signing-tokens.sql"
-                 "017-plc-submissions.sql" "018-service-token-replay.sql" "019-account-imports.sql"])
+                 "017-plc-submissions.sql" "018-service-token-replay.sql" "019-account-imports.sql"
+                 "020-record-blob-references.sql"])
 
 (defn migrate! [ds]
   (transact!
@@ -86,6 +87,8 @@
                  ((requiring-resolve 'pds.block-index/backfill!) conn))
                (when (= name "013-event-payloads.sql")
                  ((requiring-resolve 'pds.events/backfill!) conn))
+               (when (= name "020-record-blob-references.sql")
+                 ((requiring-resolve 'pds.blob-refs/backfill!) conn))
                (execute! conn "INSERT INTO schema_migrations(name, checksum) VALUES (?, ?)"
                          name checksum)))))
      true)))

@@ -35,7 +35,7 @@ runnable and update this document as features land.
 7. **OAuth:** authorization-server metadata, PAR, PKCE, DPoP, client metadata,
    consent, token binding and scoped permissions. Acceptance: reference clients
    complete login and invalid/replayed proofs fail.
-8. **Blob APIs (buffered upload/download implemented):** streaming upload/download, limits, ownership, record references,
+8. **Blob APIs (buffered transfer, record references and missing-blob listing implemented):** streaming upload/download, limits, ownership, record references,
    list/missing blobs and garbage collection. Acceptance: binary round trips,
    interrupted upload cleanup and no cross-account access leaks.
 9. **Sync and federation (queries, proofs and WebSocket firehose implemented; external relay pending):** durable ordered event log, sync queries, WebSocket

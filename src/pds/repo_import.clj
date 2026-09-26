@@ -3,6 +3,7 @@
             [clojure.string :as str]
             [pds.auth :as auth]
             [pds.block-index :as block-index]
+            [pds.blob-refs :as blob-refs]
             [pds.db :as db]
             [pds.errors :as errors]
             [pds.events :as events]
@@ -54,7 +55,8 @@
                 (block-index/associate! conn did cid))
               (db/execute! conn "DELETE FROM records WHERE did = ?" did)
               (doseq [{:keys [collection rkey cid]} (:paths verified)]
-                (db/execute! conn "INSERT INTO records(did, collection, rkey, cid) VALUES (?, ?, ?, ?)" did collection rkey cid))
+                (db/execute! conn "INSERT INTO records(did, collection, rkey, cid) VALUES (?, ?, ?, ?)" did collection rkey cid)
+                (blob-refs/replace! conn did collection rkey (get (:records verified) cid)))
               ;; Re-sign with the destination's key and a revision newer than
               ;; both heads. Large replacements use a sync checkpoint, not an
               ;; incomplete or oversized inductive commit proof.

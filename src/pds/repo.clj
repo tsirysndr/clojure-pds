@@ -1,6 +1,7 @@
 (ns pds.repo
   (:require [pds.crypto :as crypto]
             [pds.block-index :as block-index]
+            [pds.blob-refs :as blob-refs]
             [pds.db :as db]
             [pds.errors :as errors]
             [pds.events :as events]
@@ -74,7 +75,7 @@
         validation-status (lexicon/validate-record! collection rkey native validate)]
     (when (> (alength data) 1000000) (errors/raise! 413 "PayloadTooLarge" "Record exceeds 1,000,000 bytes"))
     (check-blobs! conn did native)
-    {:cid (block! conn data) :validation-status validation-status}))
+    {:cid (block! conn data) :validation-status validation-status :record native}))
 (defn apply-writes!
   "Caller owns transaction. Repository lock protects all swap checks and writes."
   [conn settings did writes swap-commit]
@@ -102,13 +103,14 @@
                  (:create :update :put)
                  (do
                    (when (and (= action :update) (nil? old)) (errors/raise! 400 "RecordNotFound" "Record does not exist"))
-                   (let [{id :cid validation-status :validation-status} (record-value! conn did collection rkey value validate)]
+                   (let [{id :cid validation-status :validation-status record :record} (record-value! conn did collection rkey value validate)]
                      (when (not= id (:cid old))
                        (swap! ops conj (cond-> {"action" (if old "update" "create") "path" (str collection "/" rkey) "cid" (codec/link id)}
                                          old (assoc "prev" (codec/link (:cid old))))))
                      (db/execute! conn "INSERT INTO records(did, collection, rkey, cid) VALUES (?, ?, ?, ?)
                                          ON CONFLICT (did, collection, rkey) DO UPDATE SET cid = excluded.cid"
                                   did collection rkey id)
+                     (blob-refs/replace! conn did collection rkey record)
                      (cond-> {:$type (str "com.atproto.repo.applyWrites#" (if (= action :create) "create" "update") "Result")
                               :uri (str "at://" did "/" collection "/" rkey) :cid id}
                        validation-status (assoc :validationStatus validation-status))))

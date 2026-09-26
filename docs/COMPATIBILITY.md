@@ -32,7 +32,8 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | `com.atproto.repo` | `createRecord`, `putRecord`, `deleteRecord`, `applyWrites` | Atomic signed commits; record/repo swap checks; batch maximum 200 |
 | `com.atproto.repo` | `getRecord`, `listRecords`, `describeRepo` | Current records; keyset pagination and reverse order |
 | `com.atproto.repo` | `importRepo` | Primary session, complete signed v3 CAR, atomic record replacement and destination re-signing; active sync checkpoint or private inactive import; buffered 64 MiB limit |
-| `com.atproto.repo` | `uploadBlob` | Authenticated, maximum 5 MiB, account ownership |
+| `com.atproto.repo` | `uploadBlob` | Authenticated, maximum 5 MiB, account ownership; inactive primary sessions supported |
+| `com.atproto.repo` | `listMissingBlobs` | Account-scoped referenced CIDs absent from blob metadata, distinct CID pagination and a representative record URI; inactive primary sessions supported |
 | `com.atproto.sync` | `getRepo`, `getLatestCommit`, `getRepoStatus`, `listRepos` | Full CAR export and local repository metadata; no incremental export optimization |
 | `com.atproto.sync` | `getBlocks`, `getRecord` | Repository-owned historical blocks; signed MST inclusion/absence proofs; rootless block CARs |
 | `com.atproto.sync` | `subscribeRepos` | Binary CBOR WebSocket stream; durable replay, cursor errors, bounded sends/backlog, account filtering; external relay integration pending |
@@ -143,8 +144,8 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
   HTTP restoration, newer locally signed revisions, sync checkpoints, private
   migration imports, source signature checks, transaction rollback, app-password
   denial, revocation while parsing and concurrent import conflicts. A two-permit
-  process-wide limit bounds buffered imports; excess requests return 503. Blob
-  content reconciliation and final destination activation remain pending.
+  process-wide limit bounds buffered imports; excess requests return 503. Final
+  destination activation remains pending.
 - PostgreSQL migrations are locked, transactional, and checksummed. Tests verify
   rollback, persistence across connections, binary data, signed commits, atomic
   batches, concurrent swap conflicts, and isolation between accounts.
@@ -196,6 +197,16 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
   test preserves existing blobs. Moto-backed HTTP tests cover binary round trips,
   ownership, duplicate uploads, missing objects and failed PUT rollback; fault
   tests cover corrupted content. Live provider behavior remains unverified.
+- Record blob references are indexed in the same transaction as normal record
+  writes and CAR import; deletion/replacement removes obsolete references.
+  Migration backfill preserves existing record bytes and repository heads.
+  Modern nested and legacy-shaped blob references are indexed; malformed historical
+  references and ordinary CID links/strings are ignored. Missing-blob queries use
+  per-account metadata, group by CID and paginate in bytewise order. PostgreSQL
+  and real Moto/S3 tests transfer blobs into inactive accounts, verify missing-list
+  reduction and duplicate retries, preserve private visibility and test rollback.
+  Missing-list queries do not inspect external objects; a lost S3 object is detected
+  by the integrity-checked read path and still requires operational repair.
 - A child-JVM test runs `pds.main`, checks HTTP health, and verifies graceful shutdown,
   including optional S3/Redis clients when the combined suite enables them.
 - Rate limiting defaults to bounded in-memory counters. Optional Redis uses atomic
@@ -215,7 +226,7 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
    event retention/compaction, and remaining record/blob takedown semantics.
 6. Completing destination activation, authenticated proxying to AppViews/labelers, and external
    client/relay end-to-end tests.
-7. Streaming repository import, blob missing/list-since behavior, garbage collection,
+7. Streaming repository import, blob list-since behavior, garbage collection,
    incremental MST mutation, streaming, quotas and bulk blob-backend migration.
 8. PostgreSQL connection pooling, account-specific abuse controls, metrics/logging, CORS,
    operational deployment/TLS and backup/restore drills. Push CI is configured;

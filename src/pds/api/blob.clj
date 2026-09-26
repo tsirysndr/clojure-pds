@@ -4,6 +4,7 @@
             [pds.api.repo :as repo-api]
             [pds.api.server :as server]
             [pds.blobs :as blobs]
+            [pds.blob-refs :as blob-refs]
             [pds.db :as db]
             [pds.errors :as errors]
             [pds.request :as request]))
@@ -14,7 +15,7 @@
    (server/json-route
     :post
     (server/authenticated
-     ds settings
+     ds settings {:allow-deactivated? true}
      (fn [conn account r]
        (let [type (some-> (get-in r [:headers "content-type"]) (str/split #";") first str/lower-case)
              _ (when-not (and type (re-matches #"[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+" type))
@@ -23,6 +24,16 @@
          (when (zero? (alength bytes)) (errors/invalid! "Blob must not be empty"))
          (let [stored (blobs/store! conn settings (:did account) bytes type)]
            {:blob {:$type "blob" :ref {:$link (:cid stored)} :mimeType (:mime_type stored) :size (:size stored)}})))))
+   "/xrpc/com.atproto.repo.listMissingBlobs"
+   (server/json-route :get
+     (server/authenticated ds settings {:allow-deactivated? true}
+       (fn [conn account r]
+         (let [params (request/query-params r) limit (request/limit! params 500 1000)
+               cursor (get params "cursor") _ (when cursor (repo-api/cid! cursor))
+               rows (blob-refs/missing conn (:did account) cursor (inc limit))
+               page (repo-api/paginated rows limit :cid
+                       (fn [row] {:cid (:cid row) :recordUri (str "at://" (:did account) "/" (:path row))}))]
+           (-> page (assoc :blobs (:items page)) (dissoc :items))))))
    "/xrpc/com.atproto.sync.getBlob"
    {:method :get
     :handler

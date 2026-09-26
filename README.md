@@ -202,8 +202,17 @@ a sync checkpoint; deactivated accounts remain private. Authorization is checked
 again after parsing, and concurrent repository changes return `409 InvalidSwap`.
 Imports are buffered, limited to 64 MiB and two simultaneous imports per process;
 capacity exhaustion returns `503 RepoImportBusy`. Blob bytes are transferred
-separately; missing-blob reconciliation and inactive blob uploads remain pending.
+separately using `uploadBlob`, including through inactive primary sessions.
 Imported historical record objects are preserved without current Lexicon checks.
+
+`GET /xrpc/com.atproto.repo.listMissingBlobs` lists referenced blob CIDs absent
+from the authenticated account's blob metadata, with a representative `recordUri`.
+It accepts `limit` (1–1000, default 500) and a CID cursor. Nested modern blob
+objects and legacy `cid`/`mimeType` objects are indexed transactionally during
+record writes and imports; ordinary CID links do not imply blob ownership.
+Uploads to either PostgreSQL or S3 remove the matching CID from this list.
+Inactive accounts' repositories and blobs remain hidden from public reads.
+This endpoint checks database metadata; it does not probe S3 for lost objects.
 
 `GET /xrpc/com.atproto.server.getServiceAuth` issues a short-lived service JWT for
 the authenticated account. Supply `aud` as a service DID or `did#serviceId` reference
