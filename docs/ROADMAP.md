@@ -20,7 +20,7 @@ runnable and update this document as features land.
    cryptographic vectors. Do not substitute JSON hashes for repository CIDs.
 3. **Durable storage (in progress):** PostgreSQL migrations, transactions, account metadata, key
    storage, content-addressed blocks and blobs, restart/recovery tests.
-4. **Repositories (core and untrusted CAR verification implemented; import storage/API and performance pending):** deterministic Merkle Search Tree, signed version-3 commits,
+4. **Repositories (core and verified CAR import/export implemented; streaming/performance pending):** deterministic Merkle Search Tree, signed version-3 commits,
    atomic writes with swap checks, record CRUD, pagination, repository description,
    CAR import/export. Acceptance: reference implementation verifies our exports
    and we verify its exports, including deletion and concurrent writes.
@@ -41,7 +41,7 @@ runnable and update this document as features land.
 9. **Sync and federation (queries, proofs and WebSocket firehose implemented; external relay pending):** durable ordered event log, sync queries, WebSocket
    subscribeRepos with replay/backpressure, relay notification and takedowns.
    Acceptance: relay consumes commits and reconnects without losing events.
-10. **Service integration and migration (service tokens/replay protection and inactive destination preparation implemented):** authenticated service proxy, service
+10. **Service integration and migration (service tokens/replay protection, destination preparation and repository transfer implemented):** authenticated service proxy, service
     auth tokens, account migration/import/export and PLC operations.
     Acceptance: an external client reads and writes through this PDS and an
     account migrates between this implementation and a reference PDS.

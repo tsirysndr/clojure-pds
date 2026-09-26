@@ -13,7 +13,7 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | Namespace | Methods | Scope |
 | --- | --- | --- |
 | `com.atproto.server` | `describeServer` | Service DID, hosted suffix when signup is open, blob limit |
-| `com.atproto.server` | `createAccount` | Configurable signup and service-authenticated destination preparation for existing web/PLC DIDs; inactive imports with new local keys; repository import/activation and phone verification pending |
+| `com.atproto.server` | `createAccount` | Configurable signup and service-authenticated destination preparation for existing web/PLC DIDs; inactive imports with new local keys; final activation and phone verification pending |
 | `com.atproto.server` | `createInviteCode`, `createInviteCodes`, `getAccountInviteCodes` | Admin-issued codes, bounded batches, account listing and concurrent redemption limits; no automatic grants |
 | `com.atproto.admin` | `disableInviteCodes`, `disableAccountInvites`, `enableAccountInvites` | Optional Basic admin credentials; code invalidation and future-grant policy |
 | `com.atproto.admin` | `getAccountInfo`, `getSubjectStatus`, `updateSubjectStatus` | Private account inspection and repoRef account takedowns; activation state preserved; record/blob subjects pending |
@@ -31,6 +31,7 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | `com.atproto.identity` | `submitPlcOperation` | Credential constraints, authorized successor signatures, durable directory reconciliation and atomic identity events; prepared destination identities supported; recovery forks pending |
 | `com.atproto.repo` | `createRecord`, `putRecord`, `deleteRecord`, `applyWrites` | Atomic signed commits; record/repo swap checks; batch maximum 200 |
 | `com.atproto.repo` | `getRecord`, `listRecords`, `describeRepo` | Current records; keyset pagination and reverse order |
+| `com.atproto.repo` | `importRepo` | Primary session, complete signed v3 CAR, atomic record replacement and destination re-signing; active sync checkpoint or private inactive import; buffered 64 MiB limit |
 | `com.atproto.repo` | `uploadBlob` | Authenticated, maximum 5 MiB, account ownership |
 | `com.atproto.sync` | `getRepo`, `getLatestCommit`, `getRepoStatus`, `listRepos` | Full CAR export and local repository metadata; no incremental export optimization |
 | `com.atproto.sync` | `getBlocks`, `getRecord` | Repository-owned historical blocks; signed MST inclusion/absence proofs; rootless block CARs |
@@ -105,7 +106,7 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
   and reauthentication after remote lookup. Deactivated/taken-down accounts can use
   existing primary sessions; restricted taken-down login remains pending. Signing
   returns a verified successor without changing local or directory state. Full
-  migration/import and external destination interoperability remain unverified.
+  migration completion and external destination interoperability remain unverified.
 - Signed submissions validate the current handle, repository key, server rotation
   key and PDS service before persistence. The existing identity queue serializes
   submissions and handle changes. Tests cover mismatched credentials, wrong signers,
@@ -135,8 +136,15 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
   blocks and extra roots, and excludes unrelated blocks and arbitrary record
   links from ownership. Historical record objects are preserved without applying
   today's Lexicons. Current bounds are 64 MiB per CAR, 1,000,000 bytes per record,
-  and 128 tree edges; legacy version-2 commits are unsupported. Database import
-  and the HTTP import endpoint remain pending.
+  and 128 tree edges; legacy version-2 commits are unsupported.
+  `importRepo` uses the saved source key for prepared destinations or the current
+  local key for backups. It verifies uploads outside database locks, reauthenticates
+  and detects concurrent changes before atomic replacement. Tests cover actual
+  HTTP restoration, newer locally signed revisions, sync checkpoints, private
+  migration imports, source signature checks, transaction rollback, app-password
+  denial, revocation while parsing and concurrent import conflicts. A two-permit
+  process-wide limit bounds buffered imports; excess requests return 503. Blob
+  content reconciliation and final destination activation remain pending.
 - PostgreSQL migrations are locked, transactional, and checksummed. Tests verify
   rollback, persistence across connections, binary data, signed commits, atomic
   batches, concurrent swap conflicts, and isolation between accounts.
@@ -181,8 +189,8 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
   session. PLC keys remain `prepared` until a source-authorized operation is accepted.
   Tests cover actual HTTP signup, invite/nonce/outbox rollback, concurrent creation,
   source key rotation during preparation, custom-handle proof, credential handoff,
-  and public repo invisibility. Owner/admin activation is gated while repository
-  import remains unfinished. Imported web DIDs resolve externally, including after
+  and public repo invisibility. Owner/admin activation is gated until final
+  destination verification is implemented. Imported web DIDs resolve externally, including after
   local deletion; deleting a destination account removes its source snapshot/keys.
 - Blob bytes can use PostgreSQL or configurable S3-compatible storage. An upgrade
   test preserves existing blobs. Moto-backed HTTP tests cover binary round trips,
@@ -205,9 +213,9 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
    refresh behavior, permission sets and scopes.
 5. Relay notification and external relay interoperability,
    event retention/compaction, and remaining record/blob takedown semantics.
-6. Completing destination repository import/activation, authenticated proxying to AppViews/labelers, and external
+6. Completing destination activation, authenticated proxying to AppViews/labelers, and external
    client/relay end-to-end tests.
-7. Repository import, blob missing/list-since behavior, garbage collection,
+7. Streaming repository import, blob missing/list-since behavior, garbage collection,
    incremental MST mutation, streaming, quotas and bulk blob-backend migration.
 8. PostgreSQL connection pooling, account-specific abuse controls, metrics/logging, CORS,
    operational deployment/TLS and backup/restore drills. Push CI is configured;

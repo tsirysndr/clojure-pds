@@ -8,6 +8,7 @@
             [pds.protocol.codec :as codec]
             [pds.protocol.syntax :as syntax]
             [pds.repo :as repo]
+            [pds.repo-import :as repo-import]
             [pds.request :as request]))
 
 (defn own-repo! [account body]
@@ -42,7 +43,8 @@
     (cond-> {:items (mapv item-fn page)}
       (> (count rows) limit) (assoc :cursor (key-fn (last page))))))
 (defn routes [ds settings]
-  {"/xrpc/com.atproto.repo.createRecord" (write-route ds settings :create)
+  {"/xrpc/com.atproto.repo.importRepo" (server/empty-route #(repo-import/import! ds settings %))
+   "/xrpc/com.atproto.repo.createRecord" (write-route ds settings :create)
    "/xrpc/com.atproto.repo.putRecord" (write-route ds settings :put)
    "/xrpc/com.atproto.repo.deleteRecord" (write-route ds settings :delete)
    "/xrpc/com.atproto.repo.applyWrites"

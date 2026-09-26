@@ -3,8 +3,8 @@
 An AT Protocol Personal Data Server in Clojure with PostgreSQL persistence.
 Built in atomic feature commits. **In development: not yet a fully federating PDS.**
 
-Implemented: hosted did:web accounts, sessions, email confirmation/password reset,
-signed repositories, record APIs, CAR export, and binary blobs. See the
+Implemented: hosted did:web/PLC accounts, sessions, email confirmation/password reset,
+signed repositories, record APIs, verified CAR import/export, and binary blobs. See the
 [compatibility matrix](docs/COMPATIBILITY.md) for supported behavior and the
 [roadmap](docs/ROADMAP.md) for remaining work.
 
@@ -187,9 +187,23 @@ The returned primary session works while the account is deactivated. PLC account
 can obtain `getRecommendedDidCredentials`, have the source sign those credentials,
 and call `submitPlcOperation` here. Account preparation publishes no repository
 events and does not alter the remote DID. A source identity snapshot is retained
-for repository validation. **Repository import and final destination activation
-are unfinished:** owner and admin activation return `MigrationIncomplete` until
-that work lands. This is preparation support, not a completed migration flow.
+for repository validation. **Final destination activation is unfinished:** owner
+and admin activation return `MigrationIncomplete` until verified activation lands.
+This is preparation and data-transfer support, not a completed migration flow.
+
+`POST /xrpc/com.atproto.repo.importRepo` accepts a complete version-3 CAR with
+`Content-Type: application/vnd.ipld.car` and a primary access session. For prepared
+destinations, it verifies the source signature against the retained DID document;
+for local backup restoration, it uses the current local signing key. It validates
+the complete MST and records before atomically replacing the record index,
+retaining only reachable blocks, and signing a fresh destination commit. The new
+revision exceeds both the imported and local revisions. Active accounts publish
+a sync checkpoint; deactivated accounts remain private. Authorization is checked
+again after parsing, and concurrent repository changes return `409 InvalidSwap`.
+Imports are buffered, limited to 64 MiB and two simultaneous imports per process;
+capacity exhaustion returns `503 RepoImportBusy`. Blob bytes are transferred
+separately; missing-blob reconciliation and inactive blob uploads remain pending.
+Imported historical record objects are preserved without current Lexicon checks.
 
 `GET /xrpc/com.atproto.server.getServiceAuth` issues a short-lived service JWT for
 the authenticated account. Supply `aud` as a service DID or `did#serviceId` reference
@@ -302,14 +316,15 @@ a duplicate. Receipts are retained indefinitely; plan retention for larger syste
 
 ## Current limits
 
-- Records always get AT data-model and blob-ownership validation. A pinned local
+- Record write APIs enforce AT data-model and blob-ownership validation. A pinned local
   catalog validates 17 common record types and their dependencies by default.
   `validate: true` requires a known schema; `validate: false` skips schema checks.
   Results report `validationStatus: "valid"` or `"unknown"`; skip mode omits it.
   See [catalog provenance and scope](resources/lexicons/README.md).
 - MSTs match upstream root fixtures but are rebuilt per commit, O(n). Large repos
   need incremental updates. Historical blocks are retained; exports contain the
-  current graph. CAR import and garbage collection are unfinished.
+  current graph. CAR imports are buffered and replace the full current record set;
+  streaming import and garbage collection are unfinished.
 - Commit events persist signed CAR proofs and previous-value operations for
   inductive verification. Records are limited to 1,000,000 encoded bytes and
   commit proofs to 2,000,000 bytes; oversized batches roll back. The upstream
