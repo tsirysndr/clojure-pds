@@ -83,8 +83,9 @@ claimed. Preserve atomic feature commits and test each protocol boundary.
   verify the audit log, use encrypted per-account rotation keys, and activate only
   after confirmation. Handle updates also use durable verified operations and
   transactional identity events, preserving web DID hostnames and unrelated PLC
-  fields. Recommended public DID credentials are exposed for migration. Key
-  rotation, migration and conflicted-operation administration remain pending;
+  fields. Recommended public DID credentials and email-authorized PLC operation
+  signatures are exposed for migration. Operation submission, local key rotation,
+  migration and conflicted-operation administration remain pending;
   general PLC resolution still trusts the directory's HTTPS document response.
 - Track conformance honestly: unsupported features stay unsupported until their
   invariants are implemented. Health indicates process liveness, not federation

@@ -26,6 +26,7 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | `com.atproto.server` | `requestPasswordReset`, `resetPassword` | Same public result for known/unknown addresses; reset revokes sessions |
 | `com.atproto.identity` | `resolveHandle`, `resolveDid`, `resolveIdentity`, `refreshIdentity` | Hosted identities and remote DNS/HTTPS handles, did:web/PLC documents, bidirectional handle verification; uncached, bounded concurrency |
 | `com.atproto.identity` | `updateHandle`, `getRecommendedDidCredentials` | Hosted/custom handles, durable audited PLC changes, stable web DID hostnames, public migration credentials; migration itself pending |
+| `com.atproto.identity` | `requestPlcOperationSignature`, `signPlcOperation` | Primary session plus one-use emailed proof; verified latest audit, partial credential overrides; returns an operation without submitting it |
 | `com.atproto.repo` | `createRecord`, `putRecord`, `deleteRecord`, `applyWrites` | Atomic signed commits; record/repo swap checks; batch maximum 200 |
 | `com.atproto.repo` | `getRecord`, `listRecords`, `describeRepo` | Current records; keyset pagination and reverse order |
 | `com.atproto.repo` | `uploadBlob` | Authenticated, maximum 5 MiB, account ownership |
@@ -92,6 +93,14 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
   custom handles are resolved externally even when stored locally. Conflicting
   PLC jobs retain reservations and block deletion or another target until resolved;
   cancellation/admin reconciliation remains unfinished.
+- PLC signing proofs use the transactional email outbox, expire after 30 minutes,
+  and are bound to account, current address and purpose. Tests verify one-use
+  consumption under concurrent requests, expiry, cross-account and app-password
+  rejection, malformed fields, fresh directory defaults, removed signing authority,
+  and reauthentication after remote lookup. Deactivated/taken-down accounts can use
+  existing primary sessions; restricted taken-down login remains pending. Signing
+  returns a verified successor without changing local or directory state. Full
+  migration/import and external destination interoperability remain unverified.
 - Record schema validation uses 33 pinned, checksummed Lexicons (17 record roots).
   Tests cover upstream record fixtures, required/nullable fields, nested unions,
   references, UTF-8/grapheme limits, blobs, string formats, and key rules. Unknown

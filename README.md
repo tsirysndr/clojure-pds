@@ -147,6 +147,20 @@ no cancellation/reconciliation admin API yet. Inspect `handle_updates.status`
 and `last_error` for sanitized status. `getRecommendedDidCredentials` returns the
 account's public repository key, PDS endpoint, handle and available rotation keys.
 
+For outgoing PLC migration, call `com.atproto.identity.requestPlcOperationSignature`
+with a primary session to enqueue a 30-minute email code through the configured
+Worker. Pass that code as `token` to `com.atproto.identity.signPlcOperation`, with
+any replacement `rotationKeys`, `alsoKnownAs`, `verificationMethods`, or `services`.
+Omitted fields retain the latest verified directory values. The code is bound to
+the account and email address and consumed once, atomically with signing; failed
+validation or unavailable directory access leaves it usable until expiry. The
+response contains a signed successor operation. It does not submit the operation
+or change local credentials. App-password sessions cannot request or use these
+codes. Existing primary sessions can use this flow while deactivated or taken
+down; restricted login/recovery for taken-down accounts remains pending. Pending
+handle updates must finish first. Destination import and signed-operation
+submission are still being implemented.
+
 Set `PDS_REQUIRE_INVITE_CODE=true` to require an invitation during signup;
 `PDS_ENABLE_SIGNUP` must also be enabled. Set `PDS_ADMIN_PASSWORD` to a random
 secret of at least 16 characters to enable admin endpoints (unset by default).

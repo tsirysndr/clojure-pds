@@ -7,6 +7,7 @@
             [pds.errors :as errors]
             [pds.identity :as identity]
             [pds.handles :as handles]
+            [pds.plc-signing :as plc-signing]
             [pds.request :as request]
             [pds.xrpc :as xrpc]))
 
@@ -35,7 +36,13 @@
   (let [resolver (identity/resolver (merge settings {:local-handle #(local-handle ds settings %)
                                                      :local-document #(local-document ds settings %)}))
         route (fn [method f] {:method method :handler #(identity/bounded-call! resolver (fn [] (xrpc/response 200 (f %))))})]
-    {"/xrpc/com.atproto.identity.updateHandle"
+    {"/xrpc/com.atproto.identity.requestPlcOperationSignature"
+     {:method :post :handler (fn [r]
+                               (plc-signing/request-signature! ds settings r)
+                               {:status 200 :headers {} :body ""})}
+     "/xrpc/com.atproto.identity.signPlcOperation"
+     (route :post #(plc-signing/sign! ds settings % (request/json-body %)))
+     "/xrpc/com.atproto.identity.updateHandle"
      {:method :post :handler (fn [r]
                                (identity/bounded-call! resolver #(handles/update! ds settings r (request/json-body r)))
                                {:status 200 :headers {} :body ""})}

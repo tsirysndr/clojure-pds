@@ -146,7 +146,7 @@
 
 (deftest handle-reservations-backfill-existing-accounts
   (let [migrations db/migrations]
-    (with-redefs [db/migrations (vec (butlast migrations))]
+    (with-redefs [db/migrations (vec (take-while #(not= "015-handle-updates.sql" %) migrations))]
       (fixture/isolated-database
         (fn []
           (db/transact! fixture/*ds* #(db/execute! % "INSERT INTO accounts(did, handle, email, password_hash) VALUES

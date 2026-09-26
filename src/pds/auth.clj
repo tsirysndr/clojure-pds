@@ -76,7 +76,7 @@
 
 (defn authenticate!
   ([conn settings request] (authenticate! conn settings request {}))
-  ([conn settings request {:keys [allow-deactivated?]}]
+  ([conn settings request {:keys [allow-deactivated? allow-taken-down?]}]
   (let [claims (verify-jwt settings "at+jwt" (bearer request))
         session (first (db/query conn "SELECT a.*, s.app_password_id, p.privileged FROM sessions s JOIN accounts a ON a.did = s.did
                                         LEFT JOIN app_passwords p ON p.id = s.app_password_id
@@ -85,7 +85,9 @@
                                  (UUID/fromString (get claims "sid")) (get claims "sub")))]
     (when-not (and session (= (access-scope session) (get claims "scope"))
                    (or (= "active" (:status session))
-                       (and allow-deactivated? (= "deactivated" (:status session)) (nil? (:app_password_id session)))))
+                       (and (nil? (:app_password_id session))
+                            (or (and allow-deactivated? (= "deactivated" (:status session)))
+                                (and allow-taken-down? (= "taken_down" (:status session)))))))
       (invalid-token!))
     (assoc session :session-id (UUID/fromString (get claims "sid")) :access-scope (access-scope session)))))
 

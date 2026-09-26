@@ -78,13 +78,16 @@
     (let [token (crypto/token)
           subject (case purpose "confirm-email" "Confirm your PDS email" "reset-password" "Reset your PDS password"
                         "delete-account" "Confirm account deletion" "update-email" "Update your PDS email"
-                        "sign-in" "Sign in to your PDS account")
+                        "sign-in" "Sign in to your PDS account" "plc-operation" "Authorize a PLC identity operation")
           minutes (if (= purpose "sign-in") 10 30)]
       (db/execute! conn "DELETE FROM account_tokens WHERE did = ? AND purpose = ?" (:did account) purpose)
       (db/execute! conn "INSERT INTO account_tokens(token_hash, did, purpose, email, expires_at) VALUES (?, ?, ?, ?, ?)"
                    (crypto/digest-token token) (:did account) purpose (:email account) (.plusSeconds (Instant/now) (* 60 minutes)))
       (email/enqueue! conn {:to (:email account) :subject subject
-                           :text (str subject ".\n\nYour token is: " token "\n\nIt expires in " minutes " minutes. If you did not request this, ignore this email.")}))))
+                           :text (str subject ".\n\n"
+                                      (when (= purpose "plc-operation")
+                                        "This code authorizes signing an identity change, including moving your account or replacing its control keys. Only enter it in a migration or identity-change flow you initiated. Do not share it.\n\n")
+                                      "Your token is: " token "\n\nIt expires in " minutes " minutes. If you did not request this, ignore this email.")}))))
 
 (defn provision-one! [ds settings did]
   (provision/process-one! ds settings did
