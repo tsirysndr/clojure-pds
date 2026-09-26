@@ -1,7 +1,7 @@
 const $ = id => document.getElementById(id);
 let state = {}, busy = false, passkeysAvailable = false, signupMode = false, signupEnabled = false, userDomain = '';
 const flowId = location.pathname.match(/^\/oauth\/flow\/([A-Za-z0-9_-]{43})$/)?.[1];
-let flow = null;
+let flow = null, sessionCursor = null;
 const scopeLabels = {
   atproto: 'Confirm your account identity.',
   'transition:generic': 'Create, change, and delete public records; upload media; access preferences and app services.',
@@ -50,10 +50,12 @@ function render(next) {
   $('passkey-login').disabled = !passkeysAvailable || !window.PublicKeyCredential;
   $('passkey-form').hidden = !passkeysAvailable || !window.PublicKeyCredential;
   if (next.stage !== 'authenticated') {
+    $('oauth-session-list').replaceChildren(); sessionCursor = null; $('oauth-session-next').hidden = true;
     $('totp-secret').textContent = ''; $('recovery-codes').textContent = '';
     $('totp-enrollment').hidden = true; $('recovery').hidden = true;
     return;
   }
+  renderSessions(next.result?.['oauth-sessions'] || next['oauth-sessions']);
   $('totp-status').textContent = next.factor === 'totp' ? 'Your authenticator is enabled. Keep your recovery codes in a safe place.' : next.factor === 'email' ? 'Email verification is enabled. Turn it off before switching to an authenticator app.' : 'Add an extra code at sign-in using Google Authenticator or another compatible app.';
   $('totp-begin').hidden = !!next.factor;
   $('email-disable').hidden = next.factor !== 'email';
@@ -67,6 +69,22 @@ function render(next) {
     const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'shrink-0 rounded px-2 py-2 text-sm font-medium text-danger hover:bg-muted-surface'; remove.textContent = 'Remove'; remove.setAttribute('aria-label', `Remove ${key.name}`);
     remove.addEventListener('click', () => run(async () => { if (confirm(`Remove “${key.name}”?`)) { await action('passkeys/remove', {id: key.id}); notice('Passkey removed.'); } }));
     item.append(name, remove); $('passkey-list').append(item);
+  }
+}
+function renderSessions(page) {
+  const list = $('oauth-session-list'); list.replaceChildren();
+  sessionCursor = page?.cursor || null; $('oauth-session-next').hidden = !sessionCursor;
+  $('oauth-session-first').textContent = page?.['first-page'] === false ? 'Back to first page' : 'Refresh list';
+  if (!page?.items?.length) { const item = document.createElement('li'); item.className = 'text-sm text-muted'; item.textContent = 'No active sessions on this page.'; list.append(item); }
+  for (const session of page?.items || []) {
+    const item = document.createElement('li'); item.className = 'space-y-3 rounded-lg border border-line p-3';
+    const client = document.createElement('p'); client.className = 'break-all text-sm font-medium'; client.textContent = session['client-id'];
+    const dates = document.createElement('p'); dates.className = 'text-xs text-muted'; dates.textContent = `Connected ${new Date(session['created-at']).toLocaleString()} · Expires ${new Date(session['expires-at']).toLocaleString()}`;
+    const scopes = document.createElement('ul'); scopes.className = 'list-disc space-y-2 pl-5 text-sm';
+    for (const scope of session.scope.split(' ')) { const entry = document.createElement('li'); entry.textContent = scopeLabels[scope] || scope; scopes.append(entry); }
+    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'secondary text-danger'; remove.textContent = 'Disconnect'; remove.setAttribute('aria-label', `Disconnect session for ${session['client-id']}`);
+    remove.addEventListener('click', () => run(async () => { if (confirm(`Disconnect this session for ${session['client-id']}?`)) { await action('oauth/revoke', {id: session.id}); notice('App session disconnected.'); } }));
+    item.append(client, dates, scopes, remove); list.append(item);
   }
 }
 async function load() { const response = await fetch('/account/session', {credentials: 'same-origin', cache: 'no-store'}); const data = await response.json(); if (!response.ok) throw new Error(data.message || 'Unable to load your account.'); render(data); }
@@ -148,6 +166,8 @@ form('totp-disable-form', async fields => { if (confirm('Remove your authenticat
 $('email-disable').addEventListener('click', () => run(async () => { if (confirm('Turn off email verification for sign-in?')) { await action('email/disable'); notice('Email verification turned off. You can now add an authenticator.'); } }));
 $('recovery-saved').addEventListener('click', () => { $('recovery-codes').textContent = ''; $('recovery').hidden = true; notice('Recovery codes hidden. Keep your saved copy safe.'); });
 $('logout').addEventListener('click', () => run(async () => { await action('logout'); location.replace('/account'); }));
+$('oauth-session-first').addEventListener('click', () => run(() => action('oauth/list')));
+$('oauth-session-next').addEventListener('click', () => run(() => action('oauth/list', {cursor: sessionCursor})));
 window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
 await run(async () => {
   if (flowId) {

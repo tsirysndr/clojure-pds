@@ -6,6 +6,7 @@
             [pds.crypto :as crypto]
             [pds.db :as db]
             [pds.errors :as errors]
+            [pds.oauth.sessions :as oauth-sessions]
             [pds.protocol.codec :as codec]
             [pds.security.factors :as factors]
             [pds.security.passkeys :as passkeys])
@@ -38,7 +39,8 @@
         stage (cond (:authenticated_at row) "authenticated" (:did row) "factor" :else "login")]
     (cond-> {:stage stage :csrf (csrf row token)}
       account (assoc :handle (:handle account) :factor (factor-type conn account))
-      (= stage "authenticated") (assoc :passkeys (passkeys/list-credentials conn (:did row))))))
+      (= stage "authenticated") (assoc :passkeys (passkeys/list-credentials conn (:did row))
+                                       :oauth-sessions (oauth-sessions/list! conn (:did row) nil)))))
 (defn- output [conn token & [result]]
   {:token token :view (view conn (load! conn token) token) :result result})
 (defn open! [ds token]
@@ -117,6 +119,8 @@
             (when-not (:authenticated_at row) (invalid!))
             (let [did (:did row)
                   result (case action
+                           "oauth/list" {:oauth-sessions (oauth-sessions/list! conn did (get body "cursor"))}
+                           "oauth/revoke" (oauth-sessions/revoke-owner! conn did (get body "id"))
                            "totp/begin" (factors/begin! conn settings did)
                            "totp/confirm" (factors/confirm! conn settings did (get body "code"))
                            "totp/disable" (factors/disable! conn settings did (get body "code"))

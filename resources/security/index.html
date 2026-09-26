@@ -99,6 +99,15 @@
           <button class="secondary text-danger">Remove authenticator</button>
         </form>
       </div>
+      <section class="panel md:col-span-2">
+        <h2 class="text-xl font-semibold">Connected apps</h2>
+        <p class="mt-2 mb-6 text-sm leading-6 text-muted">Review active OAuth sessions. Disconnecting a session stops that app from using its access and refresh tokens. Other sessions stay signed in.</p>
+        <ul id="oauth-session-list" class="mb-4 space-y-3"></ul>
+        <div class="flex flex-wrap gap-2">
+          <button id="oauth-session-first" class="secondary" type="button">Refresh list</button>
+          <button id="oauth-session-next" class="secondary" type="button" hidden>Next page</button>
+        </div>
+      </section>
       <section id="recovery" class="panel md:col-span-2" hidden>
         <h2 class="text-xl font-semibold">Save your recovery codes</h2>
         <p class="mt-2 text-sm leading-6 text-muted">Each code works once if you lose your authenticator. Save these somewhere safe. They will not be shown again.</p>

@@ -163,3 +163,42 @@
       (when (or (seq (:query-string request)) (get-in request [:headers "authorization"]))
         (http/fail! "invalid_request" "Use form client authentication without query parameters"))
       (http/response 200 (issue! ds resolver settings (http/form! request) (get-in request [:headers "dpop"]))))))
+
+(defn revoke-token!
+  "RFC 7009 session revocation. Both token kinds (including used refresh tokens)
+  identify a family. Unknown tokens succeed after client/proof authentication;
+  known tokens require the original client binding and DPoP key. Hints are ignored."
+  [ds resolver settings params proof]
+  (let [token (get params "token")
+        _ (when-not (and (string? token) (<= 1 (count token) 8192))
+            (http/fail! "invalid_request" "A token is required"))
+        candidate (when (re-matches #"(?:at|rt)_[A-Za-z0-9_-]{43}" token)
+                    (with-open [conn (db/connection ds)]
+                      (first (db/query conn "SELECT s.*, s.snapshot::text FROM oauth_tokens t JOIN oauth_sessions s USING (session_id)
+                                             WHERE t.token_hash = ?" (crypto/digest-token token)))))
+        request (when candidate (snapshot candidate))
+        resolved (client/resolve! resolver (get params "client_id"))
+        matches? (= (:client-id request) (:client-id resolved))
+        context {:method "POST" :url (str (:public-url settings) "/oauth/revoke") :jkt (when matches? (:dpop-jkt request))}]
+    (when (and matches? (not (client-auth/binding-current? resolved (:client-binding request))))
+      (proofs/accept! ds settings proof context)
+      (invalidate-binding! ds candidate)
+      (client-auth/invalid!))
+    (client-auth/accept-request! ds resolved settings params proof context (when matches? (:client-binding request)))
+    (when (and candidate (not matches?)) (invalid!))
+    (when candidate
+      (db/transact! ds
+        (fn [conn]
+          ;; Serialize with refresh and resource writes; never use access-grant!
+          ;; here, since expired/deactivated sessions must remain revocable.
+          (lock-account! conn (:did candidate))
+          (revoke! conn (:session_id candidate) "client_revoked"))))
+    nil))
+
+(defn revocation-handler [ds settings resolver]
+  (http/wrap settings
+    (fn [request]
+      (when (or (seq (:query-string request)) (get-in request [:headers "authorization"]))
+        (http/fail! "invalid_request" "Use form client authentication without query parameters"))
+      (revoke-token! ds resolver settings (http/form! request) (get-in request [:headers "dpop"]))
+      {:status 200 :headers {} :body ""})))

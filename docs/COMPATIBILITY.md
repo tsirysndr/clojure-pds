@@ -294,11 +294,12 @@ External service interoperability and OAuth remain pending.
 2. Bounded identity caching,
    signing/rotation key lifecycle, conflicted-operation administration, and migration.
 3. Remaining administrative APIs, record/blob takedowns, and broader account recovery controls.
-4. OAuth authorization server: discovery metadata, public revocation and session
-   management, granular permissions/sets and reference-client interoperability.
+4. OAuth authorization server: discovery metadata, route integration, expired-grant
+   cleanup, granular permissions/sets and reference-client interoperability.
    [DPoP replay protection, metadata/JWKS, confidential clients, PAR/PKCE, browser
-   signup/consent, token rotation and transitional resource authorization](OAUTH.md)
-   are implemented; browser authorization and token routes remain unmounted.
+   signup/consent, token rotation/revocation, owner session management and transitional
+   resource authorization](OAUTH.md) are implemented; browser authorization, token
+   and revocation routes remain unmounted.
    Optional [TOTP and passkeys](ACCOUNT-SECURITY.md) include browser enrollment,
    removal and OAuth login integration; hardware/browser ceremony verification
    and broader recovery controls remain pending.

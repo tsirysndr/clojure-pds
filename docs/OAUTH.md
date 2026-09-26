@@ -223,7 +223,7 @@ PostgreSQL tests cover cookie/interaction substitution, CSRF rotation, primary-o
 login, hints, email-factor delivery and transactional consumption, lifecycle changes,
 expiration, concurrent decisions, metadata changes and failed PAR/code inserts.
 The browser adapter and pages below implement this flow. OAuth routes remain
-unmounted while session management and discovery are completed.
+unmounted while discovery and full route integration are completed.
 
 ## Opaque access and refresh tokens
 
@@ -365,12 +365,49 @@ account restrictions, key removal/restoration, metadata outages, lifecycle races
 expiration and service/proxy scope enforcement. Granular permissions and permission
 sets are still pending; they are not accepted by PAR yet.
 
+## Revocation and owner session management
+
+`tokens/revocation-handler` implements a standalone `/oauth/revoke` adapter using
+bounded POST form bodies, public-client CORS, no-store responses and DPoP nonce
+headers. It accepts both access and refresh tokens and ignores `token_type_hint`.
+Revoking either kind revokes the entire token family, including rotated tokens.
+Previously used refresh tokens can still identify their family for logout.
+Unknown tokens and repeated valid revocations return HTTP 200 with an empty body;
+missing/empty token parameters are invalid requests. GET and query-string
+credentials are rejected. This route is not mounted yet.
+
+Revocation requires fresh client metadata, the original client authentication
+method/key and the session's DPoP key. DPoP covers POST to the configured revocation
+URL; as an authorization-server form request it does not require an `ath` claim.
+Client assertion and proof replay state commit before the revocation transaction.
+A request with another client's credentials or another session key cannot revoke
+the grant. Authoritative removal of a confidential client key permanently revokes
+its session, as it does on token/resource requests. Expired or deactivated sessions
+remain revocable. Account-then-session locking serializes revocation with refresh
+and protected resource mutations.
+
+The `/account` security screen lists and disconnects the owner's active sessions.
+Only a recent complete browser login may access the list or revoke a session;
+same-origin POST and CSRF validation apply to management actions. Lists expose only
+the session identifier, client metadata URL, original scope, creation and expiration
+times. They never include token values/hashes, PKCE data or DPoP/client keys.
+Invalidated, expired and revoked sessions are omitted. Migration 032 indexes stable
+session-ID pagination; each page has at most 20 entries. Foreign/unknown IDs produce
+the same idempotent result, without modifying another account's sessions.
+
+Tests cover both token types, rotated credentials, unknown/expired tokens, client
+and key binding, replay, concurrent refresh/revoke, owner isolation, pagination,
+factor/CSRF/Origin checks and the real HTTP contract. The connected-app screen was
+visually checked in Chrome with fixture data. Protocol behavior follows
+[RFC 7009](https://www.rfc-editor.org/rfc/rfc7009.html), with mandatory AT Protocol
+client and DPoP binding.
+
 ## Remaining steps
 
-1. Public token/session revocation and owner management, plus bounded expired-grant cleanup.
+1. Bounded expired-grant cleanup that retains replay evidence while sessions are live.
 2. Granular permission scopes and dynamically resolved permission sets, including
    permission-aware consent and enforcement in each resource operation.
-3. Mount authorization endpoints and publish authorization/resource discovery
+3. Mount authorization and revocation endpoints and publish authorization/resource discovery
    metadata, then verify full browser and reference-client flows.
 
 Sources: [AT Protocol OAuth profile](https://atproto.com/specs/oauth),

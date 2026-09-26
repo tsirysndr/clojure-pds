@@ -123,6 +123,14 @@ The browser supports account creation without legacy bearer tokens, password and
 identifier-first passkey login, passkey naming,
 registration and removal, manual authenticator setup, confirmation, one-time
 recovery-code display, authenticator removal and switching away from email 2FA.
+Connected apps are listed as individual OAuth sessions, with their full client
+metadata URL, original permissions, connection time and expiration. The list is
+paginated at 20 sessions per page. Disconnect revokes that session's access and
+refresh tokens without changing other sessions or signing out this owner browser.
+Listing and disconnecting require complete authentication, including any configured
+second factor, and POST actions require the same Origin/CSRF checks as factor settings.
+Expired, revoked and invalidated sessions are not displayed. Client-controlled text
+is rendered as text, never HTML or clickable application branding.
 Registration requests user verification and discoverable credentials. Password
 visibility is optional; password/code fields are cleared after submission.
 
@@ -149,8 +157,8 @@ No CDN or React runtime is required. Visual references:
 
 ## Remaining work
 
-- Mounting the implemented OAuth authorization/consent adapter with discovery and
-  session management; full browser ceremony tests.
+- Mounting the implemented OAuth authorization/consent/revocation adapters with
+  discovery; full browser ceremony tests.
 - Username-less discoverable login, QR provisioning, and recovery when all
   authenticators and recovery codes are lost.
 
