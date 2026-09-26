@@ -117,3 +117,40 @@ Discovery follows the required fields of the official
 The handle-domain list is empty because account creation is not implemented yet.
 The service DID is derived from `PDS_HOSTNAME`; publishing its DID document remains
 part of the identity milestone.
+
+## Email through a Cloudflare Worker
+
+Set all three variables to enable the PostgreSQL-backed email dispatcher:
+
+```sh
+export PDS_EMAIL_WORKER_URL='https://your-email-worker.example.workers.dev/'
+export PDS_EMAIL_WORKER_TOKEN='your-shared-secret'
+export PDS_EMAIL_FROM='noreply@your-verified-domain.example'
+```
+
+Unset all three to disable delivery. Partially configured email fails startup.
+The PDS POSTs JSON `{to, from, subject, text, idempotencyKey}` with Bearer
+`Authorization` and an `Idempotency-Key` header. Any 2xx means accepted. HTTPS is
+required except on loopback for local tests; redirects are never followed.
+Timeouts, 408, 429, and 5xx retry with exponential backoff (up to ten attempts).
+Other failures stop retrying. Inspect `email_outbox` for failed jobs; error fields
+contain sanitized codes. Sent payloads are erased. Failed/pending payloads contain
+private account messages and must be protected along with database backups.
+
+A deployable example lives in [examples/email-worker](examples/email-worker).
+It requires Cloudflare Email Service, a verified sender domain, and Durable
+Objects. Change `PDS_EMAIL_FROM` in `wrangler.toml`, set the shared secret with
+`wrangler secret put PDS_EMAIL_TOKEN`, then deploy using Wrangler from that folder.
+No Worker is deployed and no real email is sent by the project tests.
+
+The example stores a hashed receipt per message ID to deduplicate successful
+retries. Delivery is **at least once**: a crash after the provider sends but before
+receipt persistence can cause a duplicate. Receipts are retained indefinitely;
+plan retention if operating at scale. The PDS recovers expired delivery leases
+following restart. Worker failures never roll back a committed account change.
+
+Run the Worker contract tests with:
+`node --test examples/email-worker/handler.test.mjs`.
+
+Cloudflare setup reference:
+[Workers email API](https://developers.cloudflare.com/email-service/api/send-emails/workers-api/).

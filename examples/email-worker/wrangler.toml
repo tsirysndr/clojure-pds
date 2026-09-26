@@ -1,0 +1,17 @@
+name = "clojure-pds-email"
+main = "worker.mjs"
+compatibility_date = "2026-09-26"
+
+[vars]
+PDS_EMAIL_FROM = "noreply@example.com"
+
+[[send_email]]
+name = "EMAIL"
+
+[[durable_objects.bindings]]
+name = "DELIVERY"
+class_name = "Delivery"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Delivery"]

@@ -55,7 +55,7 @@
       (let [result (f conn)] (.commit conn) result)
       (catch Throwable t (.rollback conn) (throw t)))))
 
-(def migrations ["001-storage.sql"])
+(def migrations ["001-storage.sql" "002-email.sql"])
 
 (defn migrate! [ds]
   (transact!
