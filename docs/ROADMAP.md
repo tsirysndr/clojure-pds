@@ -32,7 +32,7 @@ runnable and update this document as features land.
    refresh rotation/revocation, app passwords, invites, email verification/reset,
    account activation/deactivation/deletion and administrative authorization.
    Acceptance: expiry, replay, cross-account authorization and restart tests.
-7. **OAuth (DPoP/replay, client metadata/redirect and client-auth foundations implemented):** authorization-server metadata, PAR, PKCE, DPoP, client metadata,
+7. **OAuth (DPoP/client-auth foundations and durable PAR/PKCE implemented):** authorization-server metadata, PAR, PKCE, DPoP, client metadata,
    consent, token binding and scoped permissions. Acceptance: reference clients
    complete login and invalid/replayed proofs fail.
 8. **Blob APIs (buffered transfer, references, missing/since listing and temporary/reference cleanup implemented):** streaming upload/download, limits, ownership, record references,

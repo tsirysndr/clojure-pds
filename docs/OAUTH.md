@@ -139,16 +139,63 @@ The assertion profile follows [RFC 7523](https://www.rfc-editor.org/rfc/rfc7523.
 Unlike a legacy allowance in the pinned reference provider, assertions without
 `exp` are rejected as required by that RFC.
 
+## Pushed authorization requests and PKCE
+
+`pds.oauth.par/push!` resolves current client metadata, validates authorization
+parameters, authenticates the client and DPoP proof, and persists an immutable
+request snapshot. Responses contain a random 256-bit `request_uri` and a
+90-second `expires_in`. PostgreSQL stores only the URI hash, the exact client ID,
+validated parameters, the client authentication binding and DPoP thumbprint.
+Client assertions, DPoP JWTs and arbitrary extension fields are not stored.
+Optional `dpop_jkt` values must match the proof's key.
+
+Only code responses, query response mode and S256 PKCE are accepted. State is
+required, redirects must match client metadata, and requested scopes must be
+declared by the client. The current validator supports `atproto` and the three
+transitional scopes; chat additionally requires `transition:generic`. Fine-grained
+permissions and permission sets remain pending and are rejected rather than
+authorized implicitly. Login hints and supported prompt values are preserved for
+the forthcoming authorization interface.
+
+Migration 026 reserves each PKCE challenge across all clients for 24 hours. The
+reservation and PAR row commit atomically; failed inserts leave neither behind.
+Proof acceptance commits first, so a failed PAR grant needs fresh authentication
+proofs. Concurrent attempts to reuse a challenge admit only one request. Cleanup
+removes at most 1,000 expired request rows and 1,000 expired challenge reservations
+per successful push. Consuming or expiring a request does not shorten its challenge
+reservation. The verifier implements the RFC 7636 S256 vector, canonical challenge
+encoding, the 43–128 character verifier grammar, and constant-time hash comparison.
+
+`claim!` consumes a request URI once, for its exact client ID, within the caller's
+transaction. It returns the snapshot for creating browser interaction state in
+that same transaction. Failed interaction creation rolls the consumption back;
+concurrent or repeated committed consumption is rejected. Expired, malformed and
+cross-client request URIs cannot be claimed or used as network lookup URLs.
+
+The standalone `par/handler` adapter implements form-encoded POST, strict UTF-8
+and duplicate-parameter handling, a 16 KiB body limit, HTTP 201, OAuth JSON errors,
+no-store responses, public-client CORS/preflight and a DPoP nonce on every response.
+It rejects query parameters and Authorization-header credentials at PAR. Actual
+HTTP/TLS tests cover nonce challenge/retry with a confidential client, persistent
+bindings, CORS, malformed forms, oversize bodies and method errors. PostgreSQL
+tests cover expiry, concurrent submission/consumption, rollback, reopened
+connections, global challenge reuse and bounded cleanup.
+
+The adapter is not yet mounted by `pds.app`, and discovery metadata does not claim
+an authorization/token flow that is still incomplete. References:
+[RFC 9126 PAR](https://www.rfc-editor.org/rfc/rfc9126.html) and
+[RFC 7636 PKCE](https://www.rfc-editor.org/rfc/rfc7636.html).
+
 ## Remaining steps
 
-1. Authorization server/resource metadata and CORS, pushed requests, mandatory
-   PKCE with challenge reuse prevention, and client/DPoP binding.
-2. Browser authorization, primary-account login, CSRF protection, consent and
+1. Browser authorization, primary-account login, CSRF protection, consent and
    exact redirect handling; one-use authorization codes and issuer responses.
-3. Opaque DPoP-bound access/refresh tokens, refresh rotation/replay revocation,
+2. Opaque DPoP-bound access/refresh tokens, refresh rotation/replay revocation,
    client key revalidation, revocation endpoints and session lifecycle integration.
-4. Resource-server authentication, permission scopes/sets, service proxy and
+3. Resource-server authentication, permission scopes/sets, service proxy and
    getServiceAuth authorization, nonce headers, and end-to-end reference clients.
+4. Mount the completed routes, publish authorization/resource discovery metadata,
+   and verify the full login/refresh/resource flow with reference clients.
 
 Sources: [AT Protocol OAuth profile](https://atproto.com/specs/oauth),
 [RFC 9449 DPoP](https://www.rfc-editor.org/rfc/rfc9449.html),
