@@ -205,6 +205,11 @@ a duplicate. Receipts are retained indefinitely; plan retention for larger syste
 - MSTs match upstream root fixtures but are rebuilt per commit, O(n). Large repos
   need incremental updates. Historical blocks are retained; exports contain the
   current graph. CAR import and garbage collection are unfinished.
+- Commit events persist signed CAR proofs and previous-value operations for
+  inductive verification. Records are limited to 1,000,000 encoded bytes and
+  commit proofs to 2,000,000 bytes; oversized batches roll back. The upstream
+  conformance suite verifies signatures and reconstructs previous MST roots.
+  Public WebSocket delivery remains unfinished.
 - Blob uploads are buffered and capped at 5 MiB. Bytes use PostgreSQL `bytea` by
   default or a [configurable S3-compatible backend](docs/S3.md). PostgreSQL always
   holds ownership and metadata. Streaming, MIME sniffing, and unreferenced-blob

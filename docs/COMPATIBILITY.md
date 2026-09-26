@@ -63,6 +63,11 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
   A transactional ownership migration traverses retained commit/MST history;
   it does not grant ownership from arbitrary record links. Public block requests
   cannot retrieve blocks belonging only to a different account.
+- Durable commit events contain signed CAR slices, mutation operations with previous
+  CIDs, and previous revision/MST links. Upstream verification inverts mixed create,
+  update, delete, and empty commits back to the previous root. Oversized proof
+  batches roll back atomically. Legacy metadata-only events migrate to sync
+  checkpoints; reactivation also emits a sync checkpoint. WebSocket delivery is pending.
 - Signing keys use AES-256-GCM with account DID as associated data. Passwords use
   Argon2id. Sessions are persisted and checked on requests; reset/replay/logout
   revocation is tested. Machine-generated app passwords use keyed digests; tests
@@ -90,10 +95,10 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
 3. Remaining administrative APIs, record/blob takedowns, and broader account recovery controls.
 4. OAuth authorization server: metadata, PAR, PKCE, DPoP, client metadata/consent,
    refresh behavior, permission sets and scopes.
-5. Commit event payloads, WebSocket subscribeRepos with
+5. WebSocket subscribeRepos with
    cursor replay/backpressure, relay notification, account/identity events and
-   takedown semantics. `repo_events` stores commit metadata and account-status payloads;
-   full commit payloads and identity events remain pending.
+   takedown semantics and identity events. Commit and account-status payloads
+   are persisted, but not yet delivered through a public event stream.
 6. Service auth JWTs, authenticated proxying to AppViews/labelers, and external
    client/relay end-to-end tests.
 7. Repository import, blob missing/list-since behavior, garbage collection,

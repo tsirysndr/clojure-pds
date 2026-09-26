@@ -165,9 +165,11 @@
                   (link (str "b" (base32 (Arrays/copyOfRange ^bytes data 1 37))))))
           (fail! "Unsupported CBOR major type"))))))
 
-(defn decode [^bytes data]
-  (when (> (alength data) (* 1024 1024)) (fail! "CBOR block exceeds 1 MiB"))
+(defn decode
+  ([data] (decode data (* 1024 1024)))
+  ([^bytes data maximum]
+  (when (> (alength data) maximum) (fail! "CBOR exceeds the decoding limit"))
   (let [in (DataInputStream. (ByteArrayInputStream. data)) value (decode-value in 0)]
     (when-not (and (zero? (.available in)) (Arrays/equals data (encode value)))
       (fail! "CBOR must use canonical encoding without trailing bytes"))
-    value))
+    value)))

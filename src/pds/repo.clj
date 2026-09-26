@@ -3,6 +3,7 @@
             [pds.block-index :as block-index]
             [pds.db :as db]
             [pds.errors :as errors]
+            [pds.events :as events]
             [pds.lexicon :as lexicon]
             [pds.protocol.car :as car]
             [pds.protocol.codec :as codec]
@@ -18,10 +19,13 @@
   (or (first (db/query conn "SELECT * FROM repositories WHERE did = ? FOR UPDATE" did))
       (errors/raise! 400 "RepoNotFound" "Repository was not found")))
 (defn tree [conn did]
-  (mst/build (into {} (map (fn [{:keys [collection rkey cid]}] [(str collection "/" rkey) cid]))
-                  (db/query conn "SELECT collection, rkey, cid FROM records WHERE did = ? ORDER BY collection, rkey" did))))
-(defn commit! [conn settings repo]
-  (let [{:keys [root blocks]} (tree conn (:did repo))
+  (let [records (into {} (map (fn [{:keys [collection rkey cid]}] [(str collection "/" rkey) cid]))
+                      (db/query conn "SELECT collection, rkey, cid FROM records WHERE did = ? ORDER BY collection, rkey" did))]
+    (assoc (mst/build records) :records records)))
+(defn commit!
+  ([conn settings repo] (commit! conn settings repo []))
+  ([conn settings repo ops]
+  (let [{:keys [root blocks] :as tree} (tree conn (:did repo))
         rev (next-tid (:rev repo))
         unsigned {"did" (:did repo) "version" 3 "rev" rev "prev" nil "data" (codec/link root)}
         private (crypto/unseal (:master-key settings) (:did repo) (:signing_key repo))
@@ -31,10 +35,13 @@
       (doseq [cid (cons head (keys blocks))] (block-index/associate! conn (:did repo) cid))
       (db/execute! conn "INSERT INTO repo_block_owners(did, cid) SELECT did, cid FROM records WHERE did = ? ON CONFLICT DO NOTHING" (:did repo))
       (db/execute! conn "UPDATE repositories SET head = ?, rev = ? WHERE did = ?" head rev (:did repo))
-      ;; Commit order and sequence order agree across concurrent repositories.
-      (db/query conn "SELECT pg_advisory_xact_lock(731946282)")
-      (db/execute! conn "INSERT INTO repo_events(did, rev, commit_cid) VALUES (?, ?, ?)" (:did repo) rev head)
-      {:cid head :rev rev})))
+      (let [proof (mst/covering-proof tree (map #(get % "path") ops))
+            record-cids (keep #(some-> (get % "cid") :cid) ops)
+            relevant (reduce (fn [all cid] (assoc all cid (:content (first (db/query conn "SELECT content FROM repo_blocks WHERE cid = ?" cid)))))
+                             (assoc proof head (codec/encode signed)) record-cids)
+            previous (when (:head repo) (codec/decode (:content (first (db/query conn "SELECT content FROM repo_blocks WHERE cid = ?" (:head repo))))))]
+        (events/commit! conn (:did repo) head rev (:rev repo) (get previous "data") ops relevant))
+      {:cid head :rev rev}))))
 (defn initialize! [conn settings did]
   (let [{:keys [private public]} (crypto/keypair)]
     (db/execute! conn "INSERT INTO repositories(did, signing_key, public_key) VALUES (?, ?, ?)"
@@ -59,7 +66,7 @@
   (let [native (try (codec/from-json value) (catch Exception _ (errors/invalid! "Invalid AT Protocol record")))
         data (codec/encode native)
         validation-status (lexicon/validate-record! collection rkey native validate)]
-    (when (> (alength data) 1048576) (errors/raise! 413 "PayloadTooLarge" "Record exceeds 1 MiB"))
+    (when (> (alength data) 1000000) (errors/raise! 413 "PayloadTooLarge" "Record exceeds 1,000,000 bytes"))
     (check-blobs! conn did native)
     {:cid (block! conn data) :validation-status validation-status}))
 (defn apply-writes!
@@ -69,7 +76,7 @@
     (when (and swap-commit (not= swap-commit (:head repo)))
       (errors/raise! 400 "InvalidSwap" "Repository commit has changed"))
     (when-not (and (vector? writes) (<= 1 (count writes) 200)) (errors/invalid! "Expected 1 to 200 writes"))
-    (let [seen (atom #{})
+    (let [seen (atom #{}) ops (atom [])
           results
           (mapv
            (fn [{:keys [action collection rkey value validate swap-record swap-record?]}]
@@ -83,12 +90,16 @@
                  (errors/raise! 400 "InvalidSwap" "Record has changed"))
                (when (and (= action :create) old) (errors/raise! 400 "RecordAlreadyExists" "Record already exists"))
                (case action
-                 :delete (do (db/execute! conn "DELETE FROM records WHERE did = ? AND collection = ? AND rkey = ?" did collection rkey)
+                 :delete (do (when old (swap! ops conj {"action" "delete" "path" (str collection "/" rkey) "cid" nil "prev" (codec/link (:cid old))}))
+                             (db/execute! conn "DELETE FROM records WHERE did = ? AND collection = ? AND rkey = ?" did collection rkey)
                              {:$type "com.atproto.repo.applyWrites#deleteResult"})
                  (:create :update :put)
                  (do
                    (when (and (= action :update) (nil? old)) (errors/raise! 400 "RecordNotFound" "Record does not exist"))
                    (let [{id :cid validation-status :validation-status} (record-value! conn did collection rkey value validate)]
+                     (when (not= id (:cid old))
+                       (swap! ops conj (cond-> {"action" (if old "update" "create") "path" (str collection "/" rkey) "cid" (codec/link id)}
+                                         old (assoc "prev" (codec/link (:cid old))))))
                      (db/execute! conn "INSERT INTO records(did, collection, rkey, cid) VALUES (?, ?, ?, ?)
                                          ON CONFLICT (did, collection, rkey) DO UPDATE SET cid = excluded.cid"
                                   did collection rkey id)
@@ -96,7 +107,7 @@
                               :uri (str "at://" did "/" collection "/" rkey) :cid id}
                        validation-status (assoc :validationStatus validation-status))))
                  (errors/invalid! "Unknown write operation")))) writes)
-          commit (commit! conn settings repo)]
+          commit (commit! conn settings repo @ops)]
       {:commit commit :results results})))
 
 (defn record [conn did collection rkey]

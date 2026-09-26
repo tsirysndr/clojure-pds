@@ -47,7 +47,8 @@
   "Read only the search path for key. Includes the record block when present;
   the same path proves absence when no matching key exists. load-block returns
   bytes by CID. Traversal never follows arbitrary links inside record values."
-  [root key load-block]
+  ([root key load-block] (proof root key load-block true))
+  ([root key load-block include-record?]
   (letfn [(load! [cid]
             (let [data (load-block cid)]
               (when-not (and data (= cid (codec/cid data))) (codec/fail! "Missing or corrupt MST proof block"))
@@ -68,6 +69,17 @@
       (when (or (contains? blocks cid) (>= (count blocks) 128)) (codec/fail! "Invalid MST traversal"))
       (let [data (load! cid) blocks (assoc blocks cid data)
             [kind next-cid] (locate (codec/decode data))]
-        (cond (= kind :record) {:cid next-cid :blocks (assoc blocks next-cid (load! next-cid))}
+        (cond (= kind :record) {:cid next-cid :blocks (if include-record? (assoc blocks next-cid (load! next-cid)) blocks)}
               next-cid (recur next-cid blocks)
-              :else {:cid nil :blocks blocks})))))
+              :else {:cid nil :blocks blocks}))))))
+
+(defn covering-proof
+  "MST nodes for the target plus its immediate neighboring leaves. Including
+  both boundaries lets consumers invert insertions/deletions on a partial tree."
+  [tree paths]
+  (let [ordered (into (sorted-set) (keys (:records tree)))
+        targets (distinct (mapcat (fn [path]
+                                   (remove nil? [path (first (rsubseq ordered < path))
+                                                 (first (subseq ordered > path))])) paths))]
+    (reduce (fn [blocks path] (merge blocks (:blocks (proof (:root tree) path (:blocks tree) false))))
+            {(:root tree) (get (:blocks tree) (:root tree))} targets)))

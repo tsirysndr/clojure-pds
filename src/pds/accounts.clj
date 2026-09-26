@@ -177,7 +177,8 @@
   (auth/require-primary! account)
   (when (= "deactivated" (:status account))
     (db/execute! conn "UPDATE accounts SET status = 'active', delete_after = NULL WHERE did = ?" (:did account))
-    (events/account! conn (:did account) "active")))
+    (events/account! conn (:did account) "active")
+    (events/sync! conn (:did account))))
 
 (defn request-deletion! [conn settings account]
   (auth/require-primary! account)
@@ -200,7 +201,7 @@
           (doseq [table ["sessions" "app_passwords" "account_tokens" "blobs" "repositories"]]
             (db/execute! conn (str "DELETE FROM " table " WHERE did = ?") did))
           (db/execute! conn "DELETE FROM email_outbox WHERE payload->>'to' = ?" (:email account))
-          (db/execute! conn "DELETE FROM repo_events WHERE did = ? AND event_type = 'commit'" did)
+          (db/execute! conn "DELETE FROM repo_events WHERE did = ? AND event_type IN ('commit', 'sync')" did)
           ;; Reserve the DID/handle permanently while erasing credentials/email.
           (db/execute! conn "UPDATE accounts SET status = 'deleted', email = NULL, password_hash = NULL,
                               email_confirmed = false, email_auth_factor = false, delete_after = NULL WHERE did = ?" did)

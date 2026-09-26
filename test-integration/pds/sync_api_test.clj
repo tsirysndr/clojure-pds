@@ -18,12 +18,14 @@
 
 (use-fixtures :each fixture/isolated-database)
 
-(defn verify-upstream! [fixture-data]
+(defn verify-upstream!
+  ([fixture-data] (verify-upstream! "verify-proof.mjs" fixture-data))
+  ([script fixture-data]
   (when (= "true" (System/getenv "PDS_TEST_UPSTREAM"))
     (let [path (Files/createTempFile "pds-proof-" ".json" (make-array java.nio.file.attribute.FileAttribute 0))]
       (try
         (spit (str path) (json/write-str fixture-data))
-        (let [process (.start (doto (ProcessBuilder. ["node" "scripts/conformance/verify-proof.mjs" (str path)])
+        (let [process (.start (doto (ProcessBuilder. ["node" (str "scripts/conformance/" script) (str path)])
                                (.redirectErrorStream true)))
               finished? (.waitFor process 30 TimeUnit/SECONDS)]
           (when-not finished? (.destroyForcibly process))
@@ -31,7 +33,7 @@
           (when finished?
             (let [output (slurp (.getInputStream process))]
               (is (= 0 (.exitValue process)) output))))
-        (finally (Files/deleteIfExists path))))))
+        (finally (Files/deleteIfExists path)))))))
 
 (deftest blocks-and-record-proofs-over-http
   (let [settings (api/settings)
@@ -115,5 +117,9 @@
             (with-redefs [db/migrations all-migrations]
               (is (true? (db/migrate! ds))))
             (with-open [conn (db/connection ds)]
+              (let [event (first (db/query conn "SELECT event_type, payload FROM repo_events WHERE did = ?" did))
+                    payload (codec/decode (:payload event))]
+                (is (= "sync" (:event_type event)))
+                (is (= did (get payload "did"))))
               (is (= (conj (set (keys (:blocks tree))) old-cid head current-head (:root empty-tree))
                      (set (map :cid (db/query conn "SELECT cid FROM repo_block_owners WHERE did = ?" did))))))))))))

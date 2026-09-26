@@ -50,7 +50,8 @@
                           delete_after = CASE WHEN ? THEN delete_after ELSE NULL END WHERE did = ?"
                    status base-status reference inactive? (:did account))
       (when (not= status (:status account))
-        (events/account! conn (:did account) status))
+        (events/account! conn (:did account) status)
+        (when (= status "active") (events/sync! conn (:did account))))
       (dissoc (status-view (assoc account :status status :status_before_takedown base-status :takedown_ref reference)) :deactivated))))
 
 (defn account-info [conn did]
