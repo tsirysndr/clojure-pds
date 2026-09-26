@@ -24,6 +24,7 @@
    "invalid_client" "Client authentication failed" "invalid_client_metadata" "Invalid client metadata"
    "invalid_dpop_proof" "Invalid DPoP proof" "use_dpop_nonce" "A current DPoP nonce is required"
    "invalid_scope" "Requested scope is not available" "unsupported_response_type" "Unsupported response type"
+   "unsupported_grant_type" "Unsupported grant type"
    "invalid_grant" "Invalid authorization grant" "temporarily_unavailable" "Service temporarily unavailable"})
 
 (defn wrap

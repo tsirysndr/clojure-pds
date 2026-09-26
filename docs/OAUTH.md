@@ -114,8 +114,8 @@ an assertion. Shared client secrets are rejected. A confidential binding retains
 client ID, method, key ID, algorithm and thumbprint. Passing an existing binding
 requires an exact match, preventing key replacement, key renaming and method
 downgrades during a session. `binding-current?` checks whether refreshed metadata
-still advertises the bound key; the forthcoming session lifecycle must revoke
-sessions whose keys have disappeared. No session revocation route is claimed yet.
+still advertises the bound key; the token lifecycle revokes the presented session when its bound key has disappeared.
+No public session revocation route is claimed yet.
 
 Migration 025 stores hashes of client IDs and jti values with assertion expiration.
 The composite unique index prevents concurrent reuse across every key belonging
@@ -209,15 +209,15 @@ locks and rechecks the interaction and account. Removed redirects, changed scope
 or changed client keys cannot reuse the original request. A database-maintained
 account security version changes on password, email, email-confirmation, email-factor
 or status updates. Pending approval remains invalid after a setting is changed back.
-Factor enrollment/removal can explicitly advance the version. Future token/session
-authentication must check this version too; that integration is not yet implemented.
+Factor enrollment/removal can explicitly advance the version. Token issuance, refresh and access-grant loading check this version too;
+resource request authentication is still pending.
 
 Exactly one concurrent decision succeeds. Approval atomically marks the interaction
 complete and stores a hashed random code with a 60-second lifetime, the account
 version, PKCE challenge, client binding and DPoP thumbprint. Denial issues no code.
 Callbacks retain the registered URI's original query and append `state`, `iss` and
 `code` or `error=access_denied`. Failed inserts roll back completion. Code redemption
-and replay/session revocation are the next token-lifecycle step, not claimed here.
+and replay/session revocation are implemented below.
 Expired interactions are cleaned in bounded batches when new ones start.
 
 PostgreSQL tests cover cookie/interaction substitution, CSRF rotation, primary-only
@@ -225,17 +225,65 @@ login, hints, email-factor delivery and transactional consumption, lifecycle cha
 expiration, concurrent decisions, metadata changes and failed PAR/code inserts.
 Browser pages and routes remain unmounted while the complete OAuth flow is built.
 
+## Opaque access and refresh tokens
+
+Migration 031 and `pds.oauth.tokens` persist OAuth sessions and token hashes.
+`issue!` redeems authorization codes with the original client ID, exact redirect,
+PKCE verifier, client authentication key/method and DPoP key. The account must
+remain active with its original security version. Issuance and code consumption
+share a transaction; failed token insertion leaves the code available, but never
+restores consumed DPoP/client assertions.
+
+The response includes `token_type=DPoP`, `sub`, `scope`, `expires_in`, an opaque
+access token and, when declared in client metadata, an opaque refresh token.
+Only SHA-256 token hashes enter PostgreSQL. Access tokens last at most five
+minutes. Public sessions have a fixed 14-day deadline; confidential sessions have
+a fixed 180-day deadline. Refreshing never extends the deadline. Clients without
+the refresh grant get a five-minute access-only session.
+
+Refresh rotation is atomic and single-use. Used refresh hashes remain as replay
+tombstones for the session lifetime. A correctly authenticated replay revokes the
+whole family, including existing access tokens and newly rotated refresh tokens.
+A correctly bound code replay also revokes its issued session. Invalid PKCE,
+redirects, client assertions or DPoP keys cannot revoke someone else's session.
+Revocation commits before `invalid_grant` is raised. Concurrent refresh/code
+requests admit at most one issuance and subsequent replays revoke that family;
+clients must serialize refreshes. No retry grace window is implemented.
+
+Every token request fetches fresh metadata outside the database transaction.
+Confidential sessions stay pinned to the exact original key and method, even
+when another published key can authenticate the client. A removed bound key or
+removed refresh grant permanently revokes the presented session. Temporary
+metadata-fetch failures reject the request without issuing tokens. Credential or
+account status changes invalidate access and refresh through `oauth_epoch`.
+Refresh scopes may narrow the access token's permission set, but cannot expand
+beyond the original authorization; omitting scope retains the original grant.
+
+`access-grant!` checks token/session expiry, revocation and account version inside
+a caller-owned transaction. It is a storage primitive, **not resource request
+authentication**: DPoP `ath`, client metadata revalidation and permission checks
+still belong in the forthcoming resource middleware. The standalone token HTTP
+adapter provides bounded form parsing, CORS, no-store responses and nonce headers;
+it remains unmounted until the full authorization/resource flow is ready.
+
+Tests exercise complete PAR/consent/code/token chains, private/public clients,
+wrong bindings, scope narrowing, absolute expiration, key removal/restoration,
+concurrent replay, account changes, insertion rollback and real HTTP token
+responses. Bounded cleanup of expired session/token/code rows remains operational
+work; used codes and refresh hashes must not be discarded while their family is live.
+
 ## Remaining steps
 
-1. Browser pages, secure cookies, same-origin POST validation and session management
-   backed by the implemented interaction state machine. Add optional passkeys and
-   browser enrollment/removal for the implemented [TOTP verifier](ACCOUNT-SECURITY.md).
-2. Opaque DPoP-bound access/refresh tokens, refresh rotation/replay revocation,
-   client key revalidation, revocation endpoints and session lifecycle integration.
+1. OAuth browser authorization and consent pages backed by the interaction state
+   machine, using the existing purple Tailwind account style. `prompt=create` is
+   accepted and preserved at PAR; implement its dedicated account-creation screen
+   (signup policy, invite requirements and final explicit consent), rather than
+   treating it as login. Integrate existing passkey/TOTP browser authentication.
+2. Public token/session revocation and management, plus bounded expired-grant cleanup.
 3. Resource-server authentication, permission scopes/sets, service proxy and
    getServiceAuth authorization, nonce headers, and end-to-end reference clients.
 4. Mount the completed routes, publish authorization/resource discovery metadata,
-   and verify the full login/refresh/resource flow with reference clients.
+   and verify the full login/signup/refresh/resource flow with reference clients.
 
 Sources: [AT Protocol OAuth profile](https://atproto.com/specs/oauth),
 [RFC 9449 DPoP](https://www.rfc-editor.org/rfc/rfc9449.html),
