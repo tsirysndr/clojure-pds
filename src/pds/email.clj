@@ -71,6 +71,9 @@
   (db/transact!
    ds
    (fn [conn]
+     (db/execute! conn "UPDATE email_outbox SET status = 'failed', last_error = 'attempts-exhausted',
+                         lease_token = NULL, lease_until = NULL
+                         WHERE status = 'sending' AND lease_until <= now() AND attempts >= 10")
      (when-let [row (first (db/query conn
                                     "SELECT id, payload::text, attempts FROM email_outbox
                                      WHERE (status = 'pending' AND available_at <= now())

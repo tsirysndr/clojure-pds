@@ -41,3 +41,11 @@
                              (email/enqueue! c message)
                              (db/execute! c "UPDATE email_outbox SET status = 'sending', lease_until = now() - interval '1 minute' WHERE status = 'pending'")))
   (is (= :sent (email/deliver-one! fixture/*ds* (fn [_])))))
+
+(deftest exhausted-crashed-deliveries-stop
+  (db/transact! fixture/*ds* (fn [c]
+                             (email/enqueue! c message)
+                             (db/execute! c "UPDATE email_outbox SET status = 'sending', attempts = 10,
+                                             lease_until = now() - interval '1 minute'")))
+  (is (nil? (email/deliver-one! fixture/*ds* (fn [_] (is false "Exhausted job must not send")))))
+  (is (= "failed" (:status (first (rows))))))
