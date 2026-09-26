@@ -117,6 +117,13 @@ code or owner. `disableAccountInvites`/`enableAccountInvites` retain the future-
 policy flag and note; existing codes remain usable. Automatic invite grants are
 disabled, so `createAvailable` currently creates no additional codes.
 
+Admins can inspect accounts with `com.atproto.admin.getAccountInfo` and manage
+account takedowns through `getSubjectStatus`/`updateSubjectStatus` using a
+`com.atproto.admin.defs#repoRef` subject. Takedown blocks content, login, refresh,
+and invitations issued by the account. Removing it preserves a preexisting
+deactivation; users cannot lift a takedown with `activateAccount`. Changes produce
+ordered account-status events. Record/blob moderation is still pending.
+
 Passwords use Argon2id. Access tokens expire after 15 minutes; sessions have a
 90-day lifetime. Refresh tokens rotate once; replay revokes the session. Password
 reset revokes all sessions and app passwords. Email confirmation/reset tokens expire after 30 minutes

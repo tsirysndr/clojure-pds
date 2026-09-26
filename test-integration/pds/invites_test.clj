@@ -16,14 +16,17 @@
 (use-fixtures :each fixture/isolated-database)
 
 (def admin-password "invite-test-admin-password")
-(defn admin-call [client port name body]
+(defn admin-call
+  ([client port name body] (admin-call client port "POST" name body))
+  ([client port method name body]
   (let [request (-> (HttpRequest/newBuilder (URI/create (str "http://127.0.0.1:" port "/xrpc/" name)))
                     (.header "Authorization" (admin-test/basic (str "admin:" admin-password)))
                     (.header "Content-Type" "application/json")
-                    (.POST (HttpRequest$BodyPublishers/ofString (json/write-str body))) .build)
+                    (.method method (if body (HttpRequest$BodyPublishers/ofString (json/write-str body))
+                                        (HttpRequest$BodyPublishers/noBody))) .build)
         response (.send ^HttpClient client request (HttpResponse$BodyHandlers/ofString))]
     {:status (.statusCode response)
-     :body (when (seq (.body response)) (json/read-str (.body response)))}))
+     :body (when (seq (.body response)) (json/read-str (.body response)))})))
 
 (defn signup [name code]
   (cond-> {"handle" (str name ".example.com") "email" (str name "@example.com") "password" "signup-password"}
