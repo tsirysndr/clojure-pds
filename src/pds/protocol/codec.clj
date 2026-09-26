@@ -70,7 +70,7 @@
          :else
          (do
            (when (contains? value "$type")
-             (when-not (or (= "blob" (get value "$type")) (syntax/nsid? (get value "$type")))
+             (when-not (or (= "blob" (get value "$type")) (syntax/type-ref? (get value "$type")))
                (fail! "Invalid $type")))
            (let [result (into {} (map (fn [[k v]] [k (from-json v (inc depth))])) value)]
              (when (= "blob" (get result "$type"))

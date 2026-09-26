@@ -15,6 +15,15 @@
                 (re-matches #"[a-zA-Z](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+\.[a-zA-Z][a-zA-Z0-9]{0,62}" x)
                 (<= (count (subs x 0 (.lastIndexOf ^String x "."))) 253))))
 
+(defn type-ref? [x]
+  (boolean
+   (and (string? x)
+        (let [[nsid fragment :as parts] (str/split x #"#" -1)]
+          (and (<= (count parts) 2) (nsid? nsid)
+               (or (= 1 (count parts))
+                   (and (not= "main" fragment)
+                        (re-matches #"[A-Za-z][A-Za-z0-9]*" fragment))))))))
+
 (defn record-key? [x]
   (boolean (and (string? x) (not (#{"." ".."} x))
                 (re-matches #"[A-Za-z0-9._:~-]{1,512}" x))))

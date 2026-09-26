@@ -11,12 +11,30 @@
     (let [bytes (.readNBytes stream (inc maximum))]
       (when (> (alength bytes) maximum) (errors/raise! 413 "PayloadTooLarge" "Request body exceeds the limit")) bytes)
     (byte-array 0)))
+(defn- bounded-json! [text]
+  ;; Scan nesting before calling the recursive JSON reader. Quoted brackets do
+  ;; not affect depth, and escaped quotes do not end a string.
+  (loop [chars (seq text) depth 0 quoted? false escaped? false]
+    (when-let [ch (first chars)]
+      (cond
+        escaped? (recur (next chars) depth quoted? false)
+        (and quoted? (= ch \")) (recur (next chars) depth false false)
+        (and quoted? (= ch \\)) (recur (next chars) depth true true)
+        quoted? (recur (next chars) depth true false)
+        (= ch \" ) (recur (next chars) depth true false)
+        (#{\{ \[} ch) (do (when (>= depth 64) (errors/invalid! "JSON nesting exceeds 64 levels"))
+                               (recur (next chars) (inc depth) false false))
+        (#{\} \]} ch) (recur (next chars) (dec depth) false false)
+        :else (recur (next chars) depth false false)))))
+
 (defn json-body [request]
   (when-not (= "application/json" (some-> (get-in request [:headers "content-type"]) (str/split #";") first str/lower-case))
     (errors/raise! 415 "InvalidRequest" "Expected application/json"))
   (let [data (body-bytes request (* 1024 1024))]
     (try
-      (let [value (json/read-str (codec/text data))]
+      (let [text (codec/text data)
+            _ (bounded-json! text)
+            value (json/read-str text)]
         (when-not (map? value) (errors/invalid! "Expected a JSON object")) value)
       (catch Exception _ (errors/invalid! "Invalid JSON object")))))
 (defn query-params [request]
