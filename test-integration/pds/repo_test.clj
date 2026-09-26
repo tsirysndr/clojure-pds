@@ -9,7 +9,7 @@
 (use-fixtures :each fixture/isolated-database)
 (def settings {:master-key (crypto/random-bytes 32)})
 (def did "did:web:alice.example.com")
-(def collection "app.bsky.feed.post")
+(def collection "com.example.post")
 (defn initialize! []
   (db/transact! fixture/*ds*
     (fn [c]

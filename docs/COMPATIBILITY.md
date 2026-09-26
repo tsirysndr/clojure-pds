@@ -2,7 +2,7 @@
 
 Last verified: 2026-09-26. This is a development implementation, not a complete
 AT Protocol PDS. Passing internal/fixture tests does not establish full network
-interoperability. Current tests: 33 Clojure tests, 779 assertions; one Worker
+interoperability. Current tests: 38 Clojure tests, 1,256 assertions; one Worker
 contract test. PostgreSQL tests used version 18.6 and the mise-pinned JDK 25.0.3.
 
 ## Implemented routes
@@ -34,6 +34,12 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
 - Canonical CBOR encoding and CID generation match upstream bytes/hashes. Decoding
   rejects noncanonical forms, invalid UTF-8, duplicate keys, floats, trailing data,
   and oversized/deep blocks. JSON request depth is bounded before parsing.
+- Record schema validation uses 33 pinned, checksummed Lexicons (17 record roots).
+  Tests cover upstream record fixtures, required/nullable fields, nested unions,
+  references, UTF-8/grapheme limits, blobs, string formats, and key rules. Unknown
+  schemas remain writable by default; explicit validation requires a known schema.
+  Invalid batches roll back records, blocks and commits. CID string formats are
+  restricted to the blessed AT Protocol CID set; see fixture notes.
 - P-256 and secp256k1 signatures enforce the 64-byte low-S format using Bouncy Castle;
   verification runs upstream signature vectors. Repositories currently sign with P-256.
 - MST height/prefix vectors and before/after commit root fixtures match upstream.
@@ -52,7 +58,7 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
 
 ## Remaining work for a full PDS
 
-1. Lexicon schema catalog, schema/record validation, and complete input/output
+1. Expand the Lexicon catalog, dynamic schema resolution, and complete input/output
    validation against pinned official endpoint lexicons.
 2. did:plc provisioning, remote DID/handle resolution with SSRF protection,
    handle updates, signing/rotation key lifecycle, and migration.

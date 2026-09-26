@@ -2,6 +2,7 @@
   (:require [pds.crypto :as crypto]
             [pds.db :as db]
             [pds.errors :as errors]
+            [pds.lexicon :as lexicon]
             [pds.protocol.car :as car]
             [pds.protocol.codec :as codec]
             [pds.protocol.mst :as mst]
@@ -49,14 +50,15 @@
           (errors/invalid! "Blob is missing or does not match its metadata")))))
   (doseq [v (cond (map? value) (vals value) (vector? value) value :else [])]
     (check-blobs! conn did v)))
-(defn record-value! [conn did collection value]
+(defn record-value! [conn did collection rkey value validate]
   (when-not (and (map? value) (= collection (get value "$type")))
     (errors/invalid! "Record $type must match its collection"))
   (let [native (try (codec/from-json value) (catch Exception _ (errors/invalid! "Invalid AT Protocol record")))
-        data (codec/encode native)]
+        data (codec/encode native)
+        validation-status (lexicon/validate-record! collection rkey native validate)]
     (when (> (alength data) 1048576) (errors/raise! 413 "PayloadTooLarge" "Record exceeds 1 MiB"))
     (check-blobs! conn did native)
-    (block! conn data)))
+    {:cid (block! conn data) :validation-status validation-status}))
 (defn apply-writes!
   "Caller owns transaction. Repository lock protects all swap checks and writes."
   [conn settings did writes swap-commit]
@@ -67,7 +69,7 @@
     (let [seen (atom #{})
           results
           (mapv
-           (fn [{:keys [action collection rkey value swap-record swap-record?]}]
+           (fn [{:keys [action collection rkey value validate swap-record swap-record?]}]
              (let [rkey (or rkey (when (= action :create) (next-tid)))
                    _ (path! collection rkey)
                    path [collection rkey]
@@ -83,12 +85,13 @@
                  (:create :update :put)
                  (do
                    (when (and (= action :update) (nil? old)) (errors/raise! 400 "RecordNotFound" "Record does not exist"))
-                   (let [id (record-value! conn did collection value)]
+                   (let [{id :cid validation-status :validation-status} (record-value! conn did collection rkey value validate)]
                      (db/execute! conn "INSERT INTO records(did, collection, rkey, cid) VALUES (?, ?, ?, ?)
                                          ON CONFLICT (did, collection, rkey) DO UPDATE SET cid = excluded.cid"
                                   did collection rkey id)
-                     {:$type (str "com.atproto.repo.applyWrites#" (if (= action :create) "create" "update") "Result")
-                      :uri (str "at://" did "/" collection "/" rkey) :cid id :validationStatus "unknown"}))
+                     (cond-> {:$type (str "com.atproto.repo.applyWrites#" (if (= action :create) "create" "update") "Result")
+                              :uri (str "at://" did "/" collection "/" rkey) :cid id}
+                       validation-status (assoc :validationStatus validation-status))))
                  (errors/invalid! "Unknown write operation")))) writes)
           commit (commit! conn settings repo)]
       {:commit commit :results results})))

@@ -15,14 +15,13 @@
     (errors/raise! 403 "AuthRequired" "Cannot write to another account's repository")))
 (defn validation! [body]
   (when (and (contains? body "validate") (not (boolean? (get body "validate"))))
-    (errors/invalid! "validate must be a boolean"))
-  (when (true? (get body "validate"))
-    (errors/raise! 400 "InvalidRecord" "Lexicon schema validation is not available; omit validate for generic data-model validation")))
+    (errors/invalid! "validate must be a boolean")))
 (defn cid! [value]
   (try (codec/cid-bytes (request/string! value "cid")) value
        (catch Exception _ (errors/invalid! "Invalid CID"))))
 (defn write [action body]
   {:action action :collection (get body "collection") :rkey (get body "rkey") :value (get body "record" (get body "value"))
+   :validate (get body "validate")
    :swap-record? (contains? body "swapRecord") :swap-record (get body "swapRecord")})
 (defn write-route [ds settings action]
   (server/json-route
@@ -61,7 +60,7 @@
                              "com.atproto.repo.applyWrites#create" :create
                              "com.atproto.repo.applyWrites#update" :update
                              "com.atproto.repo.applyWrites#delete" :delete
-                             (errors/invalid! "Unknown write type")) entry)) writes)
+                             (errors/invalid! "Unknown write type")) (assoc entry "validate" (get body "validate")))) writes)
             (get body "swapCommit"))))))
    "/xrpc/com.atproto.repo.getRecord"
    (query-route ds (fn [conn params]

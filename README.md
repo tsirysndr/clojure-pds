@@ -134,8 +134,11 @@ a duplicate. Receipts are retained indefinitely; plan retention for larger syste
 
 ## Current limits
 
-- Records get generic AT data-model validation. Explicit `validate: true` is rejected
-  until Lexicon schema validation exists; responses report `validationStatus: "unknown"`.
+- Records always get AT data-model and blob-ownership validation. A pinned local
+  catalog validates 17 common record types and their dependencies by default.
+  `validate: true` requires a known schema; `validate: false` skips schema checks.
+  Results report `validationStatus: "valid"` or `"unknown"`; skip mode omits it.
+  See [catalog provenance and scope](resources/lexicons/README.md).
 - MSTs match upstream root fixtures but are rebuilt per commit, O(n). Large repos
   need incremental updates. Historical blocks are retained; exports contain the
   current graph. CAR import and garbage collection are unfinished.
