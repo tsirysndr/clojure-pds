@@ -44,7 +44,7 @@
     {:account account
      :plc (first (db/query conn "SELECT * FROM plc_identities WHERE did = ? AND status = 'ready'" (:did account)))
      :public-key (:public_key (first (db/query conn "SELECT public_key FROM repositories WHERE did = ?" (:did account))))
-     :pending (first (db/query conn "SELECT target_handle FROM handle_updates WHERE did = ?" (:did account)))}))
+     :pending (first (db/query conn "SELECT target_handle, operation_kind FROM handle_updates WHERE did = ?" (:did account)))}))
 
 (defn- prepare-operation [settings {:keys [account plc public-key]} handle]
   (when-not plc (errors/raise! 400 "UnsupportedDID" "This PLC identity is not managed by this server"))
@@ -96,7 +96,9 @@
                 (db/execute! conn "UPDATE plc_identities SET operation = ?, operation_cid = ?, confirmed_at = now() WHERE did = ?"
                              (:operation job) (:operation_cid job) (:did job))
                 (db/execute! conn "DELETE FROM handle_updates WHERE did = ?" (:did job))
-                (apply-handle! conn account (:target_handle job))
+                (if (= "submit" (:operation_kind job))
+                  (events/append! conn (:did job) "identity" {"did" (:did job) "handle" (:handle account)})
+                  (apply-handle! conn account (:target_handle job)))
                 :updated))))
         (do (db/transact! ds
               #(db/execute! % "UPDATE handle_updates SET status = ?, lease_token = NULL, lease_until = NULL, last_error = ?,
@@ -109,7 +111,7 @@
   (let [handle (normalize! settings (get body "handle"))
         snapshot (db/transact! ds #(snapshot! % settings request))
         {:keys [account pending]} snapshot did (:did account)]
-    (when (and pending (not= handle (:target_handle pending)))
+    (when (and pending (or (not= "handle" (:operation_kind pending)) (not= handle (:target_handle pending))))
       (errors/raise! 409 "IdentityUpdatePending" "Finish the pending handle update first"))
     (when-not (and (= handle (:handle account)) (nil? pending))
       (when (and (nil? pending) (not (hosted? settings handle))) (verify-external! settings did handle))
@@ -121,7 +123,8 @@
               (when-not (= did (:did fresh)) (errors/raise! 409 "IdentityMismatch" "Account changed"))
               (if plc?
                 (if job
-                  (do (when-not (= handle (:target_handle job)) (errors/raise! 409 "IdentityUpdatePending" "Finish the pending handle update first"))
+                  (do (when-not (and (= "handle" (:operation_kind job)) (= handle (:target_handle job)))
+                        (errors/raise! 409 "IdentityUpdatePending" "Finish the pending identity update first"))
                       (db/execute! conn "UPDATE handle_updates SET status = 'pending', available_at = now(), last_error = NULL WHERE did = ? AND status = 'failed'" did))
                   (when-not (= handle (:handle fresh))
                     (when-not (and operation (= (:operation_cid (:plc snapshot)) (:operation_cid current)))
@@ -140,9 +143,8 @@
 
 (defn recommended [conn settings account]
   (let [repo (first (db/query conn "SELECT public_key FROM repositories WHERE did = ?" (:did account)))
-        identity (first (db/query conn "SELECT rotation_public, recovery_key FROM plc_identities WHERE did = ? AND status = 'ready'" (:did account)))]
+        identity (first (db/query conn "SELECT operation FROM plc_identities WHERE did = ? AND status = 'ready'" (:did account)))]
     (cond-> {:alsoKnownAs [(str "at://" (:handle account))]
              :verificationMethods {:atproto (plc/did-key {:algorithm "ES256" :public (:public_key repo)})}
              :services {:atproto_pds {:type "AtprotoPersonalDataServer" :endpoint (:public-url settings)}}}
-      identity (assoc :rotationKeys (cond-> [] (:recovery_key identity) (conj (:recovery_key identity))
-                                           true (conj (plc/did-key {:algorithm "ES256K" :public (:rotation_public identity)})))))))
+      identity (assoc :rotationKeys (get (plc/normalize (codec/decode (:operation identity))) "rotationKeys")))))

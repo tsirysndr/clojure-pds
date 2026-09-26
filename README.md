@@ -158,8 +158,18 @@ response contains a signed successor operation. It does not submit the operation
 or change local credentials. App-password sessions cannot request or use these
 codes. Existing primary sessions can use this flow while deactivated or taken
 down; restricted login/recovery for taken-down accounts remains pending. Pending
-handle updates must finish first. Destination import and signed-operation
-submission are still being implemented.
+identity updates must finish first.
+
+`com.atproto.identity.submitPlcOperation` accepts a signed operation that retains
+this account's current handle, local repository key, server rotation key, and
+configured PDS service endpoint. It verifies authorization against the current
+directory audit before queueing, persists the operation in `handle_updates` with
+`operation_kind='submit'`, and confirms directory acceptance before updating local
+metadata and publishing an identity event. Identical retries reconcile without
+duplicate events. A `503 IdentityUpdatePending` uses the same durable retry and
+lease behavior as handle changes. Deactivated primary sessions can submit without
+activating the account. This endpoint supports normal successors and already
+accepted operations; recovery forks and destination account import remain pending.
 
 Set `PDS_REQUIRE_INVITE_CODE=true` to require an invitation during signup;
 `PDS_ENABLE_SIGNUP` must also be enabled. Set `PDS_ADMIN_PASSWORD` to a random

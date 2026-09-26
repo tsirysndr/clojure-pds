@@ -27,6 +27,7 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | `com.atproto.identity` | `resolveHandle`, `resolveDid`, `resolveIdentity`, `refreshIdentity` | Hosted identities and remote DNS/HTTPS handles, did:web/PLC documents, bidirectional handle verification; uncached, bounded concurrency |
 | `com.atproto.identity` | `updateHandle`, `getRecommendedDidCredentials` | Hosted/custom handles, durable audited PLC changes, stable web DID hostnames, public migration credentials; migration itself pending |
 | `com.atproto.identity` | `requestPlcOperationSignature`, `signPlcOperation` | Primary session plus one-use emailed proof; verified latest audit, partial credential overrides; returns an operation without submitting it |
+| `com.atproto.identity` | `submitPlcOperation` | Credential constraints, authorized successor signatures, durable directory reconciliation and atomic identity events; imported accounts and recovery forks pending |
 | `com.atproto.repo` | `createRecord`, `putRecord`, `deleteRecord`, `applyWrites` | Atomic signed commits; record/repo swap checks; batch maximum 200 |
 | `com.atproto.repo` | `getRecord`, `listRecords`, `describeRepo` | Current records; keyset pagination and reverse order |
 | `com.atproto.repo` | `uploadBlob` | Authenticated, maximum 5 MiB, account ownership |
@@ -101,6 +102,14 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
   existing primary sessions; restricted taken-down login remains pending. Signing
   returns a verified successor without changing local or directory state. Full
   migration/import and external destination interoperability remain unverified.
+- Signed submissions validate the current handle, repository key, server rotation
+  key and PDS service before persistence. The existing identity queue serializes
+  submissions and handle changes. Tests cover mismatched credentials, wrong signers,
+  cross-account submission, pending conflicts, deletion blocking, revoked sessions,
+  inactive owners, unconfirmed responses, local rollback after remote acceptance,
+  and duplicate retries. Recommended rotation credentials follow the last confirmed
+  operation, including removal of an old recovery key. Only canonical successors
+  and already-confirmed operations are accepted; recovery forks need an explicit flow.
 - Record schema validation uses 33 pinned, checksummed Lexicons (17 record roots).
   Tests cover upstream record fixtures, required/nullable fields, nested unions,
   references, UTF-8/grapheme limits, blobs, string formats, and key rules. Unknown

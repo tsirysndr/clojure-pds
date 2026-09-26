@@ -84,7 +84,8 @@ claimed. Preserve atomic feature commits and test each protocol boundary.
   after confirmation. Handle updates also use durable verified operations and
   transactional identity events, preserving web DID hostnames and unrelated PLC
   fields. Recommended public DID credentials and email-authorized PLC operation
-  signatures are exposed for migration. Operation submission, local key rotation,
+  signatures are exposed for migration. Signed submissions enforce local credential
+  constraints and reconcile through the durable identity queue. Local key rotation,
   migration and conflicted-operation administration remain pending;
   general PLC resolution still trusts the directory's HTTPS document response.
 - Track conformance honestly: unsupported features stay unsupported until their
