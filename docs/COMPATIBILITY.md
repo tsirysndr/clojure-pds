@@ -13,7 +13,8 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | --- | --- | --- |
 | `com.atproto.server` | `describeServer` | Service DID, hosted suffix when signup is open, blob limit |
 | `com.atproto.server` | `createAccount` | New hosted did:web accounts; no PLC, imports, invites, or phone verification |
-| `com.atproto.server` | `createSession`, `getSession`, `refreshSession`, `deleteSession` | Primary-password sessions, JWT type separation, single-use refresh, revocation |
+| `com.atproto.server` | `createSession`, `getSession`, `refreshSession`, `deleteSession` | Primary/app-password sessions, JWT type separation, single-use refresh, revocation |
+| `com.atproto.server` | `createAppPassword`, `listAppPasswords`, `revokeAppPassword` | One-time secrets, scoped sessions, privileged flag, metadata-only listing, immediate revocation |
 | `com.atproto.server` | `requestEmailConfirmation`, `confirmEmail` | Durable email outbox, expiring one-use confirmation |
 | `com.atproto.server` | `requestPasswordReset`, `resetPassword` | Same public result for known/unknown addresses; reset revokes sessions |
 | `com.atproto.identity` | `resolveHandle` | Hosted accounts only |
@@ -50,7 +51,9 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
   batches, concurrent swap conflicts, and isolation between accounts.
 - Signing keys use AES-256-GCM with account DID as associated data. Passwords use
   Argon2id. Sessions are persisted and checked on requests; reset/replay/logout
-  revocation is tested.
+  revocation is tested. Machine-generated app passwords use keyed digests; tests
+  cover scope preservation through refresh, privilege-escalation rejection,
+  account isolation, revocation, and password-reset cleanup.
 - Email tests verify the HTTP contract, retry classes, backoff, concurrent claims,
   expired leases, attempt exhaustion, transactional rollback, and payload cleanup.
   Worker tests use mocked bindings; deployment and provider delivery are unverified.
@@ -58,7 +61,8 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
   test preserves existing blobs. Moto-backed HTTP tests cover binary round trips,
   ownership, duplicate uploads, missing objects and failed PUT rollback; fault
   tests cover corrupted content. Live provider behavior remains unverified.
-- A child-JVM test runs `pds.main`, checks HTTP health, and verifies graceful shutdown.
+- A child-JVM test runs `pds.main`, checks HTTP health, and verifies graceful shutdown,
+  including optional S3/Redis clients when the combined suite enables them.
 - Rate limiting defaults to bounded in-memory counters. Optional Redis uses atomic
   expiring counters; real Redis 8.2.3 tests cover concurrent budgets shared by two
   clients, expiry, reopen, isolation and failures. Forwarding headers remain ignored.
@@ -69,7 +73,7 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
    validation against pinned official endpoint lexicons.
 2. did:plc provisioning, remote DID/handle resolution with SSRF protection,
    handle updates, signing/rotation key lifecycle, and migration.
-3. App passwords, invites, account deletion/deactivation/reactivation, email
+3. Invites, account deletion/deactivation/reactivation, email
    updates, administrative APIs, and broader account recovery controls.
 4. OAuth authorization server: metadata, PAR, PKCE, DPoP, client metadata/consent,
    refresh behavior, permission sets and scopes.

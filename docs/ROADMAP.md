@@ -28,7 +28,7 @@ runnable and update this document as features land.
    account provisioning, DID document publication, handle updates and key rotation.
    Acceptance: persisted identities resolve from a separate process; remote fetches
    have bounded sizes/timeouts and protection against SSRF.
-6. **Sessions and account lifecycle (sessions/email recovery implemented):** password hashing, access/refresh tokens,
+6. **Sessions and account lifecycle (sessions/app passwords/email recovery implemented):** password hashing, access/refresh tokens,
    refresh rotation/revocation, app passwords, invites, email verification/reset,
    account activation/deactivation/deletion and administrative authorization.
    Acceptance: expiry, replay, cross-account authorization and restart tests.
@@ -55,7 +55,7 @@ runnable and update this document as features land.
 Current checkpoint: PostgreSQL persistence, configurable Cloudflare Worker email,
 optional S3-compatible blob storage, optional Redis rate limits (in-memory default),
 protocol codecs/identifiers, signed repositories, hosted did:web accounts,
-rotating sessions, email recovery, schema-validated record APIs, CAR exports, and blobs are
+rotating sessions, scoped app passwords, email recovery, schema-validated record APIs, CAR exports, and blobs are
 implemented. See [the compatibility matrix](COMPATIBILITY.md) for exact coverage,
 verification evidence, and limits. Full PDS compatibility is not achieved yet.
 

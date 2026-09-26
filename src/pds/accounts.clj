@@ -1,5 +1,6 @@
 (ns pds.accounts
   (:require [clojure.string :as str]
+            [pds.app-passwords :as app-passwords]
             [pds.auth :as auth]
             [pds.crypto :as crypto]
             [pds.db :as db]
@@ -93,10 +94,11 @@
      (fn [conn]
        (let [account (first (db/query conn "SELECT * FROM accounts WHERE did = ? OR handle = ? OR email = ? FOR UPDATE"
                                      identifier identifier identifier))
-             matches? (crypto/password-matches? password (or (:password_hash account) @dummy-password))]
-         (when-not (and account matches? (= "active" (:status account)))
+             matches? (crypto/password-matches? password (or (:password_hash account) @dummy-password))
+             app-password (when (and account (not matches?)) (app-passwords/find-password conn settings (:did account) password))]
+         (when-not (and account (or matches? app-password) (= "active" (:status account)))
            (errors/raise! 401 "AuthenticationRequired" "Invalid identifier or password"))
-         (merge (public-account account) (auth/issue! conn settings (:did account) nil)))))))
+         (merge (public-account account) (auth/issue! conn settings (:did account) nil (:id app-password))))))))
 
 (defn require-email! [settings]
   (when-not (:email-enabled settings) (errors/raise! 503 "EmailUnavailable" "Email delivery is not configured")))
@@ -135,4 +137,5 @@
          (when-not account (errors/raise! 400 "InvalidToken" "Invalid or expired email token"))
          (let [row (consume-token! conn "reset-password" (get body "token") (:did account) nil)]
            (db/execute! conn "UPDATE accounts SET password_hash = ? WHERE did = ?" hash (:did row))
+           (db/execute! conn "DELETE FROM app_passwords WHERE did = ?" (:did row))
            (db/execute! conn "UPDATE sessions SET revoked = true WHERE did = ?" (:did row))))))))

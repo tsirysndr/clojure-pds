@@ -106,8 +106,19 @@ migration are unfinished. The default localhost identities are development-only.
 
 Passwords use Argon2id. Access tokens expire after 15 minutes; sessions have a
 90-day lifetime. Refresh tokens rotate once; replay revokes the session. Password
-reset revokes all sessions. Email confirmation/reset tokens expire after 30 minutes
+reset revokes all sessions and app passwords. Email confirmation/reset tokens expire after 30 minutes
 and are single-use. Signup queues confirmation if email delivery is configured.
+
+Primary-password sessions can create named app passwords using
+`com.atproto.server.createAppPassword` (optional `privileged: true`). The secret is
+returned once and only a purpose-keyed digest is stored. Use it with
+`createSession`; access scopes are `com.atproto.appPass` or
+`com.atproto.appPassPrivileged` and survive refresh. App sessions cannot create
+more passwords. `listAppPasswords` returns metadata only; `revokeAppPassword`
+deletes dependent access/refresh sessions immediately. These two endpoints also
+allow app sessions for their own account, matching upstream behavior. There is a
+limit of 100 app passwords per account. Privileged scope is preserved, but chat
+and service proxy endpoints are not implemented yet.
 
 ## Cloudflare Worker email
 

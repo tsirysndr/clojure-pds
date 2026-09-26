@@ -1,6 +1,7 @@
 (ns pds.api.server
   (:require [clojure.string :as str]
             [pds.accounts :as accounts]
+            [pds.app-passwords :as app-passwords]
             [pds.auth :as auth]
             [pds.db :as db]
             [pds.errors :as errors]
@@ -23,6 +24,12 @@
    (empty-route #(auth/delete-session! ds settings %))
    "/xrpc/com.atproto.server.getSession"
    (json-route :get (authenticated ds settings (fn [_ account _] (accounts/public-account account))))
+   "/xrpc/com.atproto.server.createAppPassword"
+   (json-route :post (authenticated ds settings (fn [conn account r] (app-passwords/create! conn settings account (request/json-body r)))))
+   "/xrpc/com.atproto.server.listAppPasswords"
+   (json-route :get (authenticated ds settings (fn [conn account _] (app-passwords/list-passwords conn account))))
+   "/xrpc/com.atproto.server.revokeAppPassword"
+   (empty-route (authenticated ds settings (fn [conn account r] (app-passwords/revoke! conn account (request/json-body r)))))
    "/xrpc/com.atproto.server.requestEmailConfirmation"
    (empty-route (authenticated ds settings (fn [conn account _] (accounts/request-confirmation! conn settings account))))
    "/xrpc/com.atproto.server.confirmEmail"
