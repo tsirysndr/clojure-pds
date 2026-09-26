@@ -47,3 +47,15 @@
     (with-open [c (db/connection fixture/*ds*)]
       (is (nil? (repo/record c did collection "one")))
       (is (= id (:cid (repo/record c did collection "two")))))))
+
+(deftest concurrent-swap-has-one-winner
+  (let [head (:cid (initialize!))
+        gate (promise)
+        jobs (mapv (fn [key]
+                     (future @gate
+                             (try (write! [(create-write key)] head) :committed
+                                  (catch clojure.lang.ExceptionInfo e
+                                    (if (= "InvalidSwap" (:error (ex-data e))) :conflict (throw e))))))
+                   ["one" "two"])]
+    (deliver gate true)
+    (is (= {:committed 1 :conflict 1} (frequencies (mapv #(deref % 10000 :timeout) jobs))))))
