@@ -1,6 +1,7 @@
 (ns pds.request
   (:require [clojure.data.json :as json]
             [clojure.string :as str]
+            [pds.endpoint :as endpoint]
             [pds.errors :as errors]
             [pds.protocol.codec :as codec])
   (:import [java.io InputStream]
@@ -43,16 +44,17 @@
 (defn json-body [request]
   (when-not (= "application/json" (some-> (get-in request [:headers "content-type"]) (str/split #";") first str/lower-case))
     (errors/raise! 415 "InvalidRequest" "Expected application/json"))
-  (let [data (body-bytes request (* 1024 1024))]
-    (try
-      (let [value (json-value data)]
-        (when-not (map? value) (errors/invalid! "Expected a JSON object")) value)
-      (catch Exception _ (errors/invalid! "Invalid JSON object")))))
+  (let [data (body-bytes request (* 1024 1024))
+        value (try (json-value data) (catch Exception _ (errors/invalid! "Invalid JSON object")))]
+    (when-not (map? value) (errors/invalid! "Expected a JSON object"))
+    (endpoint/json-input! request value)))
 (defn query-params
   ([request] (query-params request #{}))
   ([request array-keys]
-  (try
-    (reduce (fn [result pair]
+  (let [array-keys (into array-keys (endpoint/array-keys request))
+        params
+        (try
+          (reduce (fn [result pair]
               (let [[k v] (str/split pair #"=" 2)
                     k (URLDecoder/decode k "UTF-8") v (URLDecoder/decode (or v "") "UTF-8")]
                 (if (contains? array-keys k)
@@ -60,7 +62,8 @@
                   (do (when (contains? result k) (errors/invalid! "Duplicate query parameter"))
                       (assoc result k v)))))
             {} (if (str/blank? (:query-string request)) [] (str/split (:query-string request) #"&")))
-    (catch Exception _ (errors/invalid! "Invalid query parameters")))))
+          (catch Exception _ (errors/invalid! "Invalid query parameters")))]
+    (endpoint/query-input! request params))))
 (defn string! [value name]
   (when-not (and (string? value) (not (str/blank? value))) (errors/invalid! (str name " is required"))) value)
 (defn limit! [params default maximum]

@@ -354,6 +354,12 @@ a duplicate. Receipts are retained indefinitely; plan retention for larger syste
   `validate: true` requires a known schema; `validate: false` skips schema checks.
   Results report `validationStatus: "valid"` or `"unknown"`; skip mode omits it.
   See [catalog provenance and scope](resources/lexicons/README.md).
+- All 58 implemented protocol endpoints have pinned Lexicon definitions. JSON
+  request bodies and query parameters are validated when handlers read them,
+  preserving authentication order. Defaults, required/nullable fields, formats,
+  array parameters and nested unions are checked; extension fields remain allowed.
+  Binary uploads retain their bounded readers. Full response/event schema
+  conformance and dynamic Lexicon resolution remain unfinished.
 - MSTs match upstream root fixtures but are rebuilt per commit, O(n). Large repos
   need incremental updates. Historical blocks are retained; exports contain the
   current graph. CAR imports are buffered and replace the full current record set;

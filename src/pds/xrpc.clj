@@ -1,5 +1,6 @@
 (ns pds.xrpc
-  (:require [clojure.data.json :as json]))
+  (:require [clojure.data.json :as json]
+            [pds.endpoint :as endpoint]))
 
 (defn response [status body]
   {:status status
@@ -13,22 +14,24 @@
   "Dispatch explicit routes. Handlers accept a request map and return a response.
   HEAD has GET semantics; the transport is responsible for suppressing its body."
   [routes]
-  (fn [{:keys [uri request-method] :as request}]
-    (try
-      (if-let [{:keys [method handler]} (get routes uri)]
-        (if (or (= method request-method)
-                (and (= method :get) (= request-method :head)))
-          (handler request)
-          (assoc-in (error-response 405 "MethodNotAllowed" "HTTP method is not supported")
-                    [:headers "Allow"] (if (= method :get) "GET, HEAD" "POST")))
-        (error-response 404 "MethodNotImplemented" "Endpoint is not implemented"))
-      (catch clojure.lang.ExceptionInfo e
-        (if (:xrpc (ex-data e))
-          (let [{:keys [status error www-authenticate]} (ex-data e)]
-            (cond-> (error-response status error (.getMessage e))
-              (= status 401) (assoc-in [:headers "WWW-Authenticate"] (or www-authenticate "Bearer"))))
-          (error-response 500 "InternalServerError" "An internal server error occurred")))
-      (catch Exception _
-        ;; Do not expose exception messages (which may contain credentials).
-        (binding [*out* *err*] (println "XRPC handler failed"))
-        (error-response 500 "InternalServerError" "An internal server error occurred")))))
+  (let [routes (into {} (map (fn [[uri route]]
+                              [uri (assoc route ::endpoint/context (endpoint/context uri (:method route)))])) routes)]
+    (fn [{:keys [uri request-method] :as request}]
+      (try
+        (if-let [{:keys [method handler] :as route} (get routes uri)]
+          (if (or (= method request-method)
+                  (and (= method :get) (= request-method :head)))
+            (handler (assoc request ::endpoint/context (::endpoint/context route)))
+            (assoc-in (error-response 405 "MethodNotAllowed" "HTTP method is not supported")
+                      [:headers "Allow"] (if (= method :get) "GET, HEAD" "POST")))
+          (error-response 404 "MethodNotImplemented" "Endpoint is not implemented"))
+        (catch clojure.lang.ExceptionInfo e
+          (if (:xrpc (ex-data e))
+            (let [{:keys [status error www-authenticate]} (ex-data e)]
+              (cond-> (error-response status error (.getMessage e))
+                (= status 401) (assoc-in [:headers "WWW-Authenticate"] (or www-authenticate "Bearer"))))
+            (error-response 500 "InternalServerError" "An internal server error occurred")))
+        (catch Exception _
+          ;; Do not expose exception messages (which may contain credentials).
+          (binding [*out* *err*] (println "XRPC handler failed"))
+          (error-response 500 "InternalServerError" "An internal server error occurred"))))))

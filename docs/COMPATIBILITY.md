@@ -117,12 +117,24 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
   and duplicate retries. Recommended rotation credentials follow the last confirmed
   operation, including removal of an old recovery key. Only canonical successors
   and already-confirmed operations are accepted; recovery forks need an explicit flow.
-- Record schema validation uses 33 pinned, checksummed Lexicons (17 record roots).
+- Record schema validation uses 17 record roots in the pinned, checksummed catalog.
   Tests cover upstream record fixtures, required/nullable fields, nested unions,
   references, UTF-8/grapheme limits, blobs, string formats, and key rules. Unknown
   schemas remain writable by default; explicit validation requires a known schema.
   Invalid batches roll back records, blocks and commits. CID string formats are
   restricted to the blessed AT Protocol CID set; see fixture notes.
+- The catalog now contains 95 schemas covering the record roots and all 58
+  implemented XRPC endpoints and their references. JSON inputs and typed query
+  parameters enforce required/nullable fields, formats, nested references/unions,
+  and scalar/array constraints at the existing request-reading boundaries.
+  Endpoint defaults apply without changing unknown record content. Repeated
+  parameters require a declared array; extension fields remain allowed. Startup
+  rejects implemented `com.atproto` routes without a matching schema/method.
+  Generated input cases are checked against pinned `@atproto/lexicon` 0.7.14;
+  HTTP tests verify auth ordering, invalid optional fields, nullable compare-and-swap
+  and that rejected requests leave accounts, sessions, records, blocks, events
+  and email unchanged. Binary inputs keep the existing bounded readers. Full
+  response/event schema conformance and dynamic Lexicon resolution remain pending.
 - P-256 and secp256k1 signatures enforce the 64-byte low-S format using Bouncy Castle;
   verification runs upstream signature vectors. Repositories currently sign with P-256.
 - MST height/prefix vectors and before/after commit root fixtures match upstream.
@@ -260,8 +272,8 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
 
 ## Remaining work for a full PDS
 
-1. Expand the Lexicon catalog, dynamic schema resolution, and complete input/output
-   validation against pinned official endpoint lexicons.
+1. Dynamic schema resolution, catalog expansion as endpoints are added, and full
+   response/event schema conformance against pinned official Lexicons.
 2. Bounded identity caching,
    signing/rotation key lifecycle, conflicted-operation administration, and migration.
 3. Remaining administrative APIs, record/blob takedowns, and broader account recovery controls.
