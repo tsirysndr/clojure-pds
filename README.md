@@ -220,6 +220,14 @@ Uploads to either PostgreSQL or S3 remove the matching CID from this list.
 Inactive accounts' repositories and blobs remain hidden from public reads.
 This endpoint checks database metadata; it does not probe S3 for lost objects.
 
+Public `com.atproto.sync.listBlobs` lists the CIDs referenced by current records,
+including references whose bytes have not arrived yet. Unreferenced uploads are
+excluded. The optional `since` TID selects records changed after that repository
+revision; the CID cursor and `limit` paginate the distinct result. Unchanged puts
+keep their previous record revision. Imported records use the new destination
+revision. Upgrading an older database assigns existing records the current repo
+revision as a conservative baseline; it does not reconstruct historical revisions.
+
 `GET /xrpc/com.atproto.server.checkAccountStatus` reports the authenticated
 account's activation state, repository head/revision, owned block count, indexed
 record count, distinct referenced blob count and stored blob count. Primary

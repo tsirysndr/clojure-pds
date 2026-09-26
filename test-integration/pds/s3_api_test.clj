@@ -48,11 +48,12 @@
               (is (= (vec data) (vec (:raw download))))
               (is (= blob (get-in (upload client port (:accessJwt alice) data "text/plain") [:body "blob"])))
               (is (= 400 (:status (api/xrpc client port "GET" (str "com.atproto.sync.getBlob?did=" (:did bob) "&cid=" cid) nil nil))))
-              (is (= [cid] (get-in (api/xrpc client port "GET" (str "com.atproto.sync.listBlobs?did=" (:did alice)) nil nil) [:body "cids"])))
+              (is (= [] (get-in (api/xrpc client port "GET" (str "com.atproto.sync.listBlobs?did=" (:did alice)) nil nil) [:body "cids"])))
               (is (= 200 (:status (api/xrpc client port "POST" "com.atproto.repo.createRecord"
                                           {"repo" (:did alice) "collection" "app.bsky.actor.profile" "rkey" "self"
                                            "record" {"$type" "app.bsky.actor.profile" "avatar" blob}}
                                           (:accessJwt alice)))))
+              (is (= [cid] (get-in (api/xrpc client port "GET" (str "com.atproto.sync.listBlobs?did=" (:did alice)) nil nil) [:body "cids"])))
               (with-open [conn (db/connection fixture/*ds*)]
                 (let [row (first (db/query conn "SELECT * FROM blobs WHERE did = ? AND cid = ?" (:did alice) cid))]
                   (is (= "s3" (:storage_backend row))) (is (nil? (:content row))) (is (= 6 (:size row)))

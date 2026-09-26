@@ -38,7 +38,7 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | `com.atproto.sync` | `getRepo`, `getLatestCommit`, `getRepoStatus`, `listRepos` | Full CAR export and local repository metadata; no incremental export optimization |
 | `com.atproto.sync` | `getBlocks`, `getRecord` | Repository-owned historical blocks; signed MST inclusion/absence proofs; rootless block CARs |
 | `com.atproto.sync` | `subscribeRepos` | Binary CBOR WebSocket stream; durable replay, cursor errors, bounded sends/backlog, account filtering; external relay integration pending |
-| `com.atproto.sync` | `getBlob`, `listBlobs` | Binary round trip and account-scoped keyset listing; `since` is rejected |
+| `com.atproto.sync` | `getBlob`, `listBlobs` | Binary round trip; distinct current record references, CID pagination and exclusive `since` revision filtering |
 
 Additional routes: plain-text banner at `/`, liveness at `/xrpc/_health`, and hosted
 identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
@@ -226,6 +226,14 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
   reduction and duplicate retries, preserve private visibility and test rollback.
   Missing-list queries do not inspect external objects; a lost S3 object is detected
   by the integrity-checked read path and still requires operational repair.
+- Public blob synchronization lists current record references, including missing
+  content, rather than all uploaded metadata. Per-record revisions are updated
+  atomically with changed records and imports; no-op puts retain their revision.
+  Tests cover shared references, pagination, exclusive `since` bounds, record
+  deletion, failed-write rollback, destination import revisions and metadata-free
+  references. Migration assigns old records their current repository revision as
+  a conservative baseline without rewriting signed content; earlier per-record
+  history cannot be recovered from that metadata alone.
 - A child-JVM test runs `pds.main`, checks HTTP health, and verifies graceful shutdown,
   including optional S3/Redis clients when the combined suite enables them.
 - Rate limiting defaults to bounded in-memory counters. Optional Redis uses atomic
@@ -245,7 +253,7 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
    event retention/compaction, and remaining record/blob takedown semantics.
 6. Migration status/private-state APIs, authenticated proxying to AppViews/labelers, and external
    client/relay end-to-end tests.
-7. Streaming repository import, blob list-since behavior, garbage collection,
+7. Streaming repository import, blob garbage collection,
    incremental MST mutation, streaming, quotas and bulk blob-backend migration.
 8. PostgreSQL connection pooling, account-specific abuse controls, metrics/logging, CORS,
    operational deployment/TLS and backup/restore drills. Push CI is configured;

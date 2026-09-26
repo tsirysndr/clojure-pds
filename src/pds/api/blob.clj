@@ -7,6 +7,7 @@
             [pds.blob-refs :as blob-refs]
             [pds.db :as db]
             [pds.errors :as errors]
+            [pds.protocol.syntax :as syntax]
             [pds.request :as request]))
 
 (def max-size blobs/max-size)
@@ -51,12 +52,17 @@
    (repo-api/query-route
     ds
     (fn [conn params]
-      (when (get params "since")
-        (errors/raise! 400 "InvalidRequest" "Incremental blob listing is not implemented"))
-      (let [account (accounts/resolve-account conn (get params "did"))
+      (let [did (get params "did") since (get params "since")
+            _ (when-not (syntax/did? did) (errors/invalid! "Invalid DID"))
+            _ (when (and since (not (syntax/tid? since))) (errors/invalid! "since must be a repository revision TID"))
+            account (accounts/resolve-account conn did)
             limit (request/limit! params 500 1000) cursor (get params "cursor")
             _ (when cursor (repo-api/cid! cursor))
-            rows (db/query conn "SELECT cid FROM blobs WHERE did = ? AND (?::text IS NULL OR cid COLLATE \"C\" > ? COLLATE \"C\") ORDER BY cid COLLATE \"C\" LIMIT ?"
-                           (:did account) cursor cursor (inc limit))
+            rows (db/query conn "SELECT b.cid FROM record_blob_refs b JOIN records r
+                                 ON r.did = b.did AND r.collection = b.collection AND r.rkey = b.rkey
+                                 WHERE b.did = ? AND (?::text IS NULL OR b.cid COLLATE \"C\" > ? COLLATE \"C\")
+                                   AND (?::text IS NULL OR r.repo_rev IS NULL OR r.repo_rev COLLATE \"C\" > ? COLLATE \"C\")
+                                 GROUP BY b.cid ORDER BY b.cid COLLATE \"C\" LIMIT ?"
+                           (:did account) cursor cursor since since (inc limit))
             page (repo-api/paginated rows limit :cid :cid)]
         (-> page (assoc :cids (:items page)) (dissoc :items)))))})

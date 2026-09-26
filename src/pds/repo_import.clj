@@ -60,8 +60,9 @@
               ;; Re-sign with the destination's key and a revision newer than
               ;; both heads. Large replacements use a sync checkpoint, not an
               ;; incomplete or oversized inductive commit proof.
-              (repo/commit! conn settings (assoc (:repo current) :suppress-events? true
-                                                 :rev (last (sort [(:rev (:repo current)) (:rev verified)]))))
+              (let [commit (repo/commit! conn settings (assoc (:repo current) :suppress-events? true
+                                                            :rev (last (sort [(:rev (:repo current)) (:rev verified)]))))]
+                (repo/stamp-records! conn did (:rev commit)))
               (db/execute! conn "UPDATE account_imports SET repository_imported = true WHERE did = ?" did)
               (when (= "active" (:status account)) (events/sync! conn did))
               nil))))

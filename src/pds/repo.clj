@@ -58,6 +58,9 @@
 (defn path! [collection rkey]
   (when-not (and (syntax/nsid? collection) (syntax/record-key? rkey))
     (errors/invalid! "Invalid collection or record key")))
+(defn stamp-records! [conn did rev]
+  ;; New/changed records have a null revision only inside the write transaction.
+  (db/execute! conn "UPDATE records SET repo_rev = ? WHERE did = ? AND repo_rev IS NULL" rev did))
 (defn- check-blobs! [conn did value]
   (when (map? value)
     (when (= "blob" (get value "$type"))
@@ -108,7 +111,8 @@
                        (swap! ops conj (cond-> {"action" (if old "update" "create") "path" (str collection "/" rkey) "cid" (codec/link id)}
                                          old (assoc "prev" (codec/link (:cid old))))))
                      (db/execute! conn "INSERT INTO records(did, collection, rkey, cid) VALUES (?, ?, ?, ?)
-                                         ON CONFLICT (did, collection, rkey) DO UPDATE SET cid = excluded.cid"
+                                         ON CONFLICT (did, collection, rkey) DO UPDATE
+                                         SET cid = excluded.cid, repo_rev = CASE WHEN records.cid = excluded.cid THEN records.repo_rev ELSE NULL END"
                                   did collection rkey id)
                      (blob-refs/replace! conn did collection rkey record)
                      (cond-> {:$type (str "com.atproto.repo.applyWrites#" (if (= action :create) "create" "update") "Result")
@@ -116,6 +120,7 @@
                        validation-status (assoc :validationStatus validation-status))))
                  (errors/invalid! "Unknown write operation")))) writes)
           commit (commit! conn settings repo @ops)]
+      (stamp-records! conn did (:rev commit))
       {:commit commit :results results})))
 
 (defn record [conn did collection rkey]
