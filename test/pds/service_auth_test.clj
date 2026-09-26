@@ -4,10 +4,14 @@
             [clojure.test :refer [deftest is]]
             [pds.auth :as auth]
             [pds.crypto :as crypto]
+            [pds.identity :as identity]
             [pds.plc :as plc]
             [pds.protocol.codec :as codec]
             [pds.service-auth :as service-auth])
   (:import [java.nio.file Files]
+           [java.math BigInteger]
+           [java.util Arrays]
+           [org.bouncycastle.util BigIntegers]
            [java.util.concurrent TimeUnit]))
 
 (defn decode [token]
@@ -16,6 +20,10 @@
      :claims (json/read-str (codec/text (crypto/unb64 payload)))
      :message (codec/utf8 (str header "." payload)) :signature (crypto/unb64 signature)}))
 (defn error [f] (try (f) nil (catch clojure.lang.ExceptionInfo e (:error (ex-data e)))))
+(defn document [issuer key]
+  {"id" issuer "verificationMethod" [{"id" "#atproto" "controller" issuer "type" "Multikey"
+                                       "publicKeyMultibase" (crypto/multikey (:algorithm key) (:public key))}]})
+(defn token-request [token] {:headers {"authorization" (str "Bearer " token)}})
 (defn upstream! [fixtures]
   (when (= "true" (System/getenv "PDS_TEST_UPSTREAM"))
     (let [path (Files/createTempFile "pds-service-jwt-" ".json" (make-array java.nio.file.attribute.FileAttribute 0))]
@@ -25,7 +33,16 @@
               finished? (.waitFor process 30 TimeUnit/SECONDS)]
           (when-not finished? (.destroyForcibly process))
           (is finished?)
-          (when finished? (is (= 0 (.exitValue process)) (slurp (.getInputStream process)))))
+          (when finished?
+            (let [output (slurp (.getInputStream process))]
+              (is (= 0 (.exitValue process)) output)
+              (when (zero? (.exitValue process))
+                (doseq [fixture (json/read-str output)]
+                  (let [issuer (get fixture "issuer")
+                        doc (document issuer (plc/parse-key (get fixture "didKey")))
+                        resolver (identity/resolver {:fetch (fn [_ _] {:status 200 :body (codec/utf8 (json/write-str doc))})})]
+                    (is (= issuer (:did (service-auth/verify! resolver {:service-did "did:web:destination.example.com"}
+                                                            (token-request (get fixture "token")) (get fixture "method")))))))))))
         (finally (Files/deleteIfExists path))))))
 
 (deftest audience-syntax-and-expiration-policy
@@ -64,3 +81,60 @@
                      (is (not (crypto/verify algorithm (:public (crypto/keypair algorithm)) message signature)))
                      {:token token :issuer issuer :audience aud :method method :didKey (plc/did-key key)}))]
     (upstream! (vec fixtures))))
+
+(defn mint [key header claims]
+  (let [unsigned (str (crypto/b64 (codec/utf8 (json/write-str header))) "." (crypto/b64 (codec/utf8 (json/write-str claims))))]
+    (str unsigned "." (crypto/b64 (crypto/sign (:algorithm key) (:private key) (codec/utf8 unsigned))))))
+(defn high-s [token algorithm]
+  (let [[header payload signature] (str/split token #"\.") raw (crypto/unb64 signature)
+        s (BigInteger. 1 (Arrays/copyOfRange raw 32 64)) high (.subtract (.getN (crypto/domain algorithm)) s)]
+    (str header "." payload "." (crypto/b64 (byte-array (concat (take 32 raw) (BigIntegers/asUnsignedByteArray 32 high)))))))
+
+(deftest receiving-service-jwts-validates-headers-claims-and-signatures
+  (let [issuer "did:web:alice.example.com" destination "did:web:destination.example.com"
+        method "com.atproto.server.createAccount" settings {:service-did destination} now (auth/now)
+        key (crypto/keypair "ES256") header {"typ" "JWT" "alg" "ES256"}
+        claims {"iss" issuer "aud" (str destination "#atproto_pds") "lxm" method "iat" now "exp" (+ now 60) "jti" "nonce"}
+        doc (atom (document issuer key)) calls (atom 0)
+        resolver (identity/resolver {:fetch (fn [_ _] (swap! calls inc) {:status 200 :body (codec/utf8 (json/write-str @doc))})})
+        verify #(service-auth/verify! resolver settings (token-request %) method)]
+    (doseq [bad-header [(assoc header "typ" "at+jwt") (assoc header "typ" "refresh+jwt") (assoc header "typ" "dpop+jwt")
+                        (dissoc header "typ") (assoc header "alg" "none") (assoc header "alg" "HS256")
+                        (assoc header "kid" "#atproto_label") (assoc header "kid" (str issuer "#atproto"))
+                        (assoc header "crit" ["unknown"]) (assoc header "b64" false)]]
+      (is (= "BadJwt" (error #(verify (mint key bad-header claims))))))
+    (doseq [bad-claims [(dissoc claims "jti") (assoc claims "jti" "") (assoc claims "jti" (apply str (repeat 257 "a")))
+                        (dissoc claims "iat") (assoc claims "iat" (+ now 31)) (assoc claims "exp" (+ now 3601))
+                        (assoc claims "exp" "later") (assoc claims "iat" -1) (assoc claims "exp" 1.5)
+                        (assoc claims "nbf" (+ now 1)) (assoc claims "iss" (str issuer "#atproto"))]]
+      (is (= "BadJwt" (error #(verify (mint key header bad-claims))))))
+    (doseq [aud [destination "did:web:other.example.com" (str destination "#other")]]
+      (when-not (= aud destination)
+        (is (= "BadJwtAudience" (error #(verify (mint key header (assoc claims "aud" aud))))))))
+    (doseq [bad-claims [(dissoc claims "lxm") (assoc claims "lxm" "com.atproto.server.getSession")]]
+      (is (= "BadJwtLexiconMethod" (error #(verify (mint key header bad-claims))))))
+    (is (= "JwtExpired" (error #(verify (mint key header (assoc claims "exp" now "iat" (dec now)))))))
+    (is (= 0 @calls) "Invalid headers and claims fail before outbound identity requests")
+    (let [token (mint key header claims)]
+      (is (= issuer (:did (verify token))))
+      (is (= issuer (:did (verify (high-s token "ES256")))) "Service JWT compatibility permits high-S")
+      (is (= issuer (:did (verify (mint key (assoc header "kid" "#atproto") (assoc claims "aud" destination))))))
+      (is (= "BadJwtSignature" (error #(verify (mint (crypto/keypair "ES256") header claims)))))
+      (is (= "BadJwtSignature" (error #(verify (mint key (assoc header "alg" "ES256K") claims)))))
+      (reset! doc (document issuer (crypto/keypair "ES256")))
+      (is (= "BadJwtSignature" (error #(verify token))) "Fresh resolution rejects the old key after rotation"))))
+
+(deftest incoming-token-bounds-and-expiry-after-resolution
+  (let [issuer "did:web:alice.example.com" key (crypto/keypair "ES256K")
+        settings {:service-did "did:web:destination.example.com"} method "com.atproto.server.createAccount"
+        clock (atom 1000) calls (atom 0)
+        resolver (identity/resolver {:fetch (fn [_ _] (swap! calls inc) (reset! clock 1060)
+                                              {:status 200 :body (codec/utf8 (json/write-str (document issuer key)))})})]
+    (with-redefs [auth/now #(deref clock)]
+      (let [token (service-auth/sign key issuer (:service-did settings) method 1000 1060)
+            verify #(service-auth/verify! resolver settings (token-request %) method)]
+        (doseq [bad [(apply str (repeat 8193 "a")) "a.b.c.d" "a.b.c" "...."]]
+          (is (= "BadJwt" (error #(verify bad)))))
+        (is (= 0 @calls))
+        (is (= "JwtExpired" (error #(verify token))))
+        (is (= 1 @calls))))))

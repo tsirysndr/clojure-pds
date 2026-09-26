@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { verifyJwt } from '@atproto/xrpc-server';
-import { P256Keypair } from '@atproto/crypto';
+import { createServiceJwt, verifyJwt } from '@atproto/xrpc-server';
+import { P256Keypair, Secp256k1Keypair } from '@atproto/crypto';
 
 const fixtures = JSON.parse(await readFile(process.argv[2], 'utf8'));
 const wrong = await P256Keypair.create();
@@ -20,4 +20,13 @@ for (const { token, issuer, audience, method, didKey } of fixtures) {
   await assert.rejects(verifyJwt(token, audience, 'com.example.wrongMethod', resolve));
   await assert.rejects(verifyJwt(token, audience, method ?? null, async () => wrong.did()));
 }
-process.stdout.write('Verified service JWT signatures, audiences, and methods');
+const generated = [];
+for (const Keypair of [P256Keypair, Secp256k1Keypair]) {
+  const keypair = await Keypair.create();
+  const issuer = 'did:web:reference.example.com';
+  const audience = 'did:web:destination.example.com#atproto_pds';
+  const method = 'com.atproto.server.createAccount';
+  const token = await createServiceJwt({ iss: issuer, aud: audience, lxm: method, keypair });
+  generated.push({ token, issuer, audience, method, didKey: keypair.did() });
+}
+process.stdout.write(JSON.stringify(generated));

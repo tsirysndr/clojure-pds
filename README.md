@@ -186,8 +186,18 @@ methods cannot be authorized this way. Chat methods and `createAccount` require
 a primary or privileged app-password session. Existing primary sessions for
 taken-down accounts can request only `createAccount` for migration. Responses are
 marked `Cache-Control: no-store`. These tokens cannot be used as local access or
-refresh sessions; receiving-service validation and proxying are separate roadmap
-steps. Issued tokens cannot be individually revoked before expiration.
+refresh sessions. Issued tokens cannot be individually revoked before expiration.
+
+Receiving-side verification and replay primitives are implemented for migration
+integration. They require an exact method and PDS audience (the service DID or its
+`#atproto_pds` reference), `typ=JWT`, and the issuer's current `#atproto` key resolved
+through the bounded identity resolver. The maximum accepted lifetime is one hour,
+with 30 seconds of allowance for a future issue timestamp. Expiration is rechecked
+after resolution and before consuming the proof. PostgreSQL stores a hash of each
+used nonce with its issuer, atomically with the protected mutation; rolled-back
+mutations retain retryability. Cleanup removes at most 1,000 expired entries per
+successful consumption. Destination account creation and proxy integration remain
+pending, so existing HTTP endpoints still use their current session authentication.
 
 Set `PDS_REQUIRE_INVITE_CODE=true` to require an invitation during signup;
 `PDS_ENABLE_SIGNUP` must also be enabled. Set `PDS_ADMIN_PASSWORD` to a random

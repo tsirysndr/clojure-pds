@@ -158,7 +158,15 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
   key isolation. Tokens carry `typ=JWT`, `kid=#atproto`, `iat`, `exp`, `iss`, `aud`,
   `jti`, and optional `lxm`. Pinned `@atproto/xrpc-server` 0.13.2 verifies both signing
   curves and tokens obtained from the HTTP endpoint, and rejects wrong audiences,
-  methods and keys. This proves token interoperability, not external service access.
+  methods and keys. The upstream library also generates tokens on both curves for
+  our receiving verifier. Incoming checks bind type, method, audience, issuer and
+  key algorithm; reject unsupported key IDs/critical headers; and recheck lifetime
+  after network resolution. Only service JWT verification tolerates high-S ECDSA,
+  matching the reference verifier; repository/PLC checks remain strict. PostgreSQL
+  replay tests cover twelve concurrent uses, transaction rollback, reopened
+  connections, issuer isolation, expiry cleanup and alternate signatures sharing
+  one nonce. Receiving primitives await destination endpoint integration. This
+  proves token interoperability, not external service access or complete migration.
 - Blob bytes can use PostgreSQL or configurable S3-compatible storage. An upgrade
   test preserves existing blobs. Moto-backed HTTP tests cover binary round trips,
   ownership, duplicate uploads, missing objects and failed PUT rollback; fault
@@ -180,7 +188,7 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
    refresh behavior, permission sets and scopes.
 5. Relay notification and external relay interoperability,
    event retention/compaction, and remaining record/blob takedown semantics.
-6. Incoming service JWT verification/replay protection, authenticated proxying to AppViews/labelers, and external
+6. Integrating incoming service authentication with migration endpoints, authenticated proxying to AppViews/labelers, and external
    client/relay end-to-end tests.
 7. Repository import, blob missing/list-since behavior, garbage collection,
    incremental MST mutation, streaming, quotas and bulk blob-backend migration.

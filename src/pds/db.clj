@@ -60,7 +60,7 @@
                  "008-blob-deletion.sql" "009-email-security.sql" "010-invites.sql"
                  "011-account-takedowns.sql" "012-repository-block-ownership.sql" "013-event-payloads.sql"
                  "014-plc-provisioning.sql" "015-handle-updates.sql" "016-plc-signing-tokens.sql"
-                 "017-plc-submissions.sql"])
+                 "017-plc-submissions.sql" "018-service-token-replay.sql"])
 
 (defn migrate! [ds]
   (transact!
