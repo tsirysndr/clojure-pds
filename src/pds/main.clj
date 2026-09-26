@@ -1,10 +1,13 @@
 (ns pds.main
   (:require [pds.app :as app]
             [pds.config :as config]
+            [pds.db :as db]
             [pds.http :as http]))
 
 (defn -main [& _]
   (let [settings (config/load-config)
+        ds (db/datasource (db/settings))
+        _ (db/migrate! ds)
         {:keys [port stop!]} (http/start! settings (app/handler settings))
         stopped (promise)
         hook (Thread. ^Runnable (fn [] (stop!) (deliver stopped true)))

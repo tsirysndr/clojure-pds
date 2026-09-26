@@ -18,7 +18,7 @@ runnable and update this document as features land.
    canonical DRISL/DAG-CBOR encoding, CID, CAR, supported signing algorithms.
    Acceptance: upstream valid/invalid fixtures, deterministic encoding and
    cryptographic vectors. Do not substitute JSON hashes for repository CIDs.
-3. **Durable storage:** SQLite migrations, transactions, account metadata, key
+3. **Durable storage (in progress):** PostgreSQL migrations, transactions, account metadata, key
    storage, content-addressed blocks and blobs, restart/recovery tests.
 4. **Repositories:** deterministic Merkle Search Tree, signed version-3 commits,
    atomic writes with swap checks, record CRUD, pagination, repository description,
@@ -62,8 +62,9 @@ All other protocol milestones remain unimplemented.
 - Begin with a small JDK HTTP adapter around Ring-shaped request/response maps.
   Replace/extend the adapter when WebSocket streaming lands; protocol handlers
   must remain independent of the transport.
-- SQLite is the intended first storage backend; introduce it with migrations and
-  transaction tests rather than exposing ephemeral account/record APIs.
+- PostgreSQL is the storage backend. Migrations are transactional, serialized by
+  an advisory lock, and checked for changes using SHA-256. Integration tests use
+  an isolated PostgreSQL cluster and disposable schemas.
 - Track conformance honestly: unsupported features stay unsupported until their
   invariants are implemented. Health indicates process liveness, not federation
   readiness.

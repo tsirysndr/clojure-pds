@@ -1,0 +1,85 @@
+(ns pds.db
+  (:require [clojure.java.io :as io]
+            [clojure.string :as str])
+  (:import [java.sql Connection Timestamp]
+           [java.security MessageDigest]
+           [java.util HexFormat]
+           [javax.sql DataSource]
+           [org.postgresql.ds PGSimpleDataSource]))
+
+(defn settings
+  ([] (settings (System/getenv)))
+  ([env]
+   (let [url (get env "PDS_DATABASE_URL" "jdbc:postgresql://127.0.0.1:5432/clojure_pds")]
+     (when-not (and (string? url) (str/starts-with? url "jdbc:postgresql://"))
+       (throw (ex-info "PDS_DATABASE_URL must be a PostgreSQL JDBC URL" {})))
+     {:url url :user (get env "PDS_DATABASE_USER" "pds")
+      :password (get env "PDS_DATABASE_PASSWORD" "")})))
+
+(defn datasource [{:keys [url user password]}]
+  (doto (PGSimpleDataSource.)
+    (.setURL url) (.setUser user) (.setPassword password)
+    (.setConnectTimeout 5) (.setSocketTimeout 30)
+    (.setApplicationName "clojure-pds")))
+
+(defn connection ^Connection [^DataSource ds] (.getConnection ds))
+
+(defn- bind! [stmt params]
+  (doseq [[i value] (map-indexed vector params)]
+    (.setObject ^java.sql.PreparedStatement stmt (inc i)
+                (if (instance? java.time.Instant value) (Timestamp/from value) value)))
+  stmt)
+
+(defn execute! [^Connection conn sql & params]
+  (with-open [stmt (bind! (.prepareStatement conn sql) params)]
+    (.executeUpdate ^java.sql.PreparedStatement stmt)))
+
+(defn query [^Connection conn sql & params]
+  (with-open [stmt (bind! (.prepareStatement conn sql) params)
+              rs (.executeQuery ^java.sql.PreparedStatement stmt)]
+    (let [metadata (.getMetaData rs)
+          columns (mapv #(keyword (.getColumnLabel metadata %))
+                        (range 1 (inc (.getColumnCount metadata))))]
+      (loop [rows []]
+        (if (.next rs)
+          (recur (conj rows (into {} (map-indexed
+                                     (fn [i k] [k (.getObject rs (inc i))]) columns))))
+          rows)))))
+
+(defn transact!
+  "Run f with an owned connection. Exceptions roll back all changes."
+  [ds f]
+  (with-open [conn (connection ds)]
+    (.setAutoCommit conn false)
+    (try
+      (let [result (f conn)] (.commit conn) result)
+      (catch Throwable t (.rollback conn) (throw t)))))
+
+(def migrations ["001-storage.sql"])
+
+(defn migrate! [ds]
+  (transact!
+   ds
+   (fn [conn]
+     ;; Serialize startup across processes, and release the lock on rollback too.
+     (query conn "SELECT pg_advisory_xact_lock(731946281)")
+     (execute! conn "CREATE TABLE IF NOT EXISTS schema_migrations
+                      (name text PRIMARY KEY, checksum text NOT NULL,
+                       applied_at timestamptz NOT NULL DEFAULT now())")
+     (doseq [name migrations]
+       (let [sql (slurp (io/resource (str "migrations/" name)) :encoding "UTF-8")
+             checksum (.formatHex (HexFormat/of)
+                                  (.digest (MessageDigest/getInstance "SHA-256")
+                                           (.getBytes sql "UTF-8")))
+             applied (first (query conn "SELECT checksum FROM schema_migrations WHERE name = ?" name))]
+         (if applied
+           (when-not (= checksum (:checksum applied))
+             (throw (ex-info "An applied database migration was modified" {:migration name})))
+           (do (execute! conn sql)
+               (execute! conn "INSERT INTO schema_migrations(name, checksum) VALUES (?, ?)"
+                         name checksum)))))
+     true)))
+
+(defn -main [& _]
+  (migrate! (datasource (settings)))
+  (println "PostgreSQL migrations applied"))

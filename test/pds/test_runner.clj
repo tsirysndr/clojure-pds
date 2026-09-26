@@ -3,13 +3,13 @@
             [clojure.string :as str]
             [clojure.test :as test]))
 
-(defn -main [& _]
-  (let [namespaces (->> (file-seq (io/file "test"))
+(defn -main [& roots]
+  (let [namespaces (->> (mapcat #(file-seq (io/file %)) (or (seq roots) ["test"]))
                         (filter #(.isFile %))
                         (map #(.getPath %))
                         (filter #(str/ends-with? % "_test.clj"))
                         (map #(-> %
-                                  (str/replace #"^test/|\.clj$" "")
+                                  (str/replace #"^(?:test|test-integration)/|\.clj$" "")
                                   (str/replace "/" ".")
                                   (str/replace "_" "-")
                                   symbol))

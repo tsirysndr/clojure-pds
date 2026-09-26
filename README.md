@@ -12,6 +12,7 @@ Temurin JDK `25.0.3+9.0.LTS` in `mise.toml`.
 mise trust
 mise install
 mise exec -- clojure -M:test
+# Start PostgreSQL as described below before running the server.
 mise exec -- clojure -M:run
 ```
 
@@ -47,6 +48,38 @@ For example, query the application handler without starting an HTTP listener:
 
 ## Configuration
 
+### PostgreSQL
+
+PostgreSQL 14+ is required to run the server. Start a local database with Docker:
+
+```sh
+export PDS_DATABASE_PASSWORD='choose-a-local-password'
+docker compose up -d postgres
+mise exec -- clojure -M:run
+```
+
+`PDS_DATABASE_URL` defaults to `jdbc:postgresql://127.0.0.1:5432/clojure_pds`;
+`PDS_DATABASE_USER` defaults to `pds`. `PDS_DATABASE_PASSWORD` is passed separately
+to the driver. For hosted databases, use the provider's JDBC URL with
+`sslmode=verify-full`. Do not commit credentials.
+
+Startup applies checksummed migrations before binding HTTP. To migrate alone:
+`mise exec -- clojure -M:migrate`. Existing migrations are immutable; add a new
+numbered SQL resource and register it in `pds.db/migrations` for schema changes.
+
+Database tests run against a temporary local PostgreSQL cluster (no Docker needed):
+
+```sh
+bash scripts/test-postgres.sh
+# Linux or another install:
+PG_BIN=/path/to/postgresql/bin bash scripts/test-postgres.sh
+```
+
+Alternatively set `PDS_TEST_DATABASE_URL`, `PDS_DATABASE_USER`, and
+`PDS_DATABASE_PASSWORD`, then run `mise exec -- clojure -M:integration`. The test
+role needs permission to create schemas. Each test uses its own schema and drops
+only that schema. Unit/HTTP tests remain available without PostgreSQL via `:test`.
+
 Configuration comes from environment variables (a `.env` file is not loaded).
 Invalid values fail before the server starts.
 
@@ -76,7 +109,7 @@ support HEAD. Stop with Ctrl-C to release the listener and worker threads.
 
 `pds.xrpc` dispatches pure request/response maps; `pds.http` adapts them to the
 JDK HTTP server. The initial adapter supports UTF-8 response bodies. Binary
-streams, WebSockets, CORS, authentication, persistence, and federation are still
+streams, WebSockets, CORS, authentication, and federation are still
 on the roadmap. Local binding is the default; this milestone is for development.
 
 Discovery follows the required fields of the official
