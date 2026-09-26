@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
   <title>Account security · atproto PDS</title>
   <link rel="stylesheet" href="/account/style.css">
   <script type="module" src="/account/app.js"></script>
@@ -39,6 +40,33 @@
           <div class="my-4 flex items-center gap-3 text-xs text-muted"><hr class="grow border-line">or<hr class="grow border-line"></div>
           <button id="passkey-login" class="secondary w-full" type="button">Sign in with a passkey</button>
           <p class="mt-2 text-xs text-muted">Enter your identifier above to use a passkey.</p>
+          <button id="show-signup" class="secondary mt-4" type="button" hidden>Create a new account</button>
+        </section>
+        <section id="signup" hidden>
+          <p id="signup-unavailable" class="notice mb-4" hidden>Account creation is disabled on this server. You can sign in with an existing account.</p>
+          <form id="signup-form" class="space-y-4">
+            <label class="field">Username<input name="username" autocomplete="username" autocapitalize="none" spellcheck="false" pattern="[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?" maxlength="63" required aria-describedby="signup-domain"></label>
+            <p id="signup-domain" class="break-all text-xs text-muted"></p>
+            <label class="field">Email<input name="email" type="email" autocomplete="email" maxlength="254" required></label>
+            <label class="field">Password<input name="password" type="password" autocomplete="new-password" minlength="8" maxlength="1024" required></label>
+            <label id="signup-invite-label" class="field"><span id="signup-invite-title">Invite code</span><input name="inviteCode" id="signup-invite" autocomplete="off" maxlength="256" spellcheck="false"></label>
+            <p class="text-xs leading-5 text-muted">Your account and public posts will be hosted on this server.</p>
+            <div class="flex justify-end"><button class="primary" type="submit">Create account</button></div>
+          </form>
+          <button id="show-login" class="secondary mt-4" type="button">Use an existing account</button>
+        </section>
+        <section id="oauth-account" class="space-y-4" hidden>
+          <p class="text-sm text-muted">Continue with this account, or sign in with another account.</p>
+          <button id="oauth-continue" class="primary" type="button">Continue</button>
+          <button id="oauth-other" class="secondary" type="button">Use another account</button>
+        </section>
+        <section id="consent" class="space-y-4" hidden>
+          <p class="text-sm text-muted">This application is requesting access to your account:</p>
+          <p id="oauth-client" class="break-all rounded-lg border border-line p-3 text-sm font-medium"></p>
+          <p class="text-xs text-muted">Check the full address. Application names and logos are not verified identities.</p>
+          <ul id="oauth-scopes" class="list-disc space-y-2 pl-5 text-sm"></ul>
+          <p id="oauth-did" class="break-all text-xs text-muted"></p>
+          <div class="flex justify-end gap-2"><button id="oauth-deny" class="secondary" type="button">Cancel</button><button id="oauth-approve" class="primary" type="button">Allow access</button></div>
         </section>
     <section id="factor" class="space-y-4" hidden>
       <h2 class="text-xl font-semibold">One more step</h2><p id="factor-help" class="mt-2 mb-6 text-sm text-muted"></p>
@@ -80,8 +108,9 @@
     </section>
       </div>
       <footer class="flex flex-col items-center gap-3 rounded-b-xl border-t border-line bg-muted-surface/50 p-4 text-center">
+        <button id="oauth-cancel" class="secondary" hidden>Cancel authorization</button>
         <button id="logout" class="secondary" hidden>Sign out</button>
-        <p class="text-xs text-muted">Account security · Sessions expire after five minutes</p>
+        <p id="session-note" class="text-xs text-muted">Account security · Sessions expire after five minutes</p>
         <p class="max-w-full break-all text-xs text-muted" id="server-origin"></p>
       </footer>
     </div>

@@ -97,7 +97,7 @@
       (repo/commit! conn settings (assoc (repo/state conn (:did account)) :announce-handle (:handle account)))
       (when (:email-enabled settings) (issue-email! conn account "confirm-email")))))
 
-(defn- create-plc! [ds settings body handle address hash]
+(defn- create-plc! [ds settings body handle address hash issue-session?]
   (when-not (:http-client settings) (errors/raise! 503 "DirectoryUnavailable" "PLC directory client is unavailable"))
   (when (contains? body "recoveryKey")
     (try (plc/parse-key (get body "recoveryKey")) (catch Exception _ (errors/invalid! "Invalid PLC recovery key"))))
@@ -133,10 +133,10 @@
           (when-not (and (= address (:email account)) (not (:email_auth_factor account)) (not (factors/enabled? conn did))
                          (crypto/password-matches? (get body "password") (:password_hash account)))
             (errors/raise! 401 "AuthenticationRequired" "Account credentials changed; sign in to continue"))
-          (merge (public-account account) (auth/issue! conn settings did nil)
+          (merge (public-account account) (when issue-session? (auth/issue! conn settings did nil))
                  {:didDoc (did-document conn settings account (:public_key (repo/state conn did)))}))))))
 
-(defn create! [ds settings body]
+(defn- create-account! [ds settings body issue-session?]
   (when-not (:signup-enabled settings) (errors/raise! 403 "SignupDisabled" "Account registration is disabled"))
   (when (some #(contains? body %) ["did" "plcOp" "verificationCode" "verificationPhone"])
     (errors/raise! 400 "InvalidRequest" "Account imports and phone verification are not implemented"))
@@ -153,7 +153,7 @@
     (when-not (email/address? address) (errors/invalid! "Invalid email address"))
     (let [hash (password! (get body "password")) did (str "did:web:" handle)]
       (if (= :plc (:did-method settings))
-        (create-plc! ds settings body handle address hash)
+        (create-plc! ds settings body handle address hash issue-session?)
         (try
           (db/transact!
            ds
@@ -164,11 +164,20 @@
              (repo/initialize! conn settings did handle)
              (let [account (resolve-account conn did)]
                (when (:email-enabled settings) (issue-email! conn account "confirm-email"))
-               (merge (public-account account) (auth/issue! conn settings did nil)
+               (merge (public-account account) (when issue-session? (auth/issue! conn settings did nil))
                       {:didDoc (did-document settings account (:public_key (repo/state conn did)))}))))
           (catch java.sql.SQLException e
             (if (= "23505" (.getSQLState e))
               (errors/raise! 400 "HandleNotAvailable" "Handle or email is already registered") (throw e))))))))
+
+(defn create! [ds settings body]
+  (create-account! ds settings body true))
+
+(defn register!
+  "Create an account without minting legacy bearer credentials. Browser/OAuth
+  callers must separately authenticate and establish their protected session."
+  [ds settings body]
+  (create-account! ds settings body false))
 
 (def dummy-password (delay (crypto/password-hash (crypto/token))))
 (declare consume-token! require-email!)

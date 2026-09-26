@@ -193,9 +193,8 @@ Starting an interaction atomically consumes PAR and persists its immutable snaps
 Each interaction lasts ten minutes and receives independent random identifiers and
 browser secrets; PostgreSQL stores their hashes. CSRF values are purpose-separated
 HMACs bound to the browser secret, interaction and a rotating nonce. Authentication
-rotates the nonce, so a login form cannot also approve the request. The forthcoming
-HTTP adapter must deliver secrets in secure HttpOnly cookies, enforce same-origin
-POSTs and render only escaped content.
+rotates the nonce, so a login form cannot also approve the request. The browser adapter delivers secrets in secure HttpOnly cookies, enforces same-origin
+POSTs and renders dynamic content through DOM text nodes.
 
 Login accepts an active account's primary password, respects `login_hint`, and
 requires the configured email or TOTP sign-in factor. App passwords cannot delegate new
@@ -223,7 +222,8 @@ Expired interactions are cleaned in bounded batches when new ones start.
 PostgreSQL tests cover cookie/interaction substitution, CSRF rotation, primary-only
 login, hints, email-factor delivery and transactional consumption, lifecycle changes,
 expiration, concurrent decisions, metadata changes and failed PAR/code inserts.
-Browser pages and routes remain unmounted while the complete OAuth flow is built.
+The browser adapter and pages below implement this flow. OAuth routes remain
+unmounted while resource authorization and session management are completed.
 
 ## Opaque access and refresh tokens
 
@@ -272,13 +272,56 @@ concurrent replay, account changes, insertion rollback and real HTTP token
 responses. Bounded cleanup of expired session/token/code rows remains operational
 work; used codes and refresh hashes must not be discarded while their family is live.
 
+## Browser authorization and signup
+
+`pds.oauth.web/handler` accepts only pushed requests at `/oauth/authorize`, consumes
+PAR and redirects to `/oauth/flow/<id>`. A separate HttpOnly SameSite=Lax cookie
+carries the random browser secret; HTTPS uses the `__Host-` prefix and Secure.
+Explicit iframe/fetch starts are rejected. Flow pages and JSON state require the
+matching cookie. Only one authorization interaction is active per browser cookie;
+starting another replaces that cookie. Secrets never appear in URLs or JSON.
+
+The shared purple Tailwind UI opens account creation for `prompt=create`, including
+when a security-session cookie already exists. Users may instead choose an existing
+account. Signup checks server registration policy and optional invite requirements;
+both did:web and PLC registration use the existing verified provisioning pipeline.
+`accounts/register!` deliberately mints no legacy access or refresh JWTs. Browser
+registration validates the anonymous session/CSRF first, performs provisioning
+without holding browser locks, then rechecks the session and primary credentials.
+A pending PLC reservation can outlive the browser flow; users can retry signup or
+sign in once provisioning completes.
+
+Password, passkey and additional-factor login use the same `/account` controller.
+`interaction/authenticate-browser!` verifies the fully authenticated recent owner
+session, account security version, login hint, and both the account and interaction
+CSRF tokens. `prompt=login` requires an authentication timestamp at least as recent
+as the interaction. Binding rotates the interaction CSRF and cannot switch an
+already bound account. Consent is a separate same-origin POST with explicit
+Allow/Cancel buttons; no automatic approval is performed.
+
+The consent view shows the exact client metadata URL, requested permissions and
+authorized DID. Client names/logos are not treated as verified identities. All
+untrusted text uses `textContent`; scripts/styles load only from this PDS, with
+no-store, no-referrer and frame-blocking headers. Invalid or expired browser starts
+show a static error card without reflecting request contents. The response to a
+successful decision contains only the already validated callback location.
+
+Tests cover signup through consent and token exchange, signup/invite policy,
+PLC signup without legacy tokens, password/TOTP and passkey binding, both CSRF
+proofs, login hints, fresh-login prompts, cookie isolation, denial, epoch changes,
+and unsafe authorization starts. Signup/sign-in rendering was also checked in
+Chrome. Full browser automation, hardware passkeys and reference-client discovery
+remain separate verification work. This adapter is not mounted by `pds.app` yet;
+the existing `/account` signup/settings UI is available now.
+
+The account-creation prompt follows the UX semantics in
+[Initiating User Registration](https://openid.net/specs/openid-connect-prompt-create-1_0.html).
+This does not add OpenID Connect or ID tokens to the AT Protocol OAuth profile.
+
 ## Remaining steps
 
-1. OAuth browser authorization and consent pages backed by the interaction state
-   machine, using the existing purple Tailwind account style. `prompt=create` is
-   accepted and preserved at PAR; implement its dedicated account-creation screen
-   (signup policy, invite requirements and final explicit consent), rather than
-   treating it as login. Integrate existing passkey/TOTP browser authentication.
+1. Integrate the completed browser adapter with resource authentication and mount
+   the OAuth endpoints together; verify full browser and reference-client flows.
 2. Public token/session revocation and management, plus bounded expired-grant cleanup.
 3. Resource-server authentication, permission scopes/sets, service proxy and
    getServiceAuth authorization, nonce headers, and end-to-end reference clients.

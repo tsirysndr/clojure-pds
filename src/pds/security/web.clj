@@ -17,7 +17,7 @@
 (defn- cookie [settings token]
   (str (cookie-name settings) "=" (or token "") "; Path=/; HttpOnly; SameSite=Lax; Max-Age=" (if token browser/lifetime 0)
        (when (secure? settings) "; Secure")))
-(defn- token [settings request]
+(defn token [settings request]
   (let [values (keep (fn [part] (let [[k v] (str/split (str/trim part) #"=" 2)] (when (= k (cookie-name settings)) v)))
                      (str/split (get-in request [:headers "cookie"] "") #";"))]
     (when (= 1 (count values)) (first values))))
@@ -28,7 +28,7 @@
     (let [data (merge (:view result) {:result (:result result)}) error (get-in result [:result :error])
           output (json-response (if error (get-in result [:result :status] 400) 200) data)]
       (assoc-in output [:headers "Set-Cookie"] (cookie settings (:token result))))))
-(defn- body! [settings request]
+(defn body! [settings request]
   (when-not (and (= (:public-url settings) (get-in request [:headers "origin"]))
                  (or (nil? (get-in request [:headers "sec-fetch-site"])) (= "same-origin" (get-in request [:headers "sec-fetch-site"]))))
     (errors/raise! 403 "InvalidOrigin" "Open this page directly on your PDS to continue"))
@@ -54,11 +54,15 @@
                 (let [[mime content] (get assets (:uri request))] {:status 200 :headers {"Content-Type" mime} :body content})
                 (and (= :get (:request-method request)) (= "/account/session" (:uri request)))
                 (let [result (browser/open! ds (token settings request))]
-                  (response settings (update result :view assoc :passkeys-available passkeys? :origin (:public-url settings))))
+                  (response settings (update result :view assoc :passkeys-available passkeys? :origin (:public-url settings)
+                                                :signup-enabled (boolean (:signup-enabled settings))
+                                                :invite-required (boolean (:invite-required settings)) :user-domain (:user-domain settings))))
                 (and (= :post (:request-method request)) (str/starts-with? (:uri request) "/account/action/"))
                 (let [body (body! settings request)
-                      result (browser/action! ds settings (token settings request) (get-in request [:headers "x-csrf-token"])
-                                              (subs (:uri request) (count "/account/action/")) body)]
+                      action (subs (:uri request) (count "/account/action/"))
+                      result (if (= action "signup")
+                               (browser/register! ds settings (token settings request) (get-in request [:headers "x-csrf-token"]) body)
+                               (browser/action! ds settings (token settings request) (get-in request [:headers "x-csrf-token"]) action body))]
                   (response settings result))
                 :else (json-response 404 {:error "NotFound" :message "Page was not found"}))
               (catch clojure.lang.ExceptionInfo e

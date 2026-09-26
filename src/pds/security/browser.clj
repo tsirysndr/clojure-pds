@@ -137,3 +137,27 @@
               (if (not= (:oauth_epoch current) (:account_epoch row))
                 (output conn (rotate! conn row current (:auth_method row) true true) result)
                 (output conn token result)))))))))
+
+(defn register!
+  "Same-origin adapter must validate Origin before calling. Validate the anonymous
+  browser and CSRF before signup; do not hold session/account locks across PLC I/O.
+  Then recheck the browser and new primary credentials, including any new factor."
+  [ds settings token csrf-token body]
+  (db/transact! ds
+    (fn [conn]
+      (let [row (load! conn token)]
+        (check-csrf! row token csrf-token)
+        (login-stage! row))))
+  (let [created (accounts/register! ds settings body)]
+    (action! ds settings token csrf-token "login/password"
+             {"identifier" (:did created) "password" (get body "password")})))
+
+(defn owner!
+  "Validate a recent, fully authenticated owner and its CSRF in an existing
+  transaction. Used to bind browser authentication to explicit OAuth consent."
+  [conn token csrf-token]
+  (when (.getAutoCommit ^java.sql.Connection conn) (throw (ex-info "Browser owner requires a transaction" {})))
+  (let [row (load! conn token)]
+    (check-csrf! row token csrf-token)
+    (when-not (:authenticated_at row) (invalid!))
+    {:did (:did row) :account-epoch (:account_epoch row) :authenticated-at (:authenticated_at row)}))

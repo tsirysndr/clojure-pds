@@ -1,5 +1,13 @@
 const $ = id => document.getElementById(id);
-let state = {}, busy = false, passkeysAvailable = false;
+let state = {}, busy = false, passkeysAvailable = false, signupMode = false, signupEnabled = false, userDomain = '';
+const flowId = location.pathname.match(/^\/oauth\/flow\/([A-Za-z0-9_-]{43})$/)?.[1];
+let flow = null;
+const scopeLabels = {
+  atproto: 'Confirm your account identity.',
+  'transition:generic': 'Create, change, and delete public records; upload media; access preferences and app services.',
+  'transition:email': 'Read your email address.',
+  'transition:chat.bsky': 'Read and send your private Bluesky chat messages.',
+};
 const messages = {
   AuthenticationRequired: 'That account or password was not recognized.',
   InvalidPasskey: 'The passkey could not be verified. Please try again.',
@@ -10,13 +18,34 @@ const messages = {
 function notice(message) { $('notice').textContent = message; $('notice').hidden = !message; }
 function render(next) {
   state = next;
+  if ('signup-enabled' in next) signupEnabled = next['signup-enabled'];
+  if (next['user-domain']) userDomain = next['user-domain'];
+  if ('invite-required' in next) $('signup-invite').required = next['invite-required'];
+  $('signup-invite-title').textContent = $('signup-invite').required ? 'Invite code' : 'Invite code (optional)';
+  $('signup-domain').textContent = userDomain ? `Your handle will be username.${userDomain}` : '';
+  $('show-signup').hidden = !signupEnabled;
+  $('signup-unavailable').hidden = signupEnabled;
+  $('signup-form').hidden = !signupEnabled;
+  let screen = next.stage === 'authenticated' ? (flowId ? 'oauth-account' : 'settings') : next.stage;
+  if (signupMode) screen = 'signup';
+  if (flow?.did) screen = 'consent';
   if ('passkeys-available' in next) passkeysAvailable = next['passkeys-available'];
   if (next.origin) { $('server-origin').textContent = next.origin; $('server-name').textContent = `${new URL(next.origin).hostname} PDS`; }
-  document.body.dataset.stage = next.stage;
-  for (const stage of ['login', 'factor', 'settings']) $(stage).hidden = stage !== (next.stage === 'authenticated' ? 'settings' : next.stage);
+  document.body.dataset.stage = screen === 'settings' ? 'authenticated' : screen;
+  for (const stage of ['login', 'factor', 'settings', 'signup', 'oauth-account', 'consent']) $(stage).hidden = stage !== screen;
   $('logout').hidden = next.stage === 'login';
+  $('oauth-cancel').hidden = !flowId || !!flow?.did;
   $('heading').textContent = next.stage === 'authenticated' ? 'Account security' : next.stage === 'factor' ? 'Verify it’s you' : 'Sign in';
   $('subtitle').textContent = next.handle ? next.handle : 'Enter your username and password';
+  if (screen === 'signup') { $('heading').textContent = 'Create your account'; $('subtitle').textContent = 'Choose your username and password'; }
+  if (screen === 'oauth-account') { $('heading').textContent = 'Continue with your account'; $('oauth-continue').textContent = flow.parameters.prompt === 'login' ? 'Sign in again' : `Continue as ${next.handle}`; }
+  if (screen === 'consent') {
+    $('heading').textContent = 'Authorize application'; $('subtitle').textContent = 'Review the access you are granting';
+    $('oauth-client').textContent = flow['client-id']; $('oauth-did').textContent = flow.did;
+    $('oauth-scopes').replaceChildren(...flow.parameters.scope.split(' ').map(scope => { const li = document.createElement('li'); li.textContent = scopeLabels[scope] || scope; return li; }));
+  }
+  document.title = `${$('heading').textContent} · ${$('server-name').textContent}`;
+  if (flowId) $('session-note').textContent = 'Authorization requests expire after ten minutes';
   $('factor-help').textContent = next.factor === 'totp' ? 'Enter a code from your authenticator app, or one of your saved recovery codes.' : 'Enter the sign-in token sent to your email.';
   $('passkey-login').disabled = !passkeysAvailable || !window.PublicKeyCredential;
   $('passkey-form').hidden = !passkeysAvailable || !window.PublicKeyCredential;
@@ -79,13 +108,34 @@ $('password-visibility').addEventListener('click', () => {
   $('password-visibility').setAttribute('aria-pressed', String(visible));
   $('password-visibility').setAttribute('aria-label', visible ? 'Hide password' : 'Show password');
 });
-form('password-form', fields => action('login/password', fields));
-form('factor-form', fields => action('login/factor', fields));
+async function flowAction(action, body) {
+  const response = await fetch(`/oauth/flow/${flowId}/${action}`, {method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json', 'X-CSRF-Token': flow.csrf}, body: JSON.stringify(body)});
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || 'Authorization could not be completed. Restart from your application.');
+  return data;
+}
+async function finishLogin() {
+  if (flowId && state.stage === 'authenticated' && !flow.did) { flow = await flowAction('attach', {accountCsrf: state.csrf}); render(state); }
+}
+async function chooseOther() { await action('logout'); signupMode = false; await load(); }
+$('show-signup').addEventListener('click', () => { signupMode = true; render(state); notice(''); });
+$('show-login').addEventListener('click', () => { signupMode = false; render(state); notice(''); });
+$('oauth-other').addEventListener('click', () => run(chooseOther));
+$('oauth-continue').addEventListener('click', () => run(flow.parameters.prompt === 'login' ? chooseOther : finishLogin));
+for (const [id, approve] of [['oauth-approve', true], ['oauth-deny', false], ['oauth-cancel', false]]) $(id).addEventListener('click', () => run(async () => { const result = await flowAction('decide', {approve}); location.assign(result.location); }));
+form('signup-form', async fields => {
+  if (state.stage !== 'login') { await action('logout'); await load(); }
+  const body = {handle: `${fields.username.toLowerCase()}.${userDomain}`, email: fields.email, password: fields.password};
+  if (fields.inviteCode) body.inviteCode = fields.inviteCode;
+  await action('signup', body); signupMode = false; $('signup-form').reset(); render(state); await finishLogin();
+});
+form('password-form', async fields => { await action('login/password', fields); await finishLogin(); });
+form('factor-form', async fields => { await action('login/factor', fields); await finishLogin(); });
 $('passkey-login').addEventListener('click', () => run(async () => {
   if (!$('identifier').reportValidity()) return;
   const started = await action('login/passkey/begin', {identifier: $('identifier').value});
   const credential = await navigator.credentials.get(options(started.options, false));
-  await action('login/passkey/finish', {id: started.id, response: credentialJSON(credential)});
+  await action('login/passkey/finish', {id: started.id, response: credentialJSON(credential)}); await finishLogin();
 }));
 form('passkey-form', async fields => {
   const started = await action('passkeys/begin', fields);
@@ -99,4 +149,13 @@ $('email-disable').addEventListener('click', () => run(async () => { if (confirm
 $('recovery-saved').addEventListener('click', () => { $('recovery-codes').textContent = ''; $('recovery').hidden = true; notice('Recovery codes hidden. Keep your saved copy safe.'); });
 $('logout').addEventListener('click', () => run(async () => { await action('logout'); location.replace('/account'); }));
 window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
-await run(load);
+await run(async () => {
+  if (flowId) {
+    const response = await fetch(`/oauth/flow/${flowId}/state`, {credentials: 'same-origin', cache: 'no-store'});
+    flow = await response.json();
+    if (!response.ok) throw new Error(flow.message || 'Restart authorization from your application.');
+    signupMode = !flow.did && flow.parameters.prompt === 'create';
+  }
+  await load();
+  if (flow?.parameters.login_hint && state.stage === 'login') $('identifier').value = flow.parameters.login_hint;
+});

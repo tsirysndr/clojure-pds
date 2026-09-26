@@ -1,6 +1,8 @@
 # Optional account authentication
 
-Optional authenticator-app TOTP and passkeys can be managed at `/account`.
+Accounts can be created and optional authenticator-app TOTP and passkeys managed
+at `/account`. Signup is shown only when `PDS_ENABLE_SIGNUP=true`, and respects
+`PDS_REQUIRE_INVITE_CODE`.
 The login, verification and settings screens use locally compiled Tailwind CSS,
 with the compact card layout of the selfhosted.social and Witchcraft PDS OAuth
 screens, a purple `#8338EC` accent, and system light/dark colors.
@@ -117,7 +119,8 @@ public origin, JSON, and a session-bound CSRF token. Responses disallow caching,
 framing and external scripts/styles. Private state is never saved in localStorage.
 Invalid TOTP attempts and invalid passkey proofs commit their attempt/replay state.
 
-The browser supports password and identifier-first passkey login, passkey naming,
+The browser supports account creation without legacy bearer tokens, password and
+identifier-first passkey login, passkey naming,
 registration and removal, manual authenticator setup, confirmation, one-time
 recovery-code display, authenticator removal and switching away from email 2FA.
 Registration requests user verification and discoverable credentials. Password
@@ -146,7 +149,8 @@ No CDN or React runtime is required. Visual references:
 
 ## Remaining work
 
-- OAuth authorization/consent integration and complete browser ceremony tests.
+- Mounting the implemented OAuth authorization/consent adapter with complete
+  resource authentication; full browser ceremony tests.
 - Username-less discoverable login, QR provisioning, and recovery when all
   authenticators and recovery codes are lost.
 

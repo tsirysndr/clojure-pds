@@ -13,7 +13,8 @@
             [pds.oauth.http :as http]
             [pds.oauth.par :as par]
             [pds.protocol.codec :as codec]
-            [pds.security.factors :as factors])
+            [pds.security.factors :as factors]
+            [pds.security.browser :as browser-session])
   (:import [java.net URLEncoder]
            [java.security MessageDigest]
            [java.time Instant]))
@@ -110,6 +111,29 @@
               (db/execute! conn "UPDATE oauth_interactions SET did = ?, account_epoch = ?, csrf_nonce = ? WHERE interaction_hash = ?"
                            (:did account) (:oauth_epoch account) (crypto/token) (:interaction_hash row))
               (view (load! conn id browser false) browser))))))))
+
+(defn authenticate-browser!
+  "Bind a recent owner session to this interaction. Both independent CSRF tokens
+  are required. Consent remains a separate operation with a rotated flow CSRF."
+  [ds id browser csrf-token account-token account-csrf]
+  (db/transact! ds
+    (fn [conn]
+      (let [row (load! conn id browser true)
+            _ (check-csrf! row browser csrf-token)
+            _ (when (:did row) (invalid!))
+            owner (browser-session/owner! conn account-token account-csrf)
+            account (first (db/query conn "SELECT * FROM accounts WHERE did = ?" (:did owner)))
+            request (snapshot row)]
+        (when-not (hint-matches? request account)
+          (http/fail! "access_denied" "Sign in with the account requested by this application"))
+        (when (and (= "login" (get-in request [:parameters "prompt"]))
+                   (.isBefore (.toInstant ^java.sql.Timestamp (:authenticated-at owner))
+                              (.toInstant ^java.sql.Timestamp (:created_at row))))
+          (http/fail! "login_required" "Sign in again to continue"))
+        (live! row)
+        (db/execute! conn "UPDATE oauth_interactions SET did = ?, account_epoch = ?, csrf_nonce = ? WHERE interaction_hash = ?"
+                     (:did owner) (:account-epoch owner) (crypto/token) (:interaction_hash row))
+        (view (load! conn id browser false) browser)))))
 
 (defn- callback [settings request result]
   ;; Append to the original registered URI without reserializing its path/query.
