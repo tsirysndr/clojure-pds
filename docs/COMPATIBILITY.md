@@ -294,8 +294,10 @@ External service interoperability and OAuth remain pending.
 2. Bounded identity caching,
    signing/rotation key lifecycle, conflicted-operation administration, and migration.
 3. Remaining administrative APIs, record/blob takedowns, and broader account recovery controls.
-4. OAuth authorization server: metadata, PAR, PKCE, DPoP, client metadata/consent,
-   refresh behavior, permission sets and scopes.
+4. OAuth authorization server: metadata, PAR, PKCE, client metadata/consent,
+   refresh behavior, permission sets and scopes. [DPoP verification and persistent
+   replay tracking](OAUTH.md) are implemented as foundations; OAuth routes and
+   resource-server authentication are not enabled yet.
 5. Relay notification and external relay interoperability,
    event retention/compaction, and remaining record/blob takedown semantics.
 6. Remaining migration private-state APIs, streaming proxy transfers, and external

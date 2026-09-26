@@ -32,7 +32,7 @@ runnable and update this document as features land.
    refresh rotation/revocation, app passwords, invites, email verification/reset,
    account activation/deactivation/deletion and administrative authorization.
    Acceptance: expiry, replay, cross-account authorization and restart tests.
-7. **OAuth:** authorization-server metadata, PAR, PKCE, DPoP, client metadata,
+7. **OAuth (DPoP verification and durable replay foundation implemented):** authorization-server metadata, PAR, PKCE, DPoP, client metadata,
    consent, token binding and scoped permissions. Acceptance: reference clients
    complete login and invalid/replayed proofs fail.
 8. **Blob APIs (buffered transfer, references, missing/since listing and temporary/reference cleanup implemented):** streaming upload/download, limits, ownership, record references,
@@ -59,8 +59,9 @@ rotating sessions, scoped app passwords, email recovery, schema-validated record
 implemented. See [the compatibility matrix](COMPATIBILITY.md) for exact coverage,
 verification evidence, and limits. Full PDS compatibility is not achieved yet.
 
-Next implementation series: identity/key lifecycle, migration,
-then extend dynamic Lexicon resolution and administration, and relay conformance.
+Next implementation series: [OAuth authorization and resource-server integration](OAUTH.md),
+then remaining identity/key lifecycle, migration, dynamic Lexicon resolution,
+administration, and relay conformance.
 Implemented endpoints now have pinned input validation and observed output/event
 schema checks with required endpoint/message coverage. Authenticated buffered
 service proxying is implemented; OAuth and external service interoperability
