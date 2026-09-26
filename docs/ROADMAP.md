@@ -14,31 +14,31 @@ runnable and update this document as features land.
    configuration, HTTP lifecycle, XRPC errors, health and server discovery.
    Acceptance: start locally, query discovery, reject invalid configuration,
    test responses over a real socket, and shut down cleanly.
-2. **Protocol primitives:** NSID, handle, DID, AT URI, record key and TID validation;
+2. **Protocol primitives (implemented; conformance expansion ongoing):** NSID, handle, DID, AT URI, record key and TID validation;
    canonical DRISL/DAG-CBOR encoding, CID, CAR, supported signing algorithms.
    Acceptance: upstream valid/invalid fixtures, deterministic encoding and
    cryptographic vectors. Do not substitute JSON hashes for repository CIDs.
 3. **Durable storage (in progress):** PostgreSQL migrations, transactions, account metadata, key
    storage, content-addressed blocks and blobs, restart/recovery tests.
-4. **Repositories:** deterministic Merkle Search Tree, signed version-3 commits,
+4. **Repositories (core implemented; import/performance pending):** deterministic Merkle Search Tree, signed version-3 commits,
    atomic writes with swap checks, record CRUD, pagination, repository description,
    CAR import/export. Acceptance: reference implementation verifies our exports
    and we verify its exports, including deletion and concurrent writes.
-5. **Identity and accounts:** DNS/HTTPS handle resolution, did:plc/did:web resolution,
+5. **Identity and accounts (hosted did:web implemented):** DNS/HTTPS handle resolution, did:plc/did:web resolution,
    account provisioning, DID document publication, handle updates and key rotation.
    Acceptance: persisted identities resolve from a separate process; remote fetches
    have bounded sizes/timeouts and protection against SSRF.
-6. **Sessions and account lifecycle:** password hashing, access/refresh tokens,
+6. **Sessions and account lifecycle (sessions/email recovery implemented):** password hashing, access/refresh tokens,
    refresh rotation/revocation, app passwords, invites, email verification/reset,
    account activation/deactivation/deletion and administrative authorization.
    Acceptance: expiry, replay, cross-account authorization and restart tests.
 7. **OAuth:** authorization-server metadata, PAR, PKCE, DPoP, client metadata,
    consent, token binding and scoped permissions. Acceptance: reference clients
    complete login and invalid/replayed proofs fail.
-8. **Blob APIs:** streaming upload/download, limits, ownership, record references,
+8. **Blob APIs (buffered upload/download implemented):** streaming upload/download, limits, ownership, record references,
    list/missing blobs and garbage collection. Acceptance: binary round trips,
    interrupted upload cleanup and no cross-account access leaks.
-9. **Sync and federation:** durable ordered event log, sync queries, WebSocket
+9. **Sync and federation (query/export subset implemented):** durable ordered event log, sync queries, WebSocket
    subscribeRepos with replay/backpressure, relay notification and takedowns.
    Acceptance: relay consumes commits and reconnects without losing events.
 10. **Service integration and migration:** authenticated service proxy, service
@@ -52,10 +52,16 @@ runnable and update this document as features land.
 
 ## Architecture decisions
 
-Current checkpoint: foundation complete, JDK pinned with mise, health and
-`com.atproto.server.describeServer` available. Next commit series: protocol
-identifier validation with pinned upstream fixtures, followed by binary codecs.
-All other protocol milestones remain unimplemented.
+Current checkpoint: PostgreSQL persistence, configurable Cloudflare Worker email,
+protocol codecs/identifiers, signed repositories, hosted did:web accounts,
+rotating sessions, email recovery, record APIs, CAR exports, and blobs are
+implemented. See [the compatibility matrix](COMPATIBILITY.md) for exact coverage,
+verification evidence, and limits. Full PDS compatibility is not achieved yet.
+
+Next implementation series: complete Lexicon validation and hosted account
+lifecycle, remote identity/PLC, then streaming sync and relay conformance. OAuth
+and service proxying remain required before a full client integration can be
+claimed. Preserve atomic feature commits and test each protocol boundary.
 
 - Plain Clojure namespaces, explicit dependencies, and pure functions for protocol
   logic; isolate network, clock, randomness and persistence at the edges.
@@ -71,8 +77,9 @@ All other protocol milestones remain unimplemented.
 
 ## Primary references
 
-Consulted 2026-09-26; upstream main/spec pages are moving targets. Pin upstream
-fixtures and lexicons to a revision when importing them in milestone 2.
+Consulted 2026-09-26; upstream main/spec pages are moving targets. Imported
+fixtures are pinned in `test/fixtures/README.md`; endpoint reference revision is
+recorded in `COMPATIBILITY.md`.
 
 - [Protocol overview](https://atproto.com/guides/overview)
 - [XRPC](https://atproto.com/specs/xrpc)
