@@ -27,10 +27,15 @@
               download (api/xrpc client port "GET" (str "com.atproto.sync.getBlob?did=" (:did alice) "&cid=" cid) nil nil)
               body {"repo" (:did alice) "collection" "com.example.file" "rkey" "one"
                     "record" {"$type" "com.example.file" "file" blob}}]
-          (is (= 200 (.statusCode response) (:status download)))
-          (is (= (vec bytes) (vec (:raw download))))
+          (is (= 200 (.statusCode response)))
+          (is (= 400 (:status download)) "Temporary uploads are private")
           (is (= 400 (:status (api/xrpc client port "GET" (str "com.atproto.sync.getBlob?did=" (:did bob) "&cid=" cid) nil nil))))
           (is (= 200 (:status (api/xrpc client port "POST" "com.atproto.repo.createRecord" body (:accessJwt alice)))))
+          (is (= (vec bytes) (vec (:raw (api/xrpc client port "GET" (str "com.atproto.sync.getBlob?did=" (:did alice) "&cid=" cid) nil nil)))))
+          (let [read-request (-> (HttpRequest/newBuilder (URI/create (str "http://127.0.0.1:" port "/xrpc/com.atproto.sync.getBlob?did=" (:did alice) "&cid=" cid))) .GET .build)
+                read-response (.send client read-request (HttpResponse$BodyHandlers/ofByteArray))]
+            (is (= "default-src 'none'; sandbox" (.orElse (.firstValue (.headers read-response) "Content-Security-Policy") "")))
+            (is (= (str (alength bytes)) (.orElse (.firstValue (.headers read-response) "Content-Length") ""))))
           (is (= 400 (:status (api/xrpc client port "POST" "com.atproto.repo.createRecord" (assoc body "repo" (:did bob)) (:accessJwt bob)))))
           (is (= [cid] (get-in (api/xrpc client port "GET" (str "com.atproto.sync.listBlobs?did=" (:did alice)) nil nil) [:body "cids"])))))
       (finally ((:stop! server))))))

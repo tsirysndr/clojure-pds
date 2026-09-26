@@ -4,6 +4,7 @@
             [pds.auth :as auth]
             [pds.block-index :as block-index]
             [pds.blob-refs :as blob-refs]
+            [pds.blobs :as blobs]
             [pds.db :as db]
             [pds.errors :as errors]
             [pds.events :as events]
@@ -45,7 +46,8 @@
         (db/transact! ds
           (fn [conn]
             (let [current (snapshot! conn settings request)
-                  account (:account current) did (:did account)]
+                  account (:account current) did (:did account)
+                  old-blobs (mapv :cid (db/query conn "SELECT DISTINCT cid FROM record_blob_refs WHERE did = ?" did))]
               (when-not (= (version snapshot) (version current))
                 (errors/raise! 409 "InvalidSwap" "Account or repository changed during import; retry with its current state"))
               ;; Only verified reachable blocks gain ownership. Unrelated CAR
@@ -64,6 +66,7 @@
                                                             :rev (last (sort [(:rev (:repo current)) (:rev verified)]))))]
                 (repo/stamp-records! conn did (:rev commit)))
               (db/execute! conn "UPDATE account_imports SET repository_imported = true WHERE did = ?" did)
+              (blobs/remove-unreferenced! conn did old-blobs)
               (when (= "active" (:status account)) (events/sync! conn did))
               nil))))
       (finally (.release permits)))))

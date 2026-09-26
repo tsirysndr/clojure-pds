@@ -44,8 +44,8 @@
                   blob (get-in response [:body "blob"]) cid (get-in blob ["ref" "$link"])
                   get-path (str "com.atproto.sync.getBlob?did=" (:did alice) "&cid=" cid)
                   download (api/xrpc client port "GET" get-path nil nil)]
-              (is (= 200 (:status response) (:status download)))
-              (is (= (vec data) (vec (:raw download))))
+              (is (= 200 (:status response)))
+              (is (= 400 (:status download)) "Temporary S3 uploads are private")
               (is (= blob (get-in (upload client port (:accessJwt alice) data "text/plain") [:body "blob"])))
               (is (= 400 (:status (api/xrpc client port "GET" (str "com.atproto.sync.getBlob?did=" (:did bob) "&cid=" cid) nil nil))))
               (is (= [] (get-in (api/xrpc client port "GET" (str "com.atproto.sync.listBlobs?did=" (:did alice)) nil nil) [:body "cids"])))
@@ -54,6 +54,7 @@
                                            "record" {"$type" "app.bsky.actor.profile" "avatar" blob}}
                                           (:accessJwt alice)))))
               (is (= [cid] (get-in (api/xrpc client port "GET" (str "com.atproto.sync.listBlobs?did=" (:did alice)) nil nil) [:body "cids"])))
+              (is (= (vec data) (vec (:raw (api/xrpc client port "GET" get-path nil nil)))))
               (with-open [conn (db/connection fixture/*ds*)]
                 (let [row (first (db/query conn "SELECT * FROM blobs WHERE did = ? AND cid = ?" (:did alice) cid))]
                   (is (= "s3" (:storage_backend row))) (is (nil? (:content row))) (is (= 6 (:size row)))

@@ -61,7 +61,7 @@
                  "011-account-takedowns.sql" "012-repository-block-ownership.sql" "013-event-payloads.sql"
                  "014-plc-provisioning.sql" "015-handle-updates.sql" "016-plc-signing-tokens.sql"
                  "017-plc-submissions.sql" "018-service-token-replay.sql" "019-account-imports.sql"
-                 "020-record-blob-references.sql" "021-record-revisions.sql"])
+                 "020-record-blob-references.sql" "021-record-revisions.sql" "022-blob-lifecycle.sql"])
 
 (defn migrate! [ds]
   (transact!

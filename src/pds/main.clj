@@ -25,6 +25,7 @@
                         (admin/settings (System/getenv)) (invites/settings (System/getenv))
                         (firehose/settings (System/getenv))
                         (identity/settings (System/getenv))
+                        (blob-cleanup/settings (System/getenv))
                         (auth/settings (System/getenv)) {:email-enabled (boolean email-config)})
         ds (db/datasource (db/settings))
         _ (db/migrate! ds)
@@ -47,7 +48,7 @@
                                                  (finally (.close ^java.io.Closeable http-client))))))]
     (try
       (let [stop-email! (email/start! ds email-config)
-            stop-cleanup! (try (blob-cleanup/start! ds blob-store)
+            stop-cleanup! (try (blob-cleanup/start! ds blob-store settings)
                                (catch Throwable t (stop-email!) (throw t)))
             stop-provision! (try (provision/start! #(do (accounts/provision-one! ds settings nil)
                                                        (handles/process-one! ds settings nil)))

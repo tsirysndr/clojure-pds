@@ -2,6 +2,7 @@
   (:require [pds.crypto :as crypto]
             [pds.block-index :as block-index]
             [pds.blob-refs :as blob-refs]
+            [pds.blobs :as blobs]
             [pds.db :as db]
             [pds.errors :as errors]
             [pds.events :as events]
@@ -86,7 +87,7 @@
     (when (and swap-commit (not= swap-commit (:head repo)))
       (errors/raise! 400 "InvalidSwap" "Repository commit has changed"))
     (when-not (and (vector? writes) (<= 1 (count writes) 200)) (errors/invalid! "Expected 1 to 200 writes"))
-    (let [seen (atom #{}) ops (atom [])
+    (let [seen (atom #{}) ops (atom []) old-blobs (atom #{})
           results
           (mapv
            (fn [{:keys [action collection rkey value validate swap-record swap-record?]}]
@@ -96,6 +97,7 @@
                    old (first (db/query conn "SELECT cid FROM records WHERE did = ? AND collection = ? AND rkey = ?" did collection rkey))]
                (when (@seen path) (errors/invalid! "Duplicate record path in batch"))
                (swap! seen conj path)
+               (swap! old-blobs into (map :cid (db/query conn "SELECT cid FROM record_blob_refs WHERE did = ? AND collection = ? AND rkey = ?" did collection rkey)))
                (when (and swap-record? (not= swap-record (:cid old)))
                  (errors/raise! 400 "InvalidSwap" "Record has changed"))
                (when (and (= action :create) old) (errors/raise! 400 "RecordAlreadyExists" "Record already exists"))
@@ -121,6 +123,7 @@
                  (errors/invalid! "Unknown write operation")))) writes)
           commit (commit! conn settings repo @ops)]
       (stamp-records! conn did (:rev commit))
+      (blobs/remove-unreferenced! conn did @old-blobs)
       {:commit commit :results results})))
 
 (defn record [conn did collection rkey]

@@ -234,6 +234,17 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
   references. Migration assigns old records their current repository revision as
   a conservative baseline without rewriting signed content; earlier per-record
   history cannot be recovered from that metadata alone.
+- Temporary uploads are hidden from public download until referenced. Final-reference
+  removal and full repository replacement remove unused blob metadata atomically;
+  batched record moves preserve shared content. Expired temporary uploads use a
+  configurable 1-hour–30-day grace period (24-hour default), with 50-blob sweeps.
+  PostgreSQL bytes disappear transactionally; S3 uses durable retry jobs. Workers
+  use shared blob locks without waiting on lock-order inversions and preserve
+  locators still in use. New S3 PUTs use unique generation keys to isolate late
+  remote DELETEs after timeouts. Tests cover rollback, renewal, batch bounds,
+  overlapping upload/deletion, real Moto removal and delayed deletion isolation.
+  Downloads include a sandbox CSP and explicit content length. Failed-commit S3
+  orphans and physical historical-block reclamation remain pending.
 - A child-JVM test runs `pds.main`, checks HTTP health, and verifies graceful shutdown,
   including optional S3/Redis clients when the combined suite enables them.
 - Rate limiting defaults to bounded in-memory counters. Optional Redis uses atomic
@@ -253,7 +264,7 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
    event retention/compaction, and remaining record/blob takedown semantics.
 6. Migration status/private-state APIs, authenticated proxying to AppViews/labelers, and external
    client/relay end-to-end tests.
-7. Streaming repository import, blob garbage collection,
+7. Streaming repository import, S3 orphan and historical-block reclamation,
    incremental MST mutation, streaming, quotas and bulk blob-backend migration.
 8. PostgreSQL connection pooling, account-specific abuse controls, metrics/logging, CORS,
    operational deployment/TLS and backup/restore drills. Push CI is configured;

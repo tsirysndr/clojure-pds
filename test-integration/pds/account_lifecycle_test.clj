@@ -98,6 +98,10 @@
                 (get-object! [_ _ _ _] data))
         stored (db/transact! fixture/*ds* #(blobs/store! % {:blob-store store} did data "image/png"))
         _ (db/transact! fixture/*ds* #(blobs/store! % {} (:did bob) data "image/png"))
+        _ (db/transact! fixture/*ds*
+            #(repo/apply-writes! % settings (:did bob)
+               [{:action :create :collection "com.example.file" :rkey "one"
+                 :value {"$type" "com.example.file" "file" {"$type" "blob" "ref" {"$link" (:cid stored)} "mimeType" "image/png" "size" 3}}}] nil))
         server (http/start! settings (app/handler settings fixture/*ds*)) port (:port server)]
     (try
       (with-open [client (HttpClient/newHttpClient)]

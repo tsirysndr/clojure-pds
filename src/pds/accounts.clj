@@ -271,9 +271,11 @@
           (when (seq (db/query conn "SELECT 1 FROM handle_updates WHERE did = ?" did))
             (errors/raise! 409 "IdentityUpdatePending" "Finish the pending identity update before deleting this account"))
           (db/execute! conn "UPDATE handle_reservations SET permanent = true WHERE did = ?" did)
-          (db/execute! conn "INSERT INTO blob_delete_jobs(object_bucket, object_key)
-                            SELECT object_bucket, object_key FROM blobs WHERE did = ? AND storage_backend = 's3'
-                            ON CONFLICT (object_bucket, object_key) DO NOTHING" did)
+          (db/execute! conn "INSERT INTO blob_delete_jobs(did, cid, object_bucket, object_key)
+                            SELECT did, cid, object_bucket, object_key FROM blobs WHERE did = ? AND storage_backend = 's3'
+                            ON CONFLICT (object_bucket, object_key) DO UPDATE
+                            SET did = excluded.did, cid = excluded.cid, status = 'pending', attempts = 0,
+                                available_at = now(), last_error = NULL" did)
           (doseq [table ["sessions" "app_passwords" "account_tokens" "blobs" "account_imports" "plc_identities" "repositories"]]
             (db/execute! conn (str "DELETE FROM " table " WHERE did = ?") did))
           (db/execute! conn "DELETE FROM email_outbox WHERE payload->>'to' = ?" (:email account))

@@ -4,6 +4,7 @@
             [pds.protocol.codec :as codec])
   (:import [java.net URI]
            [java.time Duration]
+           [java.util UUID]
            [software.amazon.awssdk.auth.credentials AwsBasicCredentials AwsSessionCredentials AwsCredentialsProvider
             DefaultCredentialsProvider StaticCredentialsProvider]
            [software.amazon.awssdk.core.client.config ClientOverrideConfiguration]
@@ -59,7 +60,9 @@
 (defrecord S3Store [^S3Client client credentials bucket prefix]
   blobs/ObjectStore
   (put-object! [_ did cid content mime-type]
-    (let [key (object-key prefix did cid)
+    ;; A DELETE whose response timed out may still finish remotely. Never reuse
+    ;; its target for a later upload, even when the bytes/CID are identical.
+    (let [key (str (object-key prefix did cid) "/" (UUID/randomUUID))
           request (-> (PutObjectRequest/builder) (.bucket bucket) (.key key)
                       (.contentType mime-type) .build)]
       (.putObject client ^PutObjectRequest request (RequestBody/fromBytes content))

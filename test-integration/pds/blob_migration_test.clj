@@ -58,10 +58,10 @@
           (is (= 400 (:status (api/xrpc client (:port server) "GET" (str "com.atproto.sync.getBlob?did=" did "&cid=" a-cid) nil nil))))
           (is (= 0 (scalar "SELECT count(*) AS n FROM repo_events")))
           ;; Replacing the imported repository removes references atomically;
-          ;; separately transferred blob bytes are retained for later GC.
+          ;; blobs lose their final references and are removed too.
           (is (= 200 (:status (handler (imports/import-request (:accessJwt account) (:car (imports/repo-car did (:key source) {})))))))
           (is (= 0 (scalar "SELECT count(*) AS n FROM record_blob_refs")))
-          (is (= 2 (scalar "SELECT count(*) AS n FROM blobs")))))
+          (is (= 0 (scalar "SELECT count(*) AS n FROM blobs")))))
       (finally ((:stop! server))))))
 
 (deftest postgres-inactive-blob-transfer (transfer! (api/settings)))
@@ -92,6 +92,7 @@
     (is (= 1 (scalar "SELECT count(*) AS n FROM record_blob_refs")))
     (db/transact! fixture/*ds* #(repo/apply-writes! % settings did [(assoc write :value {"$type" "com.example.file"})] nil))
     (is (= 0 (scalar "SELECT count(*) AS n FROM record_blob_refs")))
+    (db/transact! fixture/*ds* #(blobs/store! % settings did bytes "image/png"))
     (db/transact! fixture/*ds* #(repo/apply-writes! % settings did [write] nil))
     (db/transact! fixture/*ds* #(repo/apply-writes! % settings did [(assoc write :action :delete)] nil))
     (is (= 0 (scalar "SELECT count(*) AS n FROM record_blob_refs")))))

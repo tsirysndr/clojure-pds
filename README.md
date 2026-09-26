@@ -357,7 +357,7 @@ a duplicate. Receipts are retained indefinitely; plan retention for larger syste
 - MSTs match upstream root fixtures but are rebuilt per commit, O(n). Large repos
   need incremental updates. Historical blocks are retained; exports contain the
   current graph. CAR imports are buffered and replace the full current record set;
-  streaming import and garbage collection are unfinished.
+  streaming import and historical repository-block garbage collection are unfinished.
 - Commit events persist signed CAR proofs and previous-value operations for
   inductive verification. Records are limited to 1,000,000 encoded bytes and
   commit proofs to 2,000,000 bytes; oversized batches roll back. The upstream
@@ -374,8 +374,15 @@ a duplicate. Receipts are retained indefinitely; plan retention for larger syste
   upgrades. The replay window currently limits queries, not physical event retention.
 - Blob uploads are buffered and capped at 5 MiB. Bytes use PostgreSQL `bytea` by
   default or a [configurable S3-compatible backend](docs/S3.md). PostgreSQL always
-  holds ownership and metadata. Streaming, MIME sniffing, and unreferenced-blob
-  cleanup are unfinished.
+  holds ownership and metadata. Temporary uploads are private until referenced;
+  re-uploading them renews their grace period. `PDS_BLOB_TEMP_TTL_SECONDS` defaults
+  to 86400 (24 hours), with an allowed range of 3600–2592000 seconds. A worker checks
+  once per minute, collecting at most 50 expired unreferenced blobs from one account.
+  Losing the final current record reference removes blob metadata in that record
+  transaction. PostgreSQL bytes are removed immediately; S3 locators enter the
+  durable deletion queue. Fresh S3 uploads use unique object keys so a delayed
+  deletion cannot erase a later upload with the same CID. Streaming, MIME sniffing,
+  and discovering S3 orphans left by failed metadata commits remain unfinished.
 - Rate limits default to bounded, per-process memory with 120 requests/IP/minute.
   [Optional Redis](docs/REDIS.md) shares counters across instances. Untrusted
   forwarding headers are ignored; reverse proxies need an appropriate limit policy.

@@ -43,9 +43,12 @@
         (with-open [conn (db/connection ds)]
           (let [account (accounts/resolve-account conn (get params "did"))
                 id (repo-api/cid! (get params "cid"))
+                _ (when-not (blobs/referenced? conn (:did account) id)
+                    (errors/raise! 400 "BlobNotFound" "Blob was not found"))
                 blob (blobs/read! conn settings (:did account) id)]
             {:status 200
              :headers {"Content-Type" (:mime_type blob) "X-Content-Type-Options" "nosniff"
+                       "Content-Length" (str (:size blob)) "Content-Security-Policy" "default-src 'none'; sandbox"
                        "Content-Disposition" "attachment"}
              :body (:content blob)}))))}
    "/xrpc/com.atproto.sync.listBlobs"
