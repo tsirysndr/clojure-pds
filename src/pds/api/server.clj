@@ -71,4 +71,4 @@
                         :service [{:id "#atproto_pds" :type "AtprotoPersonalDataServer" :serviceEndpoint (:public-url settings)}]}
                        (let [account (accounts/resolve-identity conn host)
                              repo (first (db/query conn "SELECT public_key FROM repositories WHERE did = ?" (:did account)))]
-                         (accounts/did-document settings account (:public_key repo))))))))})
+                         (accounts/did-document conn settings account (:public_key repo))))))))})

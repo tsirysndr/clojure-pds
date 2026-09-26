@@ -13,7 +13,7 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | Namespace | Methods | Scope |
 | --- | --- | --- |
 | `com.atproto.server` | `describeServer` | Service DID, hosted suffix when signup is open, blob limit |
-| `com.atproto.server` | `createAccount` | New hosted did:web accounts; optional transactional invitation gate; no PLC, imports, or phone verification |
+| `com.atproto.server` | `createAccount` | Configurable did:web or did:plc signup, optional recovery key, durable directory confirmation and transactional invitations; no imports or phone verification |
 | `com.atproto.server` | `createInviteCode`, `createInviteCodes`, `getAccountInviteCodes` | Admin-issued codes, bounded batches, account listing and concurrent redemption limits; no automatic grants |
 | `com.atproto.admin` | `disableInviteCodes`, `disableAccountInvites`, `enableAccountInvites` | Optional Basic admin credentials; code invalidation and future-grant policy |
 | `com.atproto.admin` | `getAccountInfo`, `getSubjectStatus`, `updateSubjectStatus` | Private account inspection and repoRef account takedowns; activation state preserved; record/blob subjects pending |
@@ -50,8 +50,8 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
   certificate/hostname verification. PostgreSQL/HTTP tests cover hosted, remote,
   deleted and service identities. Resolution uses no application cache yet;
   `refreshIdentity` fetches fresh data. PLC directory responses are trusted over
-  verified HTTPS. PLC operation and audit verification primitives are implemented
-  but are not yet wired into directory resolution/provisioning.
+  verified HTTPS. PLC provisioning verifies the signed audit log; general remote
+  resolution still trusts the directory's DID document response.
 - PLC operations use canonical DAG-CBOR, string CID links, deterministic low-S
   signatures, a 7500-byte specification bound, and strict unpadded base64url.
   Tests cover modern and legacy genesis hashes, old-key authorization of updates,
@@ -68,7 +68,17 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
   confirmed operation is not submitted again. TLS fixture tests cover dropped
   responses, server errors after acceptance, false success responses, rejected
   submissions, changed heads and malformed audits. Audit responses are limited to
-  4 MiB and 10,000 operations. This client is not yet connected to account signup.
+  4 MiB and 10,000 operations.
+- PLC signup reserves handle/email/invite use with encrypted, distinct repository
+  and rotation keys before directory submission. Lease-based workers persist
+  retries and sanitize failures. Pending accounts cannot authenticate or expose
+  repositories/identities; activation, the first signed commit, three firehose
+  events and confirmation email commit atomically after audit verification.
+  Integration tests use a TLS directory fixture and PostgreSQL to exercise normal
+  signup, recovery-key priority, local rollback after remote acceptance, worker
+  reconstruction, expired/concurrent leases, invite rollback, credential races,
+  and private-key cleanup on deletion. These tests do not register a real public
+  identity or establish full external-client/relay interoperability.
 - Canonical CBOR encoding and CID generation match upstream bytes/hashes. Decoding
   rejects noncanonical forms, invalid UTF-8, duplicate keys, floats, trailing data,
   and oversized/deep blocks. JSON request depth is bounded before parsing.
@@ -125,7 +135,7 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
 
 1. Expand the Lexicon catalog, dynamic schema resolution, and complete input/output
    validation against pinned official endpoint lexicons.
-2. did:plc provisioning, integrating PLC audit verification, bounded identity caching,
+2. Integrating PLC audit verification into general resolution, bounded identity caching,
    handle updates, signing/rotation key lifecycle, and migration.
 3. Remaining administrative APIs, record/blob takedowns, and broader account recovery controls.
 4. OAuth authorization server: metadata, PAR, PKCE, DPoP, client metadata/consent,

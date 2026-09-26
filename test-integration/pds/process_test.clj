@@ -17,6 +17,7 @@
                  "PDS_MASTER_KEY" (crypto/b64 (crypto/random-bytes 32))
                  "PDS_HOST" "127.0.0.1" "PDS_PORT" "0" "PDS_HOSTNAME" "localhost"
                  "PDS_PUBLIC_URL" "http://localhost:3000" "PDS_USER_DOMAIN" "pds.localhost"
+                 "PDS_DID_METHOD" "web" "PDS_PLC_URL" "https://plc.directory"
                  "PDS_ENABLE_SIGNUP" "false"})
     (.putAll env (if-let [endpoint (System/getenv "PDS_TEST_S3_ENDPOINT")]
                    {"PDS_BLOB_BACKEND" "s3" "PDS_S3_ENDPOINT" endpoint "PDS_S3_BUCKET" "startup-test"

@@ -46,7 +46,7 @@
           uses (:n (first (db/query conn "SELECT count(*) AS n FROM invite_uses WHERE code = ?" code)))
           owner (when invite (first (db/query conn "SELECT status FROM accounts WHERE did = ?" (:for_account invite))))]
       (when-not (and invite (not (:disabled invite)) (< uses (:available invite))
-                     (not (#{"taken_down" "deleted"} (:status owner))))
+                     (not (#{"taken_down" "deleted" "provisioning"} (:status owner))))
         (errors/raise! 400 "InvalidInviteCode" "Invite code is unavailable"))
       (db/execute! conn "INSERT INTO invite_uses(code, used_by) VALUES (?, ?)" code did))))
 

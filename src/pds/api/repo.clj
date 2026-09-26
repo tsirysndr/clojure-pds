@@ -91,7 +91,7 @@
    (query-route ds (fn [conn params]
                     (let [account (accounts/resolve-account conn (get params "repo"))
                           key (:public_key (first (db/query conn "SELECT public_key FROM repositories WHERE did = ?" (:did account))))]
-                      {:did (:did account) :handle (:handle account) :didDoc (accounts/did-document settings account key)
+                      {:did (:did account) :handle (:handle account) :didDoc (accounts/did-document conn settings account key)
                        :collections (mapv :collection (db/query conn "SELECT DISTINCT collection FROM records WHERE did = ? ORDER BY collection" (:did account)))
                        :handleIsCorrect true})))
    "/xrpc/com.atproto.sync.getLatestCommit"
@@ -104,7 +104,7 @@
                     (let [did (get params "did")
                           account (first (db/query conn "SELECT a.status, r.rev FROM accounts a LEFT JOIN repositories r ON a.did = r.did WHERE a.did = ?"
                                                    (request/string! did "did")))]
-                      (when-not account (errors/raise! 400 "RepoNotFound" "Repository was not found"))
+                      (when (or (nil? account) (= "provisioning" (:status account))) (errors/raise! 400 "RepoNotFound" "Repository was not found"))
                       (cond-> {:did did :active (= "active" (:status account))}
                         (:rev account) (assoc :rev (:rev account))
                         (not= "active" (:status account)) (assoc :status (if (= "taken_down" (:status account)) "takendown" (:status account)))))))

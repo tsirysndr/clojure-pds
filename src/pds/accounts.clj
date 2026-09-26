@@ -8,6 +8,10 @@
             [pds.errors :as errors]
             [pds.events :as events]
             [pds.invites :as invites]
+            [pds.identity :as identity]
+            [pds.plc :as plc]
+            [pds.plc-provision :as provision]
+            [pds.protocol.codec :as codec]
             [pds.protocol.formats :as formats]
             [pds.protocol.syntax :as syntax]
             [pds.repo :as repo]
@@ -19,7 +23,9 @@
   (let [domain (get env "PDS_USER_DOMAIN" (get env "PDS_HOSTNAME" "pds.localhost"))
         url (get env "PDS_PUBLIC_URL" "http://localhost:3000")
         uri (try (URI/create url) (catch Exception _ nil))
-        signup (get env "PDS_ENABLE_SIGNUP" "false")]
+        signup (get env "PDS_ENABLE_SIGNUP" "false")
+        method (get env "PDS_DID_METHOD" "web")]
+    (when-not (#{"web" "plc"} method) (throw (ex-info "PDS_DID_METHOD must be web or plc" {})))
     (when-not (syntax/handle? domain) (throw (ex-info "PDS_USER_DOMAIN must be a DNS domain" {})))
     (when-not (#{"true" "false"} signup) (throw (ex-info "PDS_ENABLE_SIGNUP must be true or false" {})))
     (when-not (and uri (.getHost uri) (nil? (.getUserInfo uri)) (nil? (.getQuery uri)) (nil? (.getFragment uri))
@@ -27,25 +33,35 @@
                    (or (= "https" (.getScheme uri))
                        (and (= "http" (.getScheme uri)) (#{"localhost" "127.0.0.1"} (.getHost uri)))))
       (throw (ex-info "PDS_PUBLIC_URL must be an HTTPS origin (loopback HTTP allowed)" {})))
-    {:user-domain (str/lower-case domain) :public-url (str/replace url #"/$" "") :signup-enabled (= "true" signup)}))
+    (when (and (= "plc" method) (or (not= "https" (.getScheme uri)) (not (identity/resolvable-handle? domain))))
+      (throw (ex-info "PLC signup requires an HTTPS public URL and a resolvable user domain" {})))
+    {:user-domain (str/lower-case domain) :public-url (str/replace url #"/$" "")
+     :signup-enabled (= "true" signup) :did-method (keyword method)}))
 
 (defn public-account [account]
   (cond-> {:did (:did account) :handle (:handle account) :email (:email account)
            :emailConfirmed (:email_confirmed account) :emailAuthFactor (boolean (:email_auth_factor account))
            :active (= "active" (:status account))}
     (not= "active" (:status account)) (assoc :status (if (= "taken_down" (:status account)) "takendown" (:status account)))))
-(defn did-document [settings account public-key]
+(defn did-document
+  ([settings account public-key]
   {:id (:did account) :alsoKnownAs [(str "at://" (:handle account))]
    :verificationMethod [{:id (str (:did account) "#atproto") :type "Multikey"
                          :controller (:did account) :publicKeyMultibase (crypto/multikey "ES256" public-key)}]
    :service [{:id (str (:did account) "#atproto_pds") :type "AtprotoPersonalDataServer"
               :serviceEndpoint (:public-url settings)}]})
+  ([conn settings account public-key]
+   (if (str/starts-with? (:did account) "did:plc:")
+     (let [row (first (db/query conn "SELECT operation FROM plc_identities WHERE did = ? AND status = 'ready'" (:did account)))]
+       (when-not row (errors/raise! 503 "DidUnavailable" "PLC identity is not confirmed"))
+       (plc/did-document (plc/operation-data (:did account) (codec/decode (:operation row)))))
+     (did-document settings account public-key))))
 (defn resolve-account [conn identifier]
   (or (first (db/query conn "SELECT * FROM accounts WHERE (did = ? OR handle = ?) AND status = 'active'"
                       identifier (str/lower-case (request/string! identifier "repo"))))
       (errors/raise! 400 "RepoNotFound" "Account was not found")))
 (defn resolve-identity [conn identifier]
-  (or (first (db/query conn "SELECT * FROM accounts WHERE (did = ? OR handle = ?) AND status <> 'deleted'"
+  (or (first (db/query conn "SELECT * FROM accounts WHERE (did = ? OR handle = ?) AND status IN ('active', 'deactivated', 'taken_down')"
                       identifier (str/lower-case (request/string! identifier "identifier"))))
       (errors/raise! 400 "AccountNotFound" "Identity was not found")))
 (defn password! [value]
@@ -69,10 +85,57 @@
       (email/enqueue! conn {:to (:email account) :subject subject
                            :text (str subject ".\n\nYour token is: " token "\n\nIt expires in " minutes " minutes. If you did not request this, ignore this email.")}))))
 
+(defn provision-one! [ds settings did]
+  (provision/process-one! ds settings did
+    (fn [conn account]
+      (db/execute! conn "UPDATE accounts SET status = 'active' WHERE did = ?" (:did account))
+      (repo/commit! conn settings (assoc (repo/state conn (:did account)) :announce-handle (:handle account)))
+      (when (:email-enabled settings) (issue-email! conn account "confirm-email")))))
+
+(defn- create-plc! [ds settings body handle address hash]
+  (when-not (:http-client settings) (errors/raise! 503 "DirectoryUnavailable" "PLC directory client is unavailable"))
+  (when (contains? body "recoveryKey")
+    (try (plc/parse-key (get body "recoveryKey")) (catch Exception _ (errors/invalid! "Invalid PLC recovery key"))))
+  (let [prepared (provision/prepare settings handle (get body "recoveryKey"))
+        did (db/transact! ds
+              (fn [conn]
+                (if (pos? (db/execute! conn "INSERT INTO accounts(did, handle, email, password_hash, status)
+                                             VALUES (?, ?, ?, ?, 'provisioning') ON CONFLICT DO NOTHING"
+                                      (:did prepared) handle address hash))
+                  (do (invites/consume! conn settings (get body "inviteCode") (:did prepared))
+                      (provision/reserve! conn prepared)
+                      (:did prepared))
+                  (let [account (first (db/query conn "SELECT * FROM accounts WHERE handle = ? FOR UPDATE" handle))
+                        row (first (db/query conn "SELECT recovery_key FROM plc_identities WHERE did = ?" (:did account)))]
+                    ;; Only the original account owner can retry a reservation.
+                    ;; Never treat repeated signup as login after activation.
+                    (when-not (and (= "provisioning" (:status account)) (= address (:email account))
+                                   (crypto/password-matches? (get body "password") (:password_hash account))
+                                   row (= (get body "recoveryKey") (:recovery_key row)))
+                      (errors/raise! 400 "HandleNotAvailable" "Handle or email is already registered"))
+                    (db/execute! conn "UPDATE plc_identities SET status = 'pending', available_at = now(), last_error = NULL
+                                       WHERE did = ? AND status = 'failed'" (:did account))
+                    (:did account)))))]
+    (provision-one! ds settings did)
+    (db/transact! ds
+      (fn [conn]
+        (let [account (first (db/query conn "SELECT * FROM accounts WHERE did = ? FOR UPDATE" did))]
+          (when-not (= "active" (:status account))
+            (errors/raise! 503 "RegistrationPending" "Identity registration is pending; retry signup with the same credentials, or sign in after it completes"))
+          ;; Activation can finish on another worker before this transaction.
+          ;; Do not bypass a password/email/factor change made since reservation.
+          (when-not (and (= address (:email account)) (not (:email_auth_factor account))
+                         (crypto/password-matches? (get body "password") (:password_hash account)))
+            (errors/raise! 401 "AuthenticationRequired" "Account credentials changed; sign in to continue"))
+          (merge (public-account account) (auth/issue! conn settings did nil)
+                 {:didDoc (did-document conn settings account (:public_key (repo/state conn did)))}))))))
+
 (defn create! [ds settings body]
   (when-not (:signup-enabled settings) (errors/raise! 403 "SignupDisabled" "Account registration is disabled"))
-  (when (some #(contains? body %) ["did" "plcOp" "recoveryKey" "verificationCode" "verificationPhone"])
-    (errors/raise! 400 "InvalidRequest" "Account imports and PLC provisioning are not implemented"))
+  (when (some #(contains? body %) ["did" "plcOp" "verificationCode" "verificationPhone"])
+    (errors/raise! 400 "InvalidRequest" "Account imports and phone verification are not implemented"))
+  (when (and (not= :plc (:did-method settings)) (contains? body "recoveryKey"))
+    (errors/invalid! "Recovery keys require PLC signup"))
   (let [handle (str/lower-case (request/string! (get body "handle") "handle"))
         address (str/lower-case (request/string! (get body "email") "email"))
         suffix (str "." (:user-domain settings))]
@@ -83,20 +146,22 @@
       (errors/raise! 400 "UnsupportedDomain" "Handle must be a direct child of the configured user domain"))
     (when-not (email/address? address) (errors/invalid! "Invalid email address"))
     (let [hash (password! (get body "password")) did (str "did:web:" handle)]
-      (try
-        (db/transact!
-         ds
-         (fn [conn]
-           (db/execute! conn "INSERT INTO accounts(did, handle, email, password_hash) VALUES (?, ?, ?, ?)" did handle address hash)
-           (invites/consume! conn settings (get body "inviteCode") did)
-           (repo/initialize! conn settings did handle)
-           (let [account (resolve-account conn did)]
-             (when (:email-enabled settings) (issue-email! conn account "confirm-email"))
-             (merge (public-account account) (auth/issue! conn settings did nil)
-                    {:didDoc (did-document settings account (:public_key (repo/state conn did)))}))))
-        (catch java.sql.SQLException e
-          (if (= "23505" (.getSQLState e))
-            (errors/raise! 400 "HandleNotAvailable" "Handle or email is already registered") (throw e)))))))
+      (if (= :plc (:did-method settings))
+        (create-plc! ds settings body handle address hash)
+        (try
+          (db/transact!
+           ds
+           (fn [conn]
+             (db/execute! conn "INSERT INTO accounts(did, handle, email, password_hash) VALUES (?, ?, ?, ?)" did handle address hash)
+             (invites/consume! conn settings (get body "inviteCode") did)
+             (repo/initialize! conn settings did handle)
+             (let [account (resolve-account conn did)]
+               (when (:email-enabled settings) (issue-email! conn account "confirm-email"))
+               (merge (public-account account) (auth/issue! conn settings did nil)
+                      {:didDoc (did-document settings account (:public_key (repo/state conn did)))}))))
+          (catch java.sql.SQLException e
+            (if (= "23505" (.getSQLState e))
+              (errors/raise! 400 "HandleNotAvailable" "Handle or email is already registered") (throw e))))))))
 
 (def dummy-password (delay (crypto/password-hash (crypto/token))))
 (declare consume-token! require-email!)
@@ -198,7 +263,7 @@
           (db/execute! conn "INSERT INTO blob_delete_jobs(object_bucket, object_key)
                             SELECT object_bucket, object_key FROM blobs WHERE did = ? AND storage_backend = 's3'
                             ON CONFLICT (object_bucket, object_key) DO NOTHING" did)
-          (doseq [table ["sessions" "app_passwords" "account_tokens" "blobs" "repositories"]]
+          (doseq [table ["sessions" "app_passwords" "account_tokens" "blobs" "plc_identities" "repositories"]]
             (db/execute! conn (str "DELETE FROM " table " WHERE did = ?") did))
           (db/execute! conn "DELETE FROM email_outbox WHERE payload->>'to' = ?" (:email account))
           (db/execute! conn "DELETE FROM repo_events WHERE did = ? AND event_type IN ('commit', 'sync')" did)

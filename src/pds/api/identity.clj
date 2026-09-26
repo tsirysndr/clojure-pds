@@ -1,5 +1,6 @@
 (ns pds.api.identity
   (:require [clojure.walk :as walk]
+            [clojure.string :as str]
             [pds.accounts :as accounts]
             [pds.db :as db]
             [pds.errors :as errors]
@@ -10,7 +11,7 @@
 (defn local-handle [ds handle]
   (with-open [conn (db/connection ds)]
     (when-let [row (first (db/query conn "SELECT did, status FROM accounts WHERE handle = ?" handle))]
-      (when (= "deleted" (:status row)) (errors/raise! 400 "HandleNotFound" "Handle was not found"))
+      (when (#{"deleted" "provisioning"} (:status row)) (errors/raise! 400 "HandleNotFound" "Handle was not found"))
       (:did row))))
 
 (defn local-document [ds settings did]
@@ -18,8 +19,13 @@
     {"id" did "service" [{"id" "#atproto_pds" "type" "AtprotoPersonalDataServer" "serviceEndpoint" (:public-url settings)}]}
     (with-open [conn (db/connection ds)]
       (when-let [account (first (db/query conn "SELECT a.did, a.handle, a.status, r.public_key FROM accounts a LEFT JOIN repositories r ON r.did = a.did WHERE a.did = ?" did))]
-        (when (= "deleted" (:status account)) (errors/raise! 400 "DidDeactivated" "DID is deactivated"))
-        (walk/stringify-keys (accounts/did-document settings account (:public_key account)))))))
+        (cond
+          ;; Deleting a PDS account does not tombstone its portable PLC DID.
+          ;; Let the resolver ask the directory for its current public identity.
+          (= "deleted" (:status account)) (when-not (str/starts-with? did "did:plc:")
+                                             (errors/raise! 400 "DidDeactivated" "DID is deactivated"))
+          (= "provisioning" (:status account)) (errors/raise! 400 "DidNotFound" "DID is not registered")
+          :else (walk/stringify-keys (accounts/did-document conn settings account (:public_key account))))))))
 
 (defn routes [ds settings]
   (let [resolver (identity/resolver (merge settings {:local-handle #(local-handle ds %)

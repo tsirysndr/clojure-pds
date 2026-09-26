@@ -104,7 +104,10 @@ Set `PDS_HOSTNAME=pds.example.com`, `PDS_PUBLIC_URL=https://pds.example.com`,
 such as `alice.example.com`. Configure wildcard DNS and HTTPS reverse proxying to
 this server, preserving the Host header. The service hostname is reserved.
 
-Accounts currently use **did:web**, tied to their hostname. The PDS publishes
+Set `PDS_DID_METHOD=plc` to create portable **did:plc** identities. This requires
+an HTTPS public URL and a non-reserved user domain. The default `web` mode creates
+**did:web** accounts tied to their hostname and supports local development.
+The PDS publishes
 `/.well-known/did.json` and `/.well-known/atproto-did` for hosted accounts. The
 identity endpoints resolve local and remote handles, `did:web`, and `did:plc`.
 Remote handles use DNS TXT first and HTTPS fallback. `resolveIdentity` and
@@ -113,8 +116,22 @@ Set `PDS_PLC_URL` to an HTTPS directory origin (default `https://plc.directory`)
 Remote requests use public addresses, verified TLS, bounded bodies and deadlines;
 local identities resolve directly from PostgreSQL. Resolution is currently
 uncached, with at most 32 concurrent identity requests per server instance.
-did:plc creation and portable account migration remain unfinished. The default
-localhost identities are development-only.
+Portable account migration remains unfinished. The default localhost identities
+are development-only.
+
+PLC signup persists separate encrypted repository and rotation keys, the signed
+genesis operation, and the handle/email/invite reservation before submitting to
+the directory. The optional `recoveryKey` in `createAccount` is a public `did:key`
+placed ahead of the server rotation key; retain its private key separately.
+No session, repository event, or confirmation email is issued before the signed
+directory audit log confirms registration. A `503 RegistrationPending` response
+means the reservation remains durable: retry with the same credentials and
+recovery key, or sign in after the background worker finishes. Retryable failures
+use exponential backoff from 5 seconds to 1 hour; expired worker leases resume the
+same operation after restart. Permanent failures remain reserved for an explicit
+signup retry; inspect `plc_identities.status` and `last_error` for sanitized status.
+Already active accounts use `createSession`, not repeated signup. Account deletion
+erases local private keys and content but does not tombstone the public PLC DID.
 
 Set `PDS_REQUIRE_INVITE_CODE=true` to require an invitation during signup;
 `PDS_ENABLE_SIGNUP` must also be enabled. Set `PDS_ADMIN_PASSWORD` to a random

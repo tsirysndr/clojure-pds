@@ -7,7 +7,7 @@
 
 (defn account! [conn did]
   (when-not (syntax/did? did) (errors/invalid! "Invalid DID"))
-  (or (first (db/query conn "SELECT * FROM accounts WHERE did = ? AND status <> 'deleted' FOR UPDATE" did))
+  (or (first (db/query conn "SELECT * FROM accounts WHERE did = ? AND status IN ('active', 'deactivated', 'taken_down') FOR UPDATE" did))
       (errors/raise! 400 "AccountNotFound" "Account was not found")))
 
 (defn status-view [account]

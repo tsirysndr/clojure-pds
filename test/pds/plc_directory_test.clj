@@ -33,7 +33,9 @@
                   [status body]
                   (if (= "GET" method)
                     (cond @audit-body [200 @audit-body]
-                          (get @logs did) [200 (json/write-str (get @logs did))]
+                          (get @logs did) [200 (json/write-str
+                                                (if (.endsWith path "/log/audit") (get @logs did)
+                                                  (plc/did-document (plc/operation-data did (get (last (get @logs did)) "operation")))))]
                           :else [404 "{}"])
                     (do
                       (is (= "application/json" (.getFirst (.getRequestHeaders exchange) "Content-Type")))
