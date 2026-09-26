@@ -20,7 +20,7 @@ runnable and update this document as features land.
    cryptographic vectors. Do not substitute JSON hashes for repository CIDs.
 3. **Durable storage (in progress):** PostgreSQL migrations, transactions, account metadata, key
    storage, content-addressed blocks and blobs, restart/recovery tests.
-4. **Repositories (core implemented; import/performance pending):** deterministic Merkle Search Tree, signed version-3 commits,
+4. **Repositories (core and untrusted CAR verification implemented; import storage/API and performance pending):** deterministic Merkle Search Tree, signed version-3 commits,
    atomic writes with swap checks, record CRUD, pagination, repository description,
    CAR import/export. Acceptance: reference implementation verifies our exports
    and we verify its exports, including deletion and concurrent writes.

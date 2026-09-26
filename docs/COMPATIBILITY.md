@@ -126,8 +126,17 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
   `bash scripts/test-conformance.sh` additionally uses pinned `@atproto/repo`
   0.10.14 to verify a signed export, inclusion/absence proofs, false-claim rejection,
   and rootless CARs obtained over HTTP. This covers repository serialization and
-  proofs, not relay/client federation. CAR decoding verifies each block's content hash. Full repository import and
-  untrusted MST traversal validation are not yet implemented.
+  proofs, not relay/client federation. CAR decoding verifies each block's content
+  hash. The complete-repository verifier also accepts upstream-generated exports
+  signed on both curves, including empty trees and trees after mixed mutations.
+  It validates the expected DID/signature, version-3 commit fields, revision
+  (no more than five minutes ahead), complete reachable records, paths, ordered
+  MST traversal and canonical rebuilt root. It tolerates duplicate/out-of-order
+  blocks and extra roots, and excludes unrelated blocks and arbitrary record
+  links from ownership. Historical record objects are preserved without applying
+  today's Lexicons. Current bounds are 64 MiB per CAR, 1,000,000 bytes per record,
+  and 128 tree edges; legacy version-2 commits are unsupported. Database import
+  and the HTTP import endpoint remain pending.
 - PostgreSQL migrations are locked, transactional, and checksummed. Tests verify
   rollback, persistence across connections, binary data, signed commits, atomic
   batches, concurrent swap conflicts, and isolation between accounts.

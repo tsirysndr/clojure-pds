@@ -83,3 +83,51 @@
                                                  (first (subseq ordered > path))])) paths))]
     (reduce (fn [blocks path] (merge blocks (:blocks (proof (:root tree) path (:blocks tree) false))))
             {(:root tree) (get (:blocks tree) (:root tree))} targets)))
+
+(defn read-tree
+  "Validate an untrusted complete MST. Only traverses tree links, returning
+  path/CID mappings and reachable tree blocks. Rebuilding checks canonical
+  heights, intermediate nodes and maximal prefix compression as well as shape."
+  [root load-block]
+  (let [blocks (atom {}) records (atom {})]
+    (letfn [(link! [value nullable?]
+              (when-not (or (and nullable? (nil? value))
+                            (and (instance? pds.protocol.codec.Link value)
+                                 (= 113 (aget (codec/cid-bytes (:cid value)) 1))))
+                (codec/fail! "MST requires a CBOR CID link"))
+              (:cid value))
+            (walk! [cid lower upper depth]
+              (when (or (> depth 128) (contains? @blocks cid))
+                (codec/fail! "Repeated or excessively deep MST node"))
+              (let [data (load-block cid)]
+                (when-not (and data (= cid (codec/cid data))) (codec/fail! "Missing or corrupt MST node"))
+                (swap! blocks assoc cid data)
+                (let [node (codec/decode data)]
+                  (when-not (and (map? node) (= #{"l" "e"} (set (keys node))) (vector? (get node "e")))
+                    (codec/fail! "Invalid MST node"))
+                  (let [entries
+                        (loop [pending (seq (get node "e")) previous "" result []]
+                          (if-let [entry (first pending)]
+                            (let [prefix (get entry "p") suffix (get entry "k")]
+                              (when-not (and (map? entry) (= #{"p" "k" "v" "t"} (set (keys entry)))
+                                             (integer? prefix) (<= 0 prefix (count previous)) (bytes? suffix)
+                                             (<= 1 (+ prefix (alength ^bytes suffix)) 1024))
+                                (codec/fail! "Invalid MST entry"))
+                              (let [key (str (subs previous 0 prefix) (codec/text suffix))]
+                                (when-not (and (re-matches #"[\x21-\x7e]+" key)
+                                               (pos? (compare key previous))
+                                               (or (nil? lower) (pos? (compare key lower)))
+                                               (or (nil? upper) (neg? (compare key upper)))
+                                               (not (contains? @records key)))
+                                  (codec/fail! "Invalid or unordered MST key"))
+                                (swap! records assoc key (link! (get entry "v") false))
+                                (recur (next pending) key (conj result [key (link! (get entry "t") true)]))))
+                            result))]
+                    (when-let [left (link! (get node "l") true)]
+                      (walk! left lower (or (ffirst entries) upper) (inc depth)))
+                    (doseq [[index [key child]] (map-indexed vector entries)]
+                      (when child (walk! child key (or (first (get entries (inc index))) upper) (inc depth))))))))]
+      (walk! root nil nil 0)
+      (when-not (= root (:root (build @records)))
+        (codec/fail! "MST is not the canonical tree for its records"))
+      {:root root :records @records :blocks @blocks})))
