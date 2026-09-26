@@ -18,6 +18,7 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | `com.atproto.admin` | `disableInviteCodes`, `disableAccountInvites`, `enableAccountInvites` | Optional Basic admin credentials; code invalidation and future-grant policy |
 | `com.atproto.admin` | `getAccountInfo`, `getSubjectStatus`, `updateSubjectStatus` | Private account inspection and repoRef account takedowns; activation state preserved; record/blob subjects pending |
 | `com.atproto.server` | `createSession`, `getSession`, `refreshSession`, `deleteSession` | Primary/app-password sessions, JWT type separation, single-use refresh, revocation |
+| `com.atproto.server` | `getServiceAuth` | Repository-key JWTs, exact audience/service reference, method and expiration checks, primary/app-password privilege policy; incoming service authentication and proxying pending |
 | `com.atproto.server` | `createAppPassword`, `listAppPasswords`, `revokeAppPassword` | One-time secrets, scoped sessions, privileged flag, metadata-only listing, immediate revocation |
 | `com.atproto.server` | `deactivateAccount`, `activateAccount` | Primary-session lifecycle; inactive content is hidden, identity remains resolvable, durable account events |
 | `com.atproto.server` | `requestAccountDelete`, `deleteAccount` | One-use email token plus primary password; credential removal, tombstone and durable S3 cleanup |
@@ -152,6 +153,12 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
 - Email tests verify the HTTP contract, retry classes, backoff, concurrent claims,
   expired leases, attempt exhaustion, transactional rollback, and payload cleanup.
   Worker tests use mocked bindings; deployment and provider delivery are unverified.
+- Service token tests verify audience syntax, expiration boundaries, unique nonces,
+  protected methods, case-insensitive privilege checks, account/session status and
+  key isolation. Tokens carry `typ=JWT`, `kid=#atproto`, `iat`, `exp`, `iss`, `aud`,
+  `jti`, and optional `lxm`. Pinned `@atproto/xrpc-server` 0.13.2 verifies both signing
+  curves and tokens obtained from the HTTP endpoint, and rejects wrong audiences,
+  methods and keys. This proves token interoperability, not external service access.
 - Blob bytes can use PostgreSQL or configurable S3-compatible storage. An upgrade
   test preserves existing blobs. Moto-backed HTTP tests cover binary round trips,
   ownership, duplicate uploads, missing objects and failed PUT rollback; fault
@@ -173,7 +180,7 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
    refresh behavior, permission sets and scopes.
 5. Relay notification and external relay interoperability,
    event retention/compaction, and remaining record/blob takedown semantics.
-6. Service auth JWTs, authenticated proxying to AppViews/labelers, and external
+6. Incoming service JWT verification/replay protection, authenticated proxying to AppViews/labelers, and external
    client/relay end-to-end tests.
 7. Repository import, blob missing/list-since behavior, garbage collection,
    incremental MST mutation, streaming, quotas and bulk blob-backend migration.

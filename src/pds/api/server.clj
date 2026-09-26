@@ -7,6 +7,7 @@
             [pds.errors :as errors]
             [pds.invites :as invites]
             [pds.request :as request]
+            [pds.service-auth :as service-auth]
             [pds.xrpc :as xrpc]))
 
 (defn json-route [method f] {:method method :handler #(xrpc/response 200 (f %))})
@@ -17,7 +18,13 @@
   (fn [request]
     (db/transact! ds (fn [conn] (f conn (auth/authenticate! conn settings request options) request))))))
 (defn routes [ds settings]
-  {"/xrpc/com.atproto.server.createAccount"
+  {"/xrpc/com.atproto.server.getServiceAuth"
+   {:method :get
+    :handler (fn [r]
+               (assoc-in (xrpc/response 200 ((authenticated ds settings {:allow-deactivated? true :allow-taken-down? true}
+                                             (fn [conn account r] (service-auth/issue! conn settings account (request/query-params r)))) r))
+                         [:headers "Cache-Control"] "no-store"))}
+   "/xrpc/com.atproto.server.createAccount"
    (json-route :post #(accounts/create! ds settings (request/json-body %)))
    "/xrpc/com.atproto.server.createSession"
    (json-route :post #(accounts/login! ds settings (request/json-body %)))

@@ -176,6 +176,19 @@ lease behavior as handle changes. Deactivated primary sessions can submit withou
 activating the account. This endpoint supports normal successors and already
 accepted operations; recovery forks and destination account import remain pending.
 
+`GET /xrpc/com.atproto.server.getServiceAuth` issues a short-lived service JWT for
+the authenticated account. Supply `aud` as a service DID or `did#serviceId` reference
+(encode `#` as `%23` in the query), and preferably `lxm` as the exact target method.
+Tokens use the repository signing key and a fresh random nonce. They expire after
+60 seconds by default; an explicit `exp` may extend a method-bound token to at most
+one hour. A method-less legacy token is limited to one minute. Protected account
+methods cannot be authorized this way. Chat methods and `createAccount` require
+a primary or privileged app-password session. Existing primary sessions for
+taken-down accounts can request only `createAccount` for migration. Responses are
+marked `Cache-Control: no-store`. These tokens cannot be used as local access or
+refresh sessions; receiving-service validation and proxying are separate roadmap
+steps. Issued tokens cannot be individually revoked before expiration.
+
 Set `PDS_REQUIRE_INVITE_CODE=true` to require an invitation during signup;
 `PDS_ENABLE_SIGNUP` must also be enabled. Set `PDS_ADMIN_PASSWORD` to a random
 secret of at least 16 characters to enable admin endpoints (unset by default).

@@ -41,7 +41,7 @@ runnable and update this document as features land.
 9. **Sync and federation (queries, proofs and WebSocket firehose implemented; external relay pending):** durable ordered event log, sync queries, WebSocket
    subscribeRepos with replay/backpressure, relay notification and takedowns.
    Acceptance: relay consumes commits and reconnects without losing events.
-10. **Service integration and migration:** authenticated service proxy, service
+10. **Service integration and migration (outgoing service tokens implemented):** authenticated service proxy, service
     auth tokens, account migration/import/export and PLC operations.
     Acceptance: an external client reads and writes through this PDS and an
     account migrates between this implementation and a reference PDS.
