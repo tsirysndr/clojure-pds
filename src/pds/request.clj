@@ -27,14 +27,25 @@
         (#{\} \]} ch) (recur (next chars) (dec depth) false false)
         :else (recur (next chars) depth false false)))))
 
+(defn json-value
+  "Parse already size-bounded UTF-8 bytes, rejecting deep nesting and trailing
+  data. Callers choose the byte bound and required root type."
+  [data]
+  (let [text (codec/text data)]
+    (bounded-json! text)
+    (json/read-str text :extra-data-fn
+                   (fn [value reader]
+                     (loop [ch (.read ^java.io.Reader reader)]
+                       (cond (= -1 ch) value
+                             (#{9 10 13 32} ch) (recur (.read ^java.io.Reader reader))
+                             :else (errors/invalid! "Trailing JSON data")))))))
+
 (defn json-body [request]
   (when-not (= "application/json" (some-> (get-in request [:headers "content-type"]) (str/split #";") first str/lower-case))
     (errors/raise! 415 "InvalidRequest" "Expected application/json"))
   (let [data (body-bytes request (* 1024 1024))]
     (try
-      (let [text (codec/text data)
-            _ (bounded-json! text)
-            value (json/read-str text)]
+      (let [value (json-value data)]
         (when-not (map? value) (errors/invalid! "Expected a JSON object")) value)
       (catch Exception _ (errors/invalid! "Invalid JSON object")))))
 (defn query-params

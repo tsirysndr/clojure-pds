@@ -10,6 +10,12 @@
   (is (= {"a" "[{}]"} (request/json-body (body "{\"a\":\"[{}]\"}"))))
   (is (thrown? Exception (request/json-body (body (str "{\"a\":" (apply str (repeat 10000 "[")) "1" (apply str (repeat 10000 "]")) "}")))))
   (is (thrown? Exception (request/json-body (body "[]")))))
+
+(deftest exactly-one-json-value
+  (is (= [] (request/json-value (codec/utf8 "[] \n"))))
+  (doseq [text ["{}{}" "{} null" "[]garbage"]]
+    (is (thrown? Exception (request/json-value (codec/utf8 text)))))
+  (is (thrown? Exception (request/json-body (body "{}{}")))))
 (deftest union-type-references
   (is (syntax/type-ref? "app.bsky.richtext.facet#link"))
   (is (not (syntax/type-ref? "app.bsky.richtext.facet#main")))

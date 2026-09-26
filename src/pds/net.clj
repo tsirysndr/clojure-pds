@@ -2,7 +2,7 @@
   (:require [clojure.string :as str])
   (:import [java.net URI InetAddress InetSocketAddress]
            [java.util.concurrent CompletableFuture TimeUnit]
-           [org.eclipse.jetty.client HttpClient BufferingResponseListener Result]
+           [org.eclipse.jetty.client HttpClient BufferingResponseListener BytesRequestContent Result]
            [org.eclipse.jetty.http HttpCookieStore$Empty]
            [org.eclipse.jetty.util Promise SocketAddressResolver SocketAddressResolver$Async]))
 
@@ -85,9 +85,9 @@
        (->Client client uri-validator)
        (catch Throwable e (.stop client) (throw e))))))
 
-(defn- request! [^HttpClient client ^URI uri maximum timeout-ms]
+(defn- request! [^HttpClient client ^URI uri maximum timeout-ms method body]
   (let [done (CompletableFuture.)
-        request (-> (.newRequest client uri) (.timeout (long timeout-ms) TimeUnit/MILLISECONDS))
+        request (-> (.newRequest client uri) (.method method) (.timeout (long timeout-ms) TimeUnit/MILLISECONDS))
         listener (proxy [BufferingResponseListener] [(int maximum)]
                    (onComplete [^Result result]
                      (if (.isFailed result)
@@ -98,6 +98,7 @@
                                                                              (.getValue ^org.eclipse.jetty.http.HttpField field)])) (.getHeaders response))
                                           :body (.getContent this)})))))]
     (try
+      (when body (.body request (BytesRequestContent. "application/json" (into-array (Class/forName "[B") [body]))))
       (.send request listener)
       (.get done (long timeout-ms) TimeUnit/MILLISECONDS)
       (catch Exception e (.abort request e) (throw e)))))
@@ -111,7 +112,7 @@
      (loop [uri ((:uri-validator client) url) hops 0]
        (let [remaining (quot (- deadline (System/nanoTime)) 1000000)]
          (when-not (pos? remaining) (throw (java.util.concurrent.TimeoutException. "Outbound request deadline")))
-         (let [{:keys [status headers] :as response} (request! (:http client) uri maximum remaining)]
+         (let [{:keys [status headers] :as response} (request! (:http client) uri maximum remaining "GET" nil)]
            (when-let [encoding (get headers "content-encoding")]
              (when-not (= "identity" (str/lower-case encoding))
                (throw (ex-info "Encoded response is unsupported" {:network-error :encoding}))))
@@ -121,3 +122,18 @@
                    (when-not location (throw (ex-info "Redirect has no location" {:network-error :redirect})))
                    (recur ((:uri-validator client) (str (.resolve ^URI uri ^String location))) (inc hops))))
              response)))))))
+
+(defn post-json!
+  "Submit bounded JSON bytes to exactly one HTTPS destination. Never follows
+  redirects or retries automatically: the caller must reconcile an ambiguous
+  outcome before retrying a mutation. The response body is also bounded."
+  ([client url body] (post-json! client url body {}))
+  ([client url body {:keys [maximum timeout-ms] :or {maximum 65536 timeout-ms 5000}}]
+   (when-not (and (bytes? body) (<= (alength ^bytes body) 65536))
+     (throw (ex-info "Outbound JSON body exceeds 65536 bytes" {:network-error :body})))
+   (let [uri ((:uri-validator client) url)
+         response (request! (:http client) uri maximum timeout-ms "POST" body)
+         encoding (get-in response [:headers "content-encoding"])]
+     (when (and encoding (not= "identity" (str/lower-case encoding)))
+       (throw (ex-info "Encoded response is unsupported" {:network-error :encoding})))
+     response)))

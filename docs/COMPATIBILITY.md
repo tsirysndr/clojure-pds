@@ -62,6 +62,13 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
   `@atproto/crypto` 0.5.5 because the PLC package's old P-256 signer predates mandatory
   low-S signatures. A read-only smoke check also verified the four-operation public
   audit log for `did:plc:z72i7hdynmk6r22z27h6tvur`; no operation was submitted.
+- The PLC directory client submits bounded JSON over verified HTTPS without
+  redirects, then checks the complete signed audit log before reporting success.
+  A timeout or error after acceptance is reconciled by operation CID; an already
+  confirmed operation is not submitted again. TLS fixture tests cover dropped
+  responses, server errors after acceptance, false success responses, rejected
+  submissions, changed heads and malformed audits. Audit responses are limited to
+  4 MiB and 10,000 operations. This client is not yet connected to account signup.
 - Canonical CBOR encoding and CID generation match upstream bytes/hashes. Decoding
   rejects noncanonical forms, invalid UTF-8, duplicate keys, floats, trailing data,
   and oversized/deep blocks. JSON request depth is bounded before parsing.
