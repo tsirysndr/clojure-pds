@@ -28,7 +28,7 @@ runnable and update this document as features land.
    account provisioning, DID document publication, handle updates and key rotation.
    Acceptance: persisted identities resolve from a separate process; remote fetches
    have bounded sizes/timeouts and protection against SSRF.
-6. **Sessions and account lifecycle (sessions/app passwords/email recovery implemented):** password hashing, access/refresh tokens,
+6. **Sessions and account lifecycle (sessions/app passwords/email security/lifecycle/invites implemented):** password hashing, access/refresh tokens,
    refresh rotation/revocation, app passwords, invites, email verification/reset,
    account activation/deactivation/deletion and administrative authorization.
    Acceptance: expiry, replay, cross-account authorization and restart tests.
@@ -59,8 +59,8 @@ rotating sessions, scoped app passwords, email recovery, schema-validated record
 implemented. See [the compatibility matrix](COMPATIBILITY.md) for exact coverage,
 verification evidence, and limits. Full PDS compatibility is not achieved yet.
 
-Next implementation series: extend Lexicon endpoint validation and hosted account
-lifecycle, remote identity/PLC, then streaming sync and relay conformance. OAuth
+Next implementation series: extend Lexicon endpoint validation and administration,
+remote identity/PLC, then streaming sync and relay conformance. OAuth
 and service proxying remain required before a full client integration can be
 claimed. Preserve atomic feature commits and test each protocol boundary.
 

@@ -104,6 +104,19 @@ Accounts currently use **did:web**, tied to their hostname. The PDS publishes
 handle resolution works; remote resolution, did:plc creation, and portable account
 migration are unfinished. The default localhost identities are development-only.
 
+Set `PDS_REQUIRE_INVITE_CODE=true` to require an invitation during signup;
+`PDS_ENABLE_SIGNUP` must also be enabled. Set `PDS_ADMIN_PASSWORD` to a random
+secret of at least 16 characters to enable admin endpoints (unset by default).
+Use HTTP Basic authentication with username `admin` over your HTTPS origin.
+`com.atproto.server.createInviteCode` takes `useCount` and optional `forAccount`;
+`createInviteCodes` creates a bounded batch. Ordinary session tokens cannot call
+these endpoints. Invite redemption is transactional, including concurrent final uses.
+Accounts list their codes with `getAccountInviteCodes`; `includeUsed=false` filters
+unavailable codes. Admins can invalidate codes through `disableInviteCodes` by
+code or owner. `disableAccountInvites`/`enableAccountInvites` retain the future-grant
+policy flag and note; existing codes remain usable. Automatic invite grants are
+disabled, so `createAvailable` currently creates no additional codes.
+
 Passwords use Argon2id. Access tokens expire after 15 minutes; sessions have a
 90-day lifetime. Refresh tokens rotate once; replay revokes the session. Password
 reset revokes all sessions and app passwords. Email confirmation/reset tokens expire after 30 minutes

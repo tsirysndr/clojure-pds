@@ -7,6 +7,7 @@
             [pds.email :as email]
             [pds.errors :as errors]
             [pds.events :as events]
+            [pds.invites :as invites]
             [pds.protocol.formats :as formats]
             [pds.protocol.syntax :as syntax]
             [pds.repo :as repo]
@@ -70,8 +71,8 @@
 
 (defn create! [ds settings body]
   (when-not (:signup-enabled settings) (errors/raise! 403 "SignupDisabled" "Account registration is disabled"))
-  (when (some #(contains? body %) ["did" "plcOp" "recoveryKey" "inviteCode" "verificationCode" "verificationPhone"])
-    (errors/raise! 400 "InvalidRequest" "Account imports, invites, and PLC provisioning are not implemented"))
+  (when (some #(contains? body %) ["did" "plcOp" "recoveryKey" "verificationCode" "verificationPhone"])
+    (errors/raise! 400 "InvalidRequest" "Account imports and PLC provisioning are not implemented"))
   (let [handle (str/lower-case (request/string! (get body "handle") "handle"))
         address (str/lower-case (request/string! (get body "email") "email"))
         suffix (str "." (:user-domain settings))]
@@ -87,6 +88,7 @@
          ds
          (fn [conn]
            (db/execute! conn "INSERT INTO accounts(did, handle, email, password_hash) VALUES (?, ?, ?, ?)" did handle address hash)
+           (invites/consume! conn settings (get body "inviteCode") did)
            (repo/initialize! conn settings did)
            (let [account (resolve-account conn did)]
              (when (:email-enabled settings) (issue-email! conn account "confirm-email"))

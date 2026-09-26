@@ -12,7 +12,7 @@
     (is (= 200 (:status response)))
     ;; Required fields from the official describeServer lexicon. Optional
     ;; capabilities are omitted until the corresponding features exist.
-    (is (= {"did" "did:web:pds.example.com" "availableUserDomains" [] "blobUploadLimit" 5242880}
+    (is (= {"did" "did:web:pds.example.com" "availableUserDomains" [] "blobUploadLimit" 5242880 "inviteCodeRequired" false}
            (json/read-str (:body response))))
     (is (= 405 (:status (handler {:request-method :post :uri path}))))
     (is (= 200 (:status (handler {:request-method :head :uri path}))))))

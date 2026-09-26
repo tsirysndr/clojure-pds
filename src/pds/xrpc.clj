@@ -24,9 +24,9 @@
         (error-response 404 "MethodNotImplemented" "Endpoint is not implemented"))
       (catch clojure.lang.ExceptionInfo e
         (if (:xrpc (ex-data e))
-          (let [{:keys [status error]} (ex-data e)]
+          (let [{:keys [status error www-authenticate]} (ex-data e)]
             (cond-> (error-response status error (.getMessage e))
-              (= status 401) (assoc-in [:headers "WWW-Authenticate"] "Bearer")))
+              (= status 401) (assoc-in [:headers "WWW-Authenticate"] (or www-authenticate "Bearer"))))
           (error-response 500 "InternalServerError" "An internal server error occurred")))
       (catch Exception _
         ;; Do not expose exception messages (which may contain credentials).

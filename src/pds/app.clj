@@ -2,6 +2,7 @@
   (:require [clojure.java.io :as io]
             [pds.xrpc :as xrpc]
             [pds.api.server :as server-api]
+            [pds.api.admin :as admin-api]
             [pds.api.repo :as repo-api]
             [pds.api.blob :as blob-api]
             [pds.rate-limit :as rate-limit]))
@@ -15,6 +16,7 @@
     (rate-limit/wrap
      (xrpc/router
       (merge (when ds (server-api/routes ds config))
+             (when ds (admin-api/routes ds config))
              (when ds (repo-api/routes ds config))
              (when ds (blob-api/routes ds config))
      {"/"
@@ -28,6 +30,7 @@
       {:method :get
        :handler (fn [_]
                   (xrpc/response 200 {:did (:service-did config)
+                                      :inviteCodeRequired (boolean (:invite-required config))
                                       :blobUploadLimit blob-api/max-size
                                       :availableUserDomains (if (and ds (:signup-enabled config)) [(str "." (:user-domain config))] [])}))}}))
      (or (:rate-limiter config) (rate-limit/memory-limiter))))))

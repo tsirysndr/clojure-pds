@@ -5,6 +5,7 @@
             [pds.auth :as auth]
             [pds.db :as db]
             [pds.errors :as errors]
+            [pds.invites :as invites]
             [pds.request :as request]
             [pds.xrpc :as xrpc]))
 
@@ -26,6 +27,8 @@
    (empty-route #(auth/delete-session! ds settings %))
    "/xrpc/com.atproto.server.getSession"
    (json-route :get (authenticated ds settings {:allow-deactivated? true} (fn [_ account _] (accounts/public-account account))))
+   "/xrpc/com.atproto.server.getAccountInviteCodes"
+   (json-route :get (authenticated ds settings (fn [conn account r] (invites/account-codes conn (:did account) (request/query-params r)))))
    "/xrpc/com.atproto.server.deactivateAccount"
    (empty-route (authenticated ds settings {:allow-deactivated? true} (fn [conn account r] (accounts/deactivate! conn account (request/json-body r)))))
    "/xrpc/com.atproto.server.activateAccount"

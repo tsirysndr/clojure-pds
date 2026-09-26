@@ -1,5 +1,6 @@
 (ns pds.main
   (:require [pds.app :as app]
+            [pds.admin :as admin]
             [pds.accounts :as accounts]
             [pds.auth :as auth]
             [pds.blob-cleanup :as blob-cleanup]
@@ -7,6 +8,7 @@
             [pds.db :as db]
             [pds.email :as email]
             [pds.http :as http]
+            [pds.invites :as invites]
             [pds.redis :as redis]
             [pds.s3 :as s3]))
 
@@ -15,6 +17,7 @@
         blob-config (s3/settings (System/getenv))
         rate-config (redis/settings (System/getenv))
         settings (merge (config/load-config) (accounts/settings (System/getenv))
+                        (admin/settings (System/getenv)) (invites/settings (System/getenv))
                         (auth/settings (System/getenv)) {:email-enabled (boolean email-config)})
         ds (db/datasource (db/settings))
         _ (db/migrate! ds)

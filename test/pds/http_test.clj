@@ -50,7 +50,7 @@
           (is (= 404 (.statusCode missing)))
           (is (= "MethodNotImplemented" (get (json/read-str (.body missing)) "error")))
           (is (= 200 (.statusCode discovery)))
-          (is (= {"did" "did:web:localhost" "availableUserDomains" [] "blobUploadLimit" 5242880}
+          (is (= {"did" "did:web:localhost" "availableUserDomains" [] "blobUploadLimit" 5242880 "inviteCodeRequired" false}
                  (json/read-str (.body discovery))))))
       (finally (stop!)))
     (stop!)

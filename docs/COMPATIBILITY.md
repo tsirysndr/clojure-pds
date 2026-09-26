@@ -13,7 +13,9 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | Namespace | Methods | Scope |
 | --- | --- | --- |
 | `com.atproto.server` | `describeServer` | Service DID, hosted suffix when signup is open, blob limit |
-| `com.atproto.server` | `createAccount` | New hosted did:web accounts; no PLC, imports, invites, or phone verification |
+| `com.atproto.server` | `createAccount` | New hosted did:web accounts; optional transactional invitation gate; no PLC, imports, or phone verification |
+| `com.atproto.server` | `createInviteCode`, `createInviteCodes`, `getAccountInviteCodes` | Admin-issued codes, bounded batches, account listing and concurrent redemption limits; no automatic grants |
+| `com.atproto.admin` | `disableInviteCodes`, `disableAccountInvites`, `enableAccountInvites` | Optional Basic admin credentials; code invalidation and future-grant policy |
 | `com.atproto.server` | `createSession`, `getSession`, `refreshSession`, `deleteSession` | Primary/app-password sessions, JWT type separation, single-use refresh, revocation |
 | `com.atproto.server` | `createAppPassword`, `listAppPasswords`, `revokeAppPassword` | One-time secrets, scoped sessions, privileged flag, metadata-only listing, immediate revocation |
 | `com.atproto.server` | `deactivateAccount`, `activateAccount` | Primary-session lifecycle; inactive content is hidden, identity remains resolvable, durable account events |
@@ -77,12 +79,13 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
    validation against pinned official endpoint lexicons.
 2. did:plc provisioning, remote DID/handle resolution with SSRF protection,
    handle updates, signing/rotation key lifecycle, and migration.
-3. Invites, administrative APIs, and broader account recovery controls.
+3. Remaining administrative APIs, takedowns, and broader account recovery controls.
 4. OAuth authorization server: metadata, PAR, PKCE, DPoP, client metadata/consent,
    refresh behavior, permission sets and scopes.
 5. Sync block/proof APIs, commit event payloads, WebSocket subscribeRepos with
    cursor replay/backpressure, relay notification, account/identity events and
-   takedown semantics. `repo_events` currently records commit metadata only.
+   takedown semantics. `repo_events` stores commit metadata and account-status payloads;
+   full commit payloads and identity events remain pending.
 6. Service auth JWTs, authenticated proxying to AppViews/labelers, and external
    client/relay end-to-end tests.
 7. Repository import, blob missing/list-since behavior, garbage collection,
