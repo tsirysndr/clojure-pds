@@ -208,3 +208,12 @@ Lexicon catalog validator is not implemented yet. The MST is deterministic and
 matches upstream root fixtures, but is rebuilt on each commit (O(n)); incremental
 updates are needed before hosting large repositories. Historical blocks are
 retained internally; exports include only the current repository graph.
+
+## Blobs
+
+`com.atproto.repo.uploadBlob` accepts authenticated binary uploads up to 5 MiB.
+`com.atproto.sync.getBlob` returns the original bytes; `listBlobs` paginates an
+account's uploads. CIDs use SHA-256 with the raw codec. Record writes verify that
+referenced blobs belong to the author and match their size and MIME metadata.
+Uploads are buffered in memory and stored in PostgreSQL `bytea` for now; object
+storage, streaming, MIME sniffing, and unreferenced-blob cleanup remain planned.
