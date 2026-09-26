@@ -44,7 +44,7 @@
 (defn- check-blobs! [conn did value]
   (when (map? value)
     (when (= "blob" (get value "$type"))
-      (let [blob (first (db/query conn "SELECT mime_type, octet_length(content) AS size FROM blobs WHERE did = ? AND cid = ?"
+      (let [blob (first (db/query conn "SELECT mime_type, size FROM blobs WHERE did = ? AND cid = ?"
                                  did (:cid (get value "ref"))))]
         (when-not (and blob (= (:mime_type blob) (get value "mimeType")) (= (:size blob) (get value "size")))
           (errors/invalid! "Blob is missing or does not match its metadata")))))

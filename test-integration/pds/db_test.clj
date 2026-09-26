@@ -45,3 +45,21 @@
            (vec (:content (first (db/query conn "SELECT content FROM repo_blocks")))))))
   (db/transact! *ds* #(db/execute! % "UPDATE schema_migrations SET checksum = 'changed'"))
   (is (thrown-with-msg? clojure.lang.ExceptionInfo #"modified" (db/migrate! *ds*))))
+
+(deftest existing-blob-migration
+  (let [all-migrations db/migrations]
+    (with-redefs [db/migrations (vec (take 4 all-migrations))]
+      (isolated-database
+       (fn []
+         (db/transact! *ds*
+           (fn [conn]
+             (db/execute! conn "INSERT INTO accounts(did, handle, email, password_hash) VALUES ('did:web:old.test', 'old.test', 'old@example.com', 'unused')")
+             (db/execute! conn "INSERT INTO blobs(did, cid, mime_type, content) VALUES ('did:web:old.test', 'old-cid', 'image/png', ?)"
+                          (byte-array [1 2 -1]))))
+         (with-redefs [db/migrations all-migrations] (db/migrate! *ds*))
+         (with-open [conn (db/connection *ds*)]
+           (let [row (first (db/query conn "SELECT * FROM blobs"))]
+             (is (= 3 (:size row)))
+             (is (= "postgres" (:storage_backend row)))
+             (is (= [1 2 -1] (vec (:content row))))
+             (is (nil? (:object_key row))))))))))

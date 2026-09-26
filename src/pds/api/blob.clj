@@ -3,12 +3,12 @@
             [pds.accounts :as accounts]
             [pds.api.repo :as repo-api]
             [pds.api.server :as server]
+            [pds.blobs :as blobs]
             [pds.db :as db]
             [pds.errors :as errors]
-            [pds.protocol.codec :as codec]
             [pds.request :as request]))
 
-(def max-size (* 5 1024 1024))
+(def max-size blobs/max-size)
 (defn routes [ds settings]
   {"/xrpc/com.atproto.repo.uploadBlob"
    (server/json-route
@@ -21,11 +21,8 @@
                  (errors/invalid! "A valid Content-Type is required"))
              bytes (request/body-bytes r max-size)]
          (when (zero? (alength bytes)) (errors/invalid! "Blob must not be empty"))
-         (let [id (codec/cid 85 bytes)]
-           (db/execute! conn "INSERT INTO blobs(did, cid, mime_type, content) VALUES (?, ?, ?, ?)
-                               ON CONFLICT (did, cid) DO NOTHING" (:did account) id type bytes)
-           (let [stored (first (db/query conn "SELECT mime_type FROM blobs WHERE did = ? AND cid = ?" (:did account) id))]
-             {:blob {:$type "blob" :ref {:$link id} :mimeType (:mime_type stored) :size (alength bytes)}}))))))
+         (let [stored (blobs/store! conn settings (:did account) bytes type)]
+           {:blob {:$type "blob" :ref {:$link (:cid stored)} :mimeType (:mime_type stored) :size (:size stored)}})))))
    "/xrpc/com.atproto.sync.getBlob"
    {:method :get
     :handler
@@ -34,8 +31,7 @@
         (with-open [conn (db/connection ds)]
           (let [account (accounts/resolve-account conn (get params "did"))
                 id (repo-api/cid! (get params "cid"))
-                blob (first (db/query conn "SELECT content, mime_type FROM blobs WHERE did = ? AND cid = ?" (:did account) id))]
-            (when-not blob (errors/raise! 400 "BlobNotFound" "Blob was not found"))
+                blob (blobs/read! conn settings (:did account) id)]
             {:status 200
              :headers {"Content-Type" (:mime_type blob) "X-Content-Type-Options" "nosniff"
                        "Content-Disposition" "attachment"}
