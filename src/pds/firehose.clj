@@ -50,7 +50,8 @@
   ;; Recheck availability for each frame, not merely at connection time.
   (with-open [conn (db/connection ds)]
     (when-let [row (first (db/query conn "SELECT e.seq, e.event_type, e.payload FROM repo_events e JOIN accounts a ON a.did = e.did
-                                         WHERE e.seq = ? AND (e.event_type IN ('account','identity') OR a.status = 'active')" seq))]
+                                         WHERE e.seq = ? AND (e.event_type IN ('account','identity') OR (a.status = 'active' AND NOT EXISTS
+                                           (SELECT 1 FROM handle_updates h WHERE h.did = a.did AND h.operation_kind = 'signing')))" seq))]
       (when (:payload row)
         (message (:event_type row) (assoc (codec/decode (:payload row) 5000000) "seq" (:seq row)))))))
 

@@ -100,7 +100,7 @@
         (let [status (child-status did)]
           (is (= "ready" (get status "state")))
           (is (= (:rotationKey result) (get status "rotationKey")))
-          (is (= #{"did" "operationCid" "rotationKey" "state"} (set (keys status)))))
+          (is (= #{"did" "operationCid" "rotationKey" "state" "signingKey" "repoCommit" "repoRev"} (set (keys status)))))
         (upstream! {:did did :operations (mapv #(get % "operation") (get @logs did))
                     :data (:data (directory/audit! client origin did)) :position 1
                     :oldKey (plc/did-key signer) :newKey (:rotationKey result)})))))

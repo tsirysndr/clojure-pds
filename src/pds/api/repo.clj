@@ -120,10 +120,14 @@
                        :collections (mapv :collection (db/query conn "SELECT DISTINCT collection FROM records WHERE did = ? ORDER BY collection" (:did account)))
                        :handleIsCorrect true})))
    "/xrpc/com.atproto.sync.getLatestCommit"
-   (query-route ds (fn [conn params]
-                    (let [account (accounts/resolve-account conn (get params "did"))
-                          state (first (db/query conn "SELECT head, rev FROM repositories WHERE did = ?" (:did account)))]
-                      {:cid (:head state) :rev (:rev state)})))
+   (server/json-route :get
+     (fn [r]
+       (let [params (request/query-params r)]
+         (db/transact! ds
+           (fn [conn]
+             (let [account (accounts/resolve-account conn (get params "did"))
+                   state (repo/state conn (:did account))]
+               {:cid (:head state) :rev (:rev state)}))))))
    "/xrpc/com.atproto.sync.getRepoStatus"
    (query-route ds (fn [conn params]
                     (let [did (get params "did")
@@ -137,7 +141,8 @@
    (query-route ds (fn [conn params]
                     (let [limit (request/limit! params 500 1000) cursor (get params "cursor")
                           rows (db/query conn "SELECT r.did, r.head, r.rev FROM repositories r JOIN accounts a ON a.did = r.did
-                                              WHERE a.status = 'active' AND (?::text IS NULL OR r.did COLLATE \"C\" > ? COLLATE \"C\")
+                                              WHERE a.status = 'active' AND NOT EXISTS (SELECT 1 FROM handle_updates h WHERE h.did = r.did AND h.operation_kind = 'signing')
+                                              AND (?::text IS NULL OR r.did COLLATE \"C\" > ? COLLATE \"C\")
                                               ORDER BY r.did COLLATE \"C\" LIMIT ?" cursor cursor (inc limit))
                           page (paginated rows limit :did #(assoc % :active true))]
                       (-> page (assoc :repos (:items page)) (dissoc :items)))))

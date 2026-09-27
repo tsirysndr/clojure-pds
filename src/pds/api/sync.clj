@@ -8,7 +8,8 @@
             [pds.protocol.mst :as mst]
             [pds.protocol.syntax :as syntax]
             [pds.repo :as repo]
-            [pds.request :as request]))
+            [pds.request :as request]
+            [pds.signing-state :as signing-state]))
 
 (defn car-response [root blocks]
   (when (> (reduce + 0 (map #(alength ^bytes %) (vals blocks))) (* 63 1024 1024))
@@ -20,6 +21,7 @@
 
 (defn active! [conn did]
   (when-not (syntax/did? did) (errors/invalid! "Invalid DID"))
+  (signing-state/ready! conn did)
   (accounts/resolve-account conn did))
 
 (defn routes [ds _settings]

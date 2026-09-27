@@ -8,20 +8,25 @@
             [pds.db :as db]
             [pds.handles :as handles]
             [pds.net :as net]
-            [pds.plc-keys :as keys]))
+            [pds.plc-keys :as keys]
+            [pds.signing-keys :as signing-keys]))
 
-(def usage "mise exec -- clojure -M:identity status DID\nmise exec -- clojure -M:identity rotate-plc-key DID EXPECTED_OPERATION_CID")
+(def usage "mise exec -- clojure -M:identity status DID\nmise exec -- clojure -M:identity rotate-plc-key DID EXPECTED_OPERATION_CID\nmise exec -- clojure -M:identity rotate-signing-key DID EXPECTED_SIGNING_DID_KEY")
 (defn command! [args]
   (let [[command did expected] args]
     (when-not (or (and (= "status" command) (= 2 (count args)))
-                  (and (= "rotate-plc-key" command) (= 3 (count args))))
+                  (and (#{"rotate-plc-key" "rotate-signing-key"} command) (= 3 (count args))))
       (throw (ex-info usage {:usage true})))
-    (keys/identifiers! did expected)
+    (if (= "rotate-plc-key" command) (keys/identifiers! did expected) (signing-keys/identifiers! did expected))
     {:command command :did did :expected expected}))
 
 (defn execute! [ds settings {:keys [command did expected]}]
   (case command
-    "status" (keys/status! ds did)
+    "status" (signing-keys/status! ds did)
+    "rotate-signing-key"
+    (let [queued (signing-keys/enqueue! ds settings did expected)]
+      (when-not (= "completed" (:state queued)) (handles/process-one! ds settings did))
+      (signing-keys/result! ds did expected))
     "rotate-plc-key"
     (let [queued (keys/enqueue! ds settings did expected)]
       (when-not (= "completed" (:state queued)) (handles/process-one! ds settings did))

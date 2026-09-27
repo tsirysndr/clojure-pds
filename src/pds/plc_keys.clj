@@ -63,15 +63,19 @@
         true)
       (do (when-not (= expected (:operation_cid identity)) (mismatch!)) false))))
 
-(defn- prepare [settings did expected {:keys [account identity repo]}]
+(defn verified-audit! [settings did {:keys [account identity repo]}]
   (let [audit (directory/audit! (:http-client settings) (:directory_url identity) did)
         data (:data audit) old (public-key (:rotation_public identity))]
-    (when-not (and data (= expected (:head audit)) (= 1 (count (filter #{old} (get data "rotationKeys"))))
+    (when-not (and data (= (:operation_cid identity) (:head audit)) (= 1 (count (filter #{old} (get data "rotationKeys"))))
                    (= (plc/did-key {:algorithm "ES256" :public (:public_key repo)}) (get-in data ["verificationMethods" "atproto"]))
                    (= "AtprotoPersonalDataServer" (get-in data ["services" "atproto_pds" "type"]))
                    (= (:public-url settings) (get-in data ["services" "atproto_pds" "endpoint"]))
                    (= (str "at://" (:handle account)) (first (get data "alsoKnownAs"))))
       (mismatch!))
+    audit))
+
+(defn- prepare [settings did expected {:keys [identity] :as snapshot}]
+  (let [audit (verified-audit! settings did snapshot) data (:data audit) old (public-key (:rotation_public identity))]
     (let [next (crypto/keypair "ES256K") purpose (str did ":plc-rotation")
           signer {:algorithm "ES256K" :private (crypto/unseal (:master-key settings) purpose (:rotation_key identity))}
           operation (plc/sign-operation (assoc (dissoc data "did") "type" "plc_operation" "prev" expected

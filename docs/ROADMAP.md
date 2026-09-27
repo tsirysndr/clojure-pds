@@ -24,7 +24,7 @@ runnable and update this document as features land.
    atomic writes with swap checks, record CRUD, pagination, repository description,
    CAR import/export. Acceptance: reference implementation verifies our exports
    and we verify its exports, including deletion and concurrent writes.
-5. **Identity and accounts (signup, resolution, handle updates and PLC control-key rotation implemented; repository signing-key rotation/migration pending):** DNS/HTTPS handle resolution, did:plc/did:web resolution,
+5. **Identity and accounts (signup, resolution, handle updates and managed control/signing-key rotation implemented; migration conformance pending):** DNS/HTTPS handle resolution, did:plc/did:web resolution,
    account provisioning, DID document publication, handle updates and key rotation.
    Acceptance: persisted identities resolve from a separate process; remote fetches
    have bounded sizes/timeouts and protection against SSRF.
@@ -113,9 +113,11 @@ remain required before a full client integration can be claimed. Preserve atomic
   fields. Recommended public DID credentials and email-authorized PLC operation
   signatures are exposed for migration. Signed submissions enforce local credential
   constraints and reconcile through the durable identity queue.
-  [Managed PLC control-key rotation](KEY-ROTATION.md) uses the same durable queue,
+  [Managed control/signing-key rotation](KEY-ROTATION.md) uses the same durable queue,
   preserves recovery priority, and installs encrypted replacement keys only after
-  confirmation. Repository signing-key rotation, migration and conflicted-operation
+  confirmation. Signing-key rotation re-signs the existing MST root, preserves records
+  and emits identity/sync checkpoints; hosted web rotation is atomic locally.
+  Recovery/master-key lifecycle, migration conformance and conflicted-operation
   administration remain pending. General PLC resolution verifies audit history and derives the current document, including
   for hosted accounts. It does not fall back to a stale local snapshot. Directory
   timestamps and history completeness/freshness remain trusted assertions.

@@ -9,7 +9,8 @@
             [pds.oauth.permissions :as permissions]
             [pds.protocol.codec :as codec]
             [pds.protocol.syntax :as syntax]
-            [pds.request :as request])
+            [pds.request :as request]
+            [pds.signing-state :as signing-state])
   (:import [java.net URI]
            [java.math BigInteger]
            [java.time Instant]
@@ -90,6 +91,7 @@
 (defn issue! [conn settings account params]
   (let [now (auth/now) {:keys [audience method expires]} (parameters! params now)]
     (authorize! account method audience)
+    (signing-state/ready! conn (:did account))
     (let [repo (first (db/query conn "SELECT signing_key FROM repositories WHERE did = ?" (:did account)))]
       (when-not repo (errors/raise! 400 "RepoNotFound" "Repository was not found"))
       {:token (sign {:algorithm "ES256" :private (crypto/unseal (:master-key settings) (:did account) (:signing_key repo))}

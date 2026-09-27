@@ -53,17 +53,12 @@
     (is (= 2 (cleanup/collect! fixture/*ds* settings)))
     (is (nil? (cleanup/collect! fixture/*ds* settings)))))
 
-(deftest temporary-collection-serializes-with-internal-repository-writes
+(deftest temporary-collection-skips-accounts-with-internal-repository-writes
   (let [settings (api/settings) did (:did (imports/local! settings)) data (byte-array [42])
-        entered (promise) collecting (promise) release (promise)
-        validate repo/record-value! query db/query]
+        entered (promise) release (promise) validate repo/record-value!]
     (put! settings did data)
     (db/transact! fixture/*ds* #(db/execute! % "UPDATE blobs SET uploaded_at = now() - interval '2 days'"))
-    (with-redefs [db/query (fn [conn sql & args]
-                            (when (= sql "SELECT did FROM repositories WHERE did = ? FOR UPDATE")
-                              (deliver collecting true))
-                            (apply query conn sql args))
-                  repo/record-value! (fn [& args]
+    (with-redefs [repo/record-value! (fn [& args]
                                      (let [value (apply validate args)]
                                        (deliver entered true)
                                        (when (= :timeout (deref release 5000 :timeout)) (throw (ex-info "Barrier timeout" {})))
@@ -72,12 +67,14 @@
         (try
           (is (= true (deref entered 5000 :timeout)))
           (let [gc (future (cleanup/collect! fixture/*ds* settings))]
-            (is (= true (deref collecting 5000 :timeout)))
-            (is (= :waiting (deref gc 100 :waiting)))
+            ;; Internal writers now lock the account before the repository.
+            ;; SKIP LOCKED must leave this still-unreferenced blob alone.
+            (is (nil? (deref gc 1000 :timeout)))
+            (is (= 1 (scalar "SELECT count(*) AS n FROM blobs")))
             (deliver release true)
             (is (map? (deref writer 5000 :timeout)))
-            (is (= 0 (deref gc 5000 :timeout))))
-          (finally (deliver release true)))))
+            (is (nil? (cleanup/collect! fixture/*ds* settings))))
+          (finally (deliver release true) (deref writer 5000 nil)))))
     (is (= 1 (scalar "SELECT count(*) AS n FROM blobs")))
     (is (= 1 (scalar "SELECT count(*) AS n FROM record_blob_refs")))))
 

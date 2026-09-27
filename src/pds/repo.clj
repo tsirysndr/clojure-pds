@@ -5,6 +5,7 @@
             [pds.blobs :as blobs]
             [pds.db :as db]
             [pds.errors :as errors]
+            [pds.signing-state :as signing-state]
             [pds.events :as events]
             [pds.lexicon :as lexicon]
             [pds.protocol.car :as car]
@@ -18,6 +19,7 @@
     (db/execute! conn "INSERT INTO repo_blocks(cid, content) VALUES (?, ?) ON CONFLICT (cid) DO NOTHING" id data)
     id))
 (defn state [conn did]
+  (signing-state/ready! conn did)
   (or (first (db/query conn "SELECT * FROM repositories WHERE did = ? FOR UPDATE" did))
       (errors/raise! 400 "RepoNotFound" "Repository was not found")))
 (defn tree [conn did]
@@ -27,6 +29,7 @@
 (defn commit!
   ([conn settings repo] (commit! conn settings repo []))
   ([conn settings repo ops]
+  (signing-state/ready! conn (:did repo))
   (let [{:keys [root blocks] :as tree} (tree conn (:did repo))
         rev (next-tid (:rev repo))
         unsigned {"did" (:did repo) "version" 3 "rev" rev "prev" nil "data" (codec/link root)}
@@ -48,6 +51,23 @@
           (events/account! conn (:did repo) "active"))
         (events/commit! conn (:did repo) head rev (:rev repo) (get previous "data") ops relevant)))
       {:cid head :rev rev}))))
+(defn resign!
+  "Install an operator-authorized key and sign the existing MST root with a new
+  revision. Caller holds the account lock and has confirmed external publication."
+  [conn settings did sealed public]
+  (let [current (first (db/query conn "SELECT * FROM repositories WHERE did = ? FOR UPDATE" did))
+        previous (some-> (first (db/query conn "SELECT content FROM repo_blocks WHERE cid = ?" (:head current))) :content codec/decode)
+        _ (when-not previous (errors/raise! 400 "RepoNotFound" "A committed repository is required"))
+        rev (next-tid (:rev current))
+        unsigned {"did" did "version" 3 "rev" rev "prev" nil "data" (get previous "data")}
+        private (crypto/unseal (:master-key settings) did sealed)
+        signed (assoc unsigned "sig" (crypto/sign "ES256" private (codec/encode unsigned)))
+        head (block! conn (codec/encode signed))]
+    (block-index/associate! conn did head)
+    (db/execute! conn "UPDATE repositories SET signing_key = ?, public_key = ?, head = ?, rev = ? WHERE did = ?"
+                 sealed public head rev did)
+    {:cid head :rev rev}))
+
 (defn initialize!
   ([conn settings did] (initialize! conn settings did nil))
   ([conn settings did handle]
