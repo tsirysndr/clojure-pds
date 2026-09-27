@@ -11,7 +11,7 @@
   (let [java (str (System/getProperty "java.home") "/bin/java")
         builder (ProcessBuilder. ^java.util.List [java "-cp" (System/getProperty "java.class.path") "clojure.main" "-m" "pds.main"])
         env (.environment builder)]
-    (doseq [name ["PDS_EMAIL_WORKER_URL" "PDS_EMAIL_WORKER_TOKEN" "PDS_EMAIL_FROM"]] (.remove env name))
+    (doseq [name ["PDS_EMAIL_WORKER_URL" "PDS_EMAIL_WORKER_TOKEN" "PDS_EMAIL_FROM" "PDS_RELAY_URLS" "PDS_RELAY_INTERVAL_SECONDS"]] (.remove env name))
     (.putAll env {"PDS_DATABASE_URL" (.getURL fixture/*ds*)
                  "PDS_DATABASE_USER" (.getUser fixture/*ds*) "PDS_DATABASE_PASSWORD" (.getPassword fixture/*ds*)
                  "PDS_MASTER_KEY" (crypto/b64 (crypto/random-bytes 32))

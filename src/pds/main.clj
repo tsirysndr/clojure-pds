@@ -17,6 +17,7 @@
             [pds.plc-provision :as provision]
             [pds.proxy :as proxy]
             [pds.redis :as redis]
+            [pds.relay :as relay]
             [pds.s3 :as s3]))
 
 (defn -main [& _]
@@ -28,6 +29,7 @@
                         (firehose/settings (System/getenv))
                         (identity/settings (System/getenv))
                         (proxy/settings (System/getenv))
+                        (relay/settings (System/getenv))
                         (blob-cleanup/settings (System/getenv))
                         (auth/settings (System/getenv)) {:email-enabled (boolean email-config)})
         ds (db/datasource (db/settings))
@@ -63,10 +65,11 @@
                                  (catch Throwable t (try (stop-email!) (finally (stop-cleanup!))) (throw t)))]
         (try
           (let [{:keys [port stop!]} (http/start! settings (app/handler settings ds))
+                stop-relay! (try (relay/start! ds settings) (catch Throwable t (stop!) (throw t)))
                 stopped (promise)
                 once (atom false)
                 stop-all! (fn [] (when (compare-and-set! once false true)
-                                   (try (stop!)
+                                   (try (try (stop-relay!) (finally (stop!)))
                                         (finally (try (stop-provision!)
                                                       (finally (try (stop-email!)
                                                                     (finally (try (stop-cleanup!) (finally (stop-dependencies!)))))))))))

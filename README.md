@@ -98,6 +98,8 @@ to avoid wrapping Rebel in a second readline tool.
 | `PDS_RECORD_WRITE_RATE_LIMIT_ENABLED` | `true` | `false` disables record-write limits; [write budget settings](docs/REDIS.md#record-write-overrides) |
 | `PDS_RATE_LIMIT_REQUESTS` | `120` | Requests per IP per window |
 | `PDS_RATE_LIMIT_WINDOW_SECONDS` | `60` | Fixed window duration |
+| `PDS_RELAY_URLS` | unset | Comma-separated relay HTTPS origins; [durable announcements](docs/RELAY.md) |
+| `PDS_RELAY_INTERVAL_SECONDS` | `1200` | Interval between successful relay announcements |
 | `PDS_EMAIL_WORKER_URL` | unset | Email Worker HTTPS endpoint |
 | `PDS_EMAIL_WORKER_TOKEN` | unset | Worker shared secret |
 | `PDS_EMAIL_FROM` | unset | Verified sending address |

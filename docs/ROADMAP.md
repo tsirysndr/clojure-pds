@@ -48,9 +48,11 @@ runnable and update this document as features land.
 8. **Blob APIs (buffered transfer, references, missing/since listing and temporary/reference cleanup implemented):** streaming upload/download, limits, ownership, record references,
    list/missing blobs and garbage collection. Acceptance: binary round trips,
    interrupted upload cleanup and no cross-account access leaks.
-9. **Sync and federation (queries, proofs and WebSocket firehose implemented; external relay pending):** durable ordered event log, sync queries, WebSocket
+9. **Sync and federation (queries, proofs, WebSocket firehose and relay announcements implemented; external relay pending):** durable ordered event log, sync queries, WebSocket
    subscribeRepos with replay/backpressure, relay notification and takedowns.
    Acceptance: relay consumes commits and reconnects without losing events.
+   [Relay discovery](RELAY.md) is opt-in, with durable per-relay scheduling,
+   bounded HTTPS delivery, retries and cross-process leases.
 10. **Service integration and migration (authenticated buffered proxy, service tokens/replay protection, destination preparation, data transfer and verified activation implemented):** authenticated service proxy, service
     auth tokens, account migration/import/export and PLC operations.
     Acceptance: an external client reads and writes through this PDS and an

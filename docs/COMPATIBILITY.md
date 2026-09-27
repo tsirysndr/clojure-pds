@@ -319,8 +319,10 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
    Optional [TOTP and passkeys](ACCOUNT-SECURITY.md) include browser enrollment,
    removal and OAuth login integration; hardware/browser ceremony verification
    and broader recovery controls remain pending.
-5. Relay notification and external relay interoperability,
-   event retention/compaction, and remaining record/blob takedown semantics.
+5. External relay interoperability, event retention/compaction, and remaining
+   record/blob takedown semantics. [Opt-in relay announcements](RELAY.md) are
+   implemented with durable schedules, bounded HTTPS, retries and fenced leases;
+   local tests do not prove that a deployed relay accepts or consumes this PDS.
 6. Remaining migration private-state APIs, streaming proxy transfers, and external
    AppView/labeler/client/relay end-to-end tests.
 7. Streaming repository import, S3 orphan and historical-block reclamation,
