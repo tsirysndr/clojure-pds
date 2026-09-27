@@ -219,6 +219,11 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   The pinned upstream CBOR decoder parses actual socket frames and verifies their
   signed repository. Jetty 12.1.13 supplies HTTP/WebSocket transport with owned
   virtual threads and bounded shutdown.
+- Owned HTTP stream bodies use one 64 KiB buffer and wait for each write callback
+  (30-second deadline). Real socket tests cover multiple chunks, empty bodies,
+  HEAD/204/304 suppression, declared-length mismatches, read failures, slow-client
+  backpressure, disconnect and shutdown cleanup. Existing endpoint body buffering
+  is unchanged until each endpoint adopts the stream body contract.
 - Signing keys use AES-256-GCM with account DID as associated data. Passwords use
   Argon2id. Sessions are persisted and checked on requests; reset/replay/logout
   revocation is tested. Machine-generated app passwords use keyed digests; tests

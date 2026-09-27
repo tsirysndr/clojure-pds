@@ -96,6 +96,10 @@ remain required before a full client integration can be claimed. Preserve atomic
 - Jetty serves HTTP and WebSocket upgrades through Ring-shaped request/response
   maps. Blocking handlers and stream workers use owned virtual threads. A stream
   worker waits for each send callback with a deadline before producing another frame.
+  HTTP also accepts owned, known-length input streams with 64 KiB reads, write
+  backpressure and cleanup on completion, HEAD, failure, disconnect and shutdown.
+  Blob/CAR/proxy endpoints still need to adopt this transport; this infrastructure
+  alone does not remove their existing whole-response buffering.
 - PostgreSQL is the storage backend. Migrations are transactional, serialized by
   an advisory lock, and checked for changes using SHA-256. Integration tests use
   an isolated PostgreSQL cluster and disposable schemas. The server uses a
