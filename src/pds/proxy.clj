@@ -97,7 +97,7 @@
             (when-not (.tryAcquire permits) (errors/raise! 503 "ProxyBusy" "Proxy concurrency limit reached"))
             (try
               ;; Authenticate before any remote lookup or reading a request body.
-              (db/transact! ds #(service-auth/authorize! (auth/authenticate! % config r) method))
+              (db/transact! ds #(service-auth/authorize! (auth/authenticate! % config r) method target))
               (let [service (service! target)
                     body (when (= :post (:request-method r)) (request/body-bytes r (:proxy-max-request-bytes config)))
                     _ (when (and body (get-in r [:headers "content-encoding"])

@@ -295,11 +295,13 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
 2. Bounded identity caching,
    signing/rotation key lifecycle, conflicted-operation administration, and migration.
 3. Remaining administrative APIs, record/blob takedowns, and broader account recovery controls.
-4. OAuth authorization server: granular permissions/sets and deployed
+4. OAuth authorization server: management permissions, permission sets and deployed
    reference-client interoperability.
    [DPoP replay protection, metadata/JWKS, confidential clients, PAR/PKCE, browser
    signup/consent, token rotation/revocation, owner session management and transitional
    resource authorization](OAUTH.md) are implemented and mounted with discovery.
+   Direct collection/action, blob MIME, RPC audience/method and email-read scopes
+   are enforced and shown in consent; an upstream client flow covers these grants.
    Pinned upstream Node client tests verify public signup and confidential login,
    writes, refresh and revocation against a local HTTP fixture. Bounded grant
    cleanup preserves replay evidence until absolute session expiry.

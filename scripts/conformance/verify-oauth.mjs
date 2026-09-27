@@ -91,6 +91,10 @@ assert.equal(owner.stage, 'authenticated');
 assert.equal(owner.accessJwt, undefined);
 const consent = (await browser(`${flow}/attach`, { accountCsrf: owner.csrf }, initial.csrf)).json;
 assert.equal(consent.did, fixture.did);
+assert.ok(Array.isArray(consent.permissions));
+if (fixture.metadata.scope.includes('repo:com.example.note?action=create')) {
+  assert.ok(consent.permissions.includes('Create public records in com.example.note.'));
+}
 const decision = (await browser(`${flow}/decide`, { approve: true }, consent.csrf)).json;
 const callback = new URL(decision.location);
 assert.equal(callback.origin + callback.pathname, 'https://app.example.com/callback');
@@ -105,7 +109,7 @@ async function identity() {
   assert.equal(response.status, 200);
   const result = await response.json();
   assert.equal(result.did, fixture.did);
-  assert.equal(result.email, fixture.metadata.scope.includes('transition:email') ? fixture.email : undefined);
+  assert.equal(result.email, (fixture.metadata.scope.includes('transition:email') || fixture.metadata.scope.includes('account:email')) ? fixture.email : undefined);
 }
 await identity();
 const written = await session.fetchHandler('/xrpc/com.atproto.repo.createRecord', {

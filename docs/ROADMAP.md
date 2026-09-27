@@ -36,11 +36,11 @@ runnable and update this document as features land.
    passkey registration/assertion primitives. Secure browser enrollment/removal and
    passkey login integration are implemented; hardware and complete browser ceremonies remain pending.
    Acceptance: expiry, replay, cross-account authorization and restart tests.
-7. **OAuth (discovery, browser authorization, tokens/revocation and transitional resource permissions implemented):** authorization-server metadata, PAR, PKCE, DPoP, client metadata,
+7. **OAuth (discovery, browser authorization, tokens/revocation, direct and transitional resource permissions implemented):** authorization-server metadata, PAR, PKCE, DPoP, client metadata,
    consent, token binding and scoped permissions. Acceptance: reference clients
    complete login and invalid/replayed proofs fail. Local upstream Node client flows
-   cover signup, login, writes, refresh and revocation; granular permissions and
-   deployed interoperability remain pending.
+   cover signup, login, writes, refresh and revocation; management permissions,
+   permission sets and deployed interoperability remain pending.
 8. **Blob APIs (buffered transfer, references, missing/since listing and temporary/reference cleanup implemented):** streaming upload/download, limits, ownership, record references,
    list/missing blobs and garbage collection. Acceptance: binary round trips,
    interrupted upload cleanup and no cross-account access leaks.

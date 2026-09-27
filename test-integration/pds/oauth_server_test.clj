@@ -87,11 +87,14 @@
             (when (zero? (.exitValue process)) (json/read-str output)))))
       (finally (Files/deleteIfExists path)))))
 
-(defn upstream-flow! [confidential?]
+(defn upstream-flow!
+  ([confidential?] (upstream-flow! confidential? nil))
+  ([confidential? requested-scope]
   (let [env (token/env confidential?)
         _ (swap! (:document env) merge (if confidential?
             {"scope" "atproto transition:generic transition:email" "token_endpoint_auth_signing_alg" "ES256"}
             {"token_endpoint_auth_method" "none"}))
+        _ (when requested-scope (swap! (:document env) assoc "scope" requested-scope))
         config (settings env) key (:client-key env)
         handle (if confidential? "alice.example.com" "new.example.com") did (str "did:web:" handle)
         running (http/start! {:host "127.0.0.1" :port 0} (app/handler config fixture/*ds*))]
@@ -108,8 +111,9 @@
         (is (= [{:revoke_reason "client_revoked"}]
                (token/query "SELECT revoke_reason FROM oauth_sessions WHERE did = ?" did)))
         (is (= (if confidential? 1 0) (count (token/query "SELECT * FROM sessions WHERE did = ?" did)))))
-      (finally ((:stop! running))))))
+      (finally ((:stop! running)))))))
 
 (when (= "true" (System/getenv "PDS_TEST_UPSTREAM"))
   (deftest upstream-public-signup (upstream-flow! false))
+  (deftest upstream-granular-signup (upstream-flow! false "atproto repo:com.example.note?action=create account:email"))
   (deftest upstream-confidential-login (upstream-flow! true)))

@@ -42,7 +42,7 @@ function render(next) {
   if (screen === 'consent') {
     $('heading').textContent = 'Authorize application'; $('subtitle').textContent = 'Review the access you are granting';
     $('oauth-client').textContent = flow['client-id']; $('oauth-did').textContent = flow.did;
-    $('oauth-scopes').replaceChildren(...flow.parameters.scope.split(' ').map(scope => { const li = document.createElement('li'); li.textContent = scopeLabels[scope] || scope; return li; }));
+    $('oauth-scopes').replaceChildren(...(flow.permissions || flow.parameters.scope.split(' ').map(scope => scopeLabels[scope] || scope)).map(label => { const li = document.createElement('li'); li.className = 'wrap-anywhere'; li.textContent = label; return li; }));
   }
   document.title = `${$('heading').textContent} · ${$('server-name').textContent}`;
   if (flowId) $('session-note').textContent = 'Authorization requests expire after ten minutes';
@@ -81,7 +81,7 @@ function renderSessions(page) {
     const client = document.createElement('p'); client.className = 'break-all text-sm font-medium'; client.textContent = session['client-id'];
     const dates = document.createElement('p'); dates.className = 'text-xs text-muted'; dates.textContent = `Connected ${new Date(session['created-at']).toLocaleString()} · Expires ${new Date(session['expires-at']).toLocaleString()}`;
     const scopes = document.createElement('ul'); scopes.className = 'list-disc space-y-2 pl-5 text-sm';
-    for (const scope of session.scope.split(' ')) { const entry = document.createElement('li'); entry.textContent = scopeLabels[scope] || scope; scopes.append(entry); }
+    for (const label of session.permissions || session.scope.split(' ').map(scope => scopeLabels[scope] || scope)) { const entry = document.createElement('li'); entry.className = 'wrap-anywhere'; entry.textContent = label; scopes.append(entry); }
     const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'secondary text-danger'; remove.textContent = 'Disconnect'; remove.setAttribute('aria-label', `Disconnect session for ${session['client-id']}`);
     remove.addEventListener('click', () => run(async () => { if (confirm(`Disconnect this session for ${session['client-id']}?`)) { await action('oauth/revoke', {id: session.id}); notice('App session disconnected.'); } }));
     item.append(client, dates, scopes, remove); list.append(item);

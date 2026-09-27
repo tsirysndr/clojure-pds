@@ -7,6 +7,7 @@
             [pds.blob-refs :as blob-refs]
             [pds.db :as db]
             [pds.errors :as errors]
+            [pds.oauth.permissions :as permissions]
             [pds.protocol.syntax :as syntax]
             [pds.request :as request]))
 
@@ -21,6 +22,7 @@
        (let [type (some-> (get-in r [:headers "content-type"]) (str/split #";") first str/lower-case)
              _ (when-not (and type (re-matches #"[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+" type))
                  (errors/invalid! "A valid Content-Type is required"))
+             _ (permissions/blob! account type)
              bytes (request/body-bytes r max-size)]
          (let [stored (blobs/store! conn settings (:did account) bytes type)]
            {:blob {:$type "blob" :ref {:$link (:cid stored)} :mimeType (:mime_type stored) :size (:size stored)}})))))

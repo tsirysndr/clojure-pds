@@ -4,6 +4,7 @@
             [pds.api.server :as server]
             [pds.db :as db]
             [pds.errors :as errors]
+            [pds.oauth.permissions :as permissions]
             [pds.protocol.car :as car]
             [pds.protocol.codec :as codec]
             [pds.protocol.syntax :as syntax]
@@ -32,7 +33,8 @@
     (fn [conn account r]
       (let [body (request/json-body r)]
         (own-repo! account body) (validation! body)
-        (let [result (repo/apply-writes! conn settings (:did account) [(write action body)] (get body "swapCommit"))]
+        (let [result (repo/apply-writes! conn settings (:did account) [(write action body)] (get body "swapCommit")
+                                         #(permissions/repo! account %1 %2))]
           (if (= action :delete) {:commit (:commit result)}
               (assoc (dissoc (first (:results result)) :$type) :commit (:commit result)))))))))
 (defn query-route [ds f]
@@ -63,7 +65,7 @@
                              "com.atproto.repo.applyWrites#update" :update
                              "com.atproto.repo.applyWrites#delete" :delete
                              (errors/invalid! "Unknown write type")) (assoc entry "validate" (get body "validate")))) writes)
-            (get body "swapCommit"))))))
+            (get body "swapCommit") #(permissions/repo! account %1 %2))))))
    "/xrpc/com.atproto.repo.getRecord"
    (query-route ds (fn [conn params]
                     (let [account (accounts/resolve-account conn (get params "repo"))

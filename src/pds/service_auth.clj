@@ -65,8 +65,8 @@
         (errors/raise! 400 "BadExpiration" "Expiration must be in the future, at most one hour for a method or one minute without one"))
       {:audience audience :method method :expires expires})))
 
-(defn authorize! [account method]
-  (when (:oauth-scope account) (permissions/rpc! account method))
+(defn authorize! [account method audience]
+  (when (:oauth-scope account) (permissions/rpc! account method audience))
   (let [method (some-> method str/lower-case)]
     (when (and (= "taken_down" (:status account)) (not= "com.atproto.server.createaccount" method))
       (errors/raise! 400 "InvalidToken" "Taken-down accounts may only authorize account migration"))
@@ -89,7 +89,7 @@
 
 (defn issue! [conn settings account params]
   (let [now (auth/now) {:keys [audience method expires]} (parameters! params now)]
-    (authorize! account method)
+    (authorize! account method audience)
     (let [repo (first (db/query conn "SELECT signing_key FROM repositories WHERE did = ?" (:did account)))]
       (when-not repo (errors/raise! 400 "RepoNotFound" "Repository was not found"))
       {:token (sign {:algorithm "ES256" :private (crypto/unseal (:master-key settings) (:did account) (:signing_key repo))}

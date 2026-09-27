@@ -3,7 +3,8 @@
   lock before invoking these operations; no credentials or token hashes leave here."
   (:require [pds.db :as db]
             [pds.errors :as errors]
-            [pds.oauth.dpop :as dpop])
+            [pds.oauth.dpop :as dpop]
+            [pds.oauth.scope :as scope])
   (:import [java.time Instant]))
 
 (def page-size 20)
@@ -27,7 +28,7 @@
                        did (Instant/ofEpochSecond (dpop/now)) cursor cursor (inc page-size))
         page (vec (take page-size rows))]
     (cond-> {:items (mapv (fn [row]
-                           {:id (:session_id row) :client-id (:client_id row) :scope (:scope row)
+                           {:id (:session_id row) :client-id (:client_id row) :scope (:scope row) :permissions (scope/describe (:scope row))
                             :created-at (str (.toInstant ^java.sql.Timestamp (:created_at row)))
                             :expires-at (str (.toInstant ^java.sql.Timestamp (:expires_at row)))}) page)
              :first-page (nil? cursor)}

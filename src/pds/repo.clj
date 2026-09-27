@@ -82,7 +82,9 @@
     {:cid (block! conn data) :validation-status validation-status :record native}))
 (defn apply-writes!
   "Caller owns transaction. Repository lock protects all swap checks and writes."
-  [conn settings did writes swap-commit]
+  ([conn settings did writes swap-commit]
+   (apply-writes! conn settings did writes swap-commit (fn [_ _] nil)))
+  ([conn settings did writes swap-commit authorize-write!]
   (let [repo (state conn did)]
     (when (and swap-commit (not= swap-commit (:head repo)))
       (errors/raise! 400 "InvalidSwap" "Repository commit has changed"))
@@ -95,6 +97,7 @@
                    _ (path! collection rkey)
                    path [collection rkey]
                    old (first (db/query conn "SELECT cid FROM records WHERE did = ? AND collection = ? AND rkey = ?" did collection rkey))]
+               (authorize-write! collection (if (= :put action) (if old :update :create) action))
                (when (@seen path) (errors/invalid! "Duplicate record path in batch"))
                (swap! seen conj path)
                (swap! old-blobs into (map :cid (db/query conn "SELECT cid FROM record_blob_refs WHERE did = ? AND collection = ? AND rkey = ?" did collection rkey)))
@@ -124,7 +127,7 @@
           commit (commit! conn settings repo @ops)]
       (stamp-records! conn did (:rev commit))
       (blobs/remove-unreferenced! conn did @old-blobs)
-      {:commit commit :results results})))
+      {:commit commit :results results}))))
 
 (defn record [conn did collection rkey]
   (path! collection rkey)

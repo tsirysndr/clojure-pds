@@ -1,9 +1,10 @@
 # OAuth implementation series
 
 The PDS publishes OAuth discovery, PAR, browser authorization, token and revocation
-endpoints. DPoP resource authentication is connected to XRPC, with the four
-transitional scopes described below. Legacy session endpoints retain their existing
-behavior. Granular permissions and deployed interoperability remain incomplete.
+endpoints. DPoP resource authentication is connected to XRPC with transitional
+scopes and direct record, blob, RPC and email-read permissions. Legacy session
+endpoints retain their existing behavior. Management permissions, permission sets
+and deployed interoperability remain incomplete.
 
 ## Proof verification and durable replay protection
 
@@ -151,10 +152,10 @@ Optional `dpop_jkt` values must match the proof's key.
 
 Only code responses, query response mode and S256 PKCE are accepted. State is
 required, redirects must match client metadata, and requested scopes must be
-declared by the client. The current validator supports `atproto` and the three
-transitional scopes; chat additionally requires `transition:generic`. Fine-grained
-permissions and permission sets remain pending and are rejected rather than
-authorized implicitly. Login hints and supported prompt values are preserved for
+declared by the client. The validator supports `atproto`, the three transitional
+scopes and the direct permissions documented below. Transitional chat additionally
+requires `transition:generic`. Management scopes and permission sets remain pending
+and are rejected rather than authorized implicitly. Login hints and supported prompt values are preserved for
 the browser authorization interface.
 
 Migration 026 reserves each PKCE challenge across all clients for 24 hours. The
@@ -361,8 +362,57 @@ forwards a newly signed service token, never the OAuth token, DPoP proof or cook
 PostgreSQL and real HTTP/TLS tests cover nonce retries, wrong key/token/method/URL,
 replay after errors, concurrent requests, email filtering, writes, blob upload,
 account restrictions, key removal/restoration, metadata outages, lifecycle races,
-expiration and service/proxy scope enforcement. Granular permissions and permission
-sets are still pending; they are not accepted by PAR yet.
+expiration and service/proxy scope enforcement. Direct granular permissions are
+described below; management scopes and permission sets are not accepted by PAR yet.
+
+## Direct granular permissions
+
+PAR accepts these resource permissions in addition to the transitional scopes:
+
+| Scope examples | Granted operation |
+| --- | --- |
+| `repo:com.example.note?action=create` | Create records in one collection |
+| `repo:com.example.note?action=update&action=delete` | Update/delete that collection |
+| `repo:*` | Create/update/delete any public record |
+| `blob:image/*` | Upload images |
+| `blob?accept=image/png&accept=video/mp4` | Upload only the listed media types |
+| `rpc:com.example.read?aud=did:web:api.example.com%23appview` | Call one method on one service |
+| `rpc:com.example.read?aud=*` | Call that method on any service |
+| `rpc:*?aud=did:web:api.example.com%23appview` | Call any permitted service-auth method on that service |
+| `account:email` | Read email and verification information |
+
+Named/positional parameters, repeated array values and percent escapes are parsed
+strictly. Unknown resources/parameters, scalar duplicates, mixed positional/named
+values, partial NSID wildcards and simultaneous RPC method/audience wildcards fail
+with `invalid_scope`. Positional `+` remains literal, while query `+` means a space;
+use `%2B` in a query MIME subtype such as `application/ld%2Bjson`. MIME matching
+normalizes case. Each scope is bounded by 8,192 characters and 64 parameters; the
+existing 100-token/8,192-character total scope limit still applies. Requested scope
+strings must appear in client metadata and remain within the original grant when
+refreshing. Discovery lists the fixed transitional scope names; resource scopes
+are parameterized and cannot be exhaustively listed.
+
+Repository authorization runs after the repository lock is held, with the actual
+collection and operation. `putRecord` requires `create` for a missing record and
+`update` for an existing record. Every `applyWrites` entry is checked, and a denied
+entry rolls back the entire batch, including records, blocks, commit and events.
+Blob MIME permissions are checked before reading or storing upload bytes. RPC
+permissions bind both the exact method and audience, before remote lookup and again
+before signing the service token. Explicit granular chat grants can authorize a
+specific chat method without the broad transitional DM permission. Existing service
+auth method restrictions still apply. Email-read grants do not permit email changes.
+
+Consent and the connected-app list display server-generated descriptions through
+DOM `textContent`. Long method, collection and audience identifiers wrap inside the
+purple card; the consent fixture was visually checked in Chrome. Authorization
+checks use validated scope values, never the displayed descriptions.
+
+`@atproto/oauth-scopes` 0.5.12 is pinned for parser/matcher comparison. Tests also
+cover atomic denial, put create/update distinctions, pre-body upload denial,
+audience/method substitution and refresh narrowing. The upstream Node OAuth client
+completes signup, a scoped record write, refresh and revocation using granular
+permissions. Account management, identity management and dynamically resolved
+`include:` permission sets remain the next implementation steps.
 
 ## Revocation and owner session management
 
@@ -389,7 +439,7 @@ The `/account` security screen lists and disconnects the owner's active sessions
 Only a recent complete browser login may access the list or revoke a session;
 same-origin POST and CSRF validation apply to management actions. Lists expose only
 the session identifier, client metadata URL, original scope, creation and expiration
-times. They never include token values/hashes, PKCE data or DPoP/client keys.
+times, plus readable permission descriptions. They never include token values/hashes, PKCE data or DPoP/client keys.
 Invalidated, expired and revoked sessions are omitted. Migration 032 indexes stable
 session-ID pagination; each page has at most 20 entries. Foreign/unknown IDs produce
 the same idempotent result, without modifying another account's sessions.
@@ -470,8 +520,8 @@ The process lifecycle test covers starting and stopping the registered worker.
 
 ## Remaining steps
 
-1. Granular permission scopes and dynamically resolved permission sets, including
-   permission-aware consent and enforcement in each resource operation.
+1. Account/identity management scopes and dynamically resolved permission sets,
+   including fixed access-token permission snapshots and permission-set consent.
 2. Full browser/hardware ceremonies and deployed reference-client verification.
 
 Sources: [AT Protocol OAuth profile](https://atproto.com/specs/oauth),

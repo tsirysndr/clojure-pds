@@ -12,6 +12,7 @@
             [pds.oauth.dpop :as dpop]
             [pds.oauth.http :as http]
             [pds.oauth.par :as par]
+            [pds.oauth.scope :as scope]
             [pds.protocol.codec :as codec]
             [pds.security.factors :as factors]
             [pds.security.browser :as browser-session])
@@ -50,6 +51,7 @@
 (defn- view [row browser]
   (let [request (snapshot row)]
     {:client-id (:client-id request) :parameters (:parameters request)
+     :permissions (scope/describe (get-in request [:parameters "scope"]))
      :did (:did row) :csrf (csrf row browser)}))
 
 (defn start!

@@ -8,12 +8,13 @@
             [pds.oauth.dpop :as dpop]
             [pds.oauth.http :as http]
             [pds.oauth.pkce :as pkce]
+            [pds.oauth.scope :as scope]
             [pds.protocol.codec :as codec])
   (:import [java.time Instant]))
 
 (def request-uri-prefix "urn:ietf:params:oauth:request_uri:")
 (def request-lifetime 90)
-(def supported-scopes #{"atproto" "transition:generic" "transition:chat.bsky" "transition:email"})
+(def supported-scopes scope/transitional)
 
 (defn parameters! [resolved params]
   (when-not (= "code" (get params "response_type")) (http/fail! "unsupported_response_type" "Only authorization code responses are supported"))
@@ -31,7 +32,7 @@
   (pkce/challenge! (get params "code_challenge") (get params "code_challenge_method"))
   (let [requested (try (client/scopes! (get params "scope")) (catch Exception _ (http/fail! "invalid_scope" "Invalid scope")))
         declared (client/scopes! (get-in resolved [:metadata "scope"]))]
-    (when-not (and (set/subset? requested declared) (set/subset? requested supported-scopes)
+    (when-not (and (set/subset? requested declared) (every? scope/supported? requested)
                    (or (not (requested "transition:chat.bsky")) (requested "transition:generic")))
       (http/fail! "invalid_scope" "Requested scope is not available")))
   ;; Persist only authorization parameters, never client assertions or arbitrary
