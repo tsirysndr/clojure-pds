@@ -137,25 +137,25 @@
         foreign (codec/encode foreign-value) foreign-cid (codec/cid foreign)
         f (repo-car did key {"com.example.record/a" {"reference" (codec/link foreign-cid)}})
         bytes (car/encode (:head f) (assoc (:blocks f) foreign-cid foreign))
-        handler (app/handler settings fixture/*ds*) verify repository/verify-car
+        handler (app/handler settings fixture/*ds*) verify repository/verify-blocks
         bob (accounts/create! fixture/*ds* settings {"handle" "bob.example.com" "email" "bob@example.com" "password" "test-password"})]
     (db/transact! fixture/*ds* #(repo/apply-writes! % settings (:did bob) [{:action :create :collection "com.example.record" :rkey "a" :value foreign-value}] nil))
     (is (= 200 (:status (handler (import-request (:accessJwt account) bytes)))))
     (is (= 1 (:n (first (rows "SELECT count(*) AS n FROM repo_blocks WHERE cid = ?" foreign-cid)))))
     (is (= [{:did (:did bob)}] (rows "SELECT did FROM repo_block_owners WHERE cid = ?" foreign-cid)))
     (let [before (state)]
-      (with-redefs [repository/verify-car (fn [& args]
+      (with-redefs [repository/verify-blocks (fn [& args]
                                            (let [result (apply verify args)]
                                              (db/transact! fixture/*ds* #(db/execute! % "UPDATE sessions SET revoked = true WHERE did = ?" did))
                                              result))]
         (is (= 401 (:status (handler (import-request (:accessJwt account) bytes))))))
       (is (= before (state))))))
 
-(deftest concurrent-imports-detect-conflicts-and-bound-buffered-work
+(deftest concurrent-imports-detect-conflicts-and-bound-staged-work
   (let [settings (api/settings) account (local! settings) did (:did account) key (local-key settings did)
         f (repo-car did key {"com.example.record/a" {}}) handler (app/handler settings fixture/*ds*)
-        verify repository/verify-car arrived (CountDownLatch. 2) release (CountDownLatch. 1)]
-    (with-redefs [repository/verify-car (fn [& args]
+        verify repository/verify-blocks arrived (CountDownLatch. 2) release (CountDownLatch. 1)]
+    (with-redefs [repository/verify-blocks (fn [& args]
                                          (.countDown arrived)
                                          (when-not (.await release 15 TimeUnit/SECONDS) (throw (ex-info "Barrier timed out" {})))
                                          (apply verify args))]

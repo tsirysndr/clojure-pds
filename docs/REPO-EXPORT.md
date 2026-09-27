@@ -46,7 +46,7 @@ Individual database block reads are capped at 1 MiB, matching the repository
 codec's supported block envelope. Missing or unowned explicitly requested blocks
 return `400 BlockNotFound`; corrupt proof/commit data fails without a partial CAR.
 
-The current import verifier still has its independent 64 MiB buffered limit.
+The [disk-staged importer](REPO-IMPORT.md) has an independent 64 MiB input limit.
 Raising the export limit does not raise import capacity. Internal byte-array CAR
 helpers remain buffered. Large-repo
 load tests, bulk read optimization and deployed relay/migration verification
@@ -78,8 +78,10 @@ The input remains owned by the caller. Visitor exceptions and read failures stop
 parsing immediately; thread interruption is checked between reads. Callers must
 provide transport deadlines and stage visitor effects until successful EOF and
 repository/signature verification: a valid prefix does not establish a valid
-archive or repository. This reader is a prerequisite for staged imports; the
-public import endpoint still buffers the archive and decoded repository today.
+archive or repository. The public importer uses this reader to stage individual
+block payloads before canonical repository verification and atomic publication.
+Its CID/offset/path metadata remains in memory; it no longer buffers the entire
+archive or all decoded record payloads.
 
 Unit tests cover fragmented input, empty/rootless archives, the largest supported
 block, exact byte limits, duplicate accounting, malformed lengths, incomplete

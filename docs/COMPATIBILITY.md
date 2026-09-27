@@ -34,7 +34,7 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | `com.atproto.identity` | `submitPlcOperation` | Credential constraints, authorized successor signatures, durable directory reconciliation and atomic identity events; prepared destination identities supported; recovery forks use the separate operator CLI |
 | `com.atproto.repo` | `createRecord`, `putRecord`, `deleteRecord`, `applyWrites` | Atomic signed commits; record/repo swap checks; batch maximum 200 |
 | `com.atproto.repo` | `getRecord`, `listRecords`, `describeRepo` | Current records; keyset pagination and reverse order |
-| `com.atproto.repo` | `importRepo` | Primary session, complete signed v3 CAR, atomic record replacement and destination re-signing; active sync checkpoint or private inactive import; buffered 64 MiB limit |
+| `com.atproto.repo` | `importRepo` | Primary session, complete signed v3 CAR, atomic record replacement and destination re-signing; active sync checkpoint or private inactive import; disk-staged 64 MiB limit |
 | `com.atproto.repo` | `uploadBlob` | Authenticated, maximum 5 MiB, account ownership; inactive primary sessions supported |
 | `com.atproto.repo` | `listMissingBlobs` | Account-scoped referenced CIDs absent from blob metadata, distinct CID pagination and a representative record URI; inactive primary sessions supported |
 | `com.atproto.sync` | `getRepo`, `getLatestCommit`, `getRepoStatus`, `listRepos` | Staged streaming full CAR export and local repository metadata; no incremental export optimization |
@@ -198,7 +198,16 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   HTTP restoration, newer locally signed revisions, sync checkpoints, private
   migration imports, source signature checks, transaction rollback, app-password
   denial, revocation while parsing and concurrent import conflicts. A two-permit
-  process-wide limit bounds buffered imports; excess requests return 503.
+  process-wide limit bounds staged imports; excess requests return 503.
+  [Disk-staged imports](REPO-IMPORT.md) read at most 64 KiB from the upload at once,
+  retain CID/offset/path metadata, and load payloads individually for hash/signature,
+  canonical-tree and record checks. The destination signs the verified root without
+  collecting/rebuilding its encoded nodes. Tests reject buffered import helpers,
+  restore multi-megabyte content, exercise chunked HTTP and disconnect cleanup,
+  and inject a disk-read failure after publication begins to prove full rollback.
+  A one-connection pool remains available during reads; legacy/OAuth revocation
+  after staging still denies publication. Metadata and canonical rebuilding remain
+  O(n); large-scale throughput and heap benchmarks are pending.
 - PostgreSQL migrations are locked, transactional, and checksummed. Tests verify
   rollback, persistence across connections, binary data, signed commits, atomic
   batches, concurrent swap conflicts, and isolation between accounts.

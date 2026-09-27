@@ -13,18 +13,17 @@
     (if (and (< n (min (alength a) (alength b))) (= (aget a n) (aget b n)))
       (recur (inc n)) n)))
 
-(defn build
-  "Deterministic complete-tree builder. Returns root CID and encoded node blocks.
-  Rebuilds O(n) nodes; incremental mutation is a future performance improvement."
-  [records]
-  (let [blocks (atom {})
-        entries (mapv (fn [[k v]] {:key k :value (codec/link v) :height (height k)}) (sort records))]
+(defn write-tree!
+  "Build a canonical MST, visiting each encoded node without retaining payloads.
+  Returns the root CID. Path/CID metadata remains O(n); mutation is not incremental."
+  [records visit-node!]
+  (let [entries (mapv (fn [[k v]] {:key k :value (codec/link v) :height (height k)}) (sort records))]
     (doseq [{:keys [key]} entries]
       (when-not (and (string? key) (<= 1 (count key) 1024) (re-matches #"[\x21-\x7e]+" key))
         (codec/fail! "MST key must be nonempty printable ASCII")))
     (letfn [(store! [node]
               (let [data (codec/encode node) cid (codec/cid data)]
-                (swap! blocks assoc cid data) (codec/link cid)))
+                (visit-node! cid data) (codec/link cid)))
             (node! [items level]
               (let [positions (vec (keep-indexed #(when (= level (:height %2)) %1) items))
                     subtree (fn [start end]
@@ -41,7 +40,13 @@
                 (store! {"l" left "e" entries})))]
       (let [root (if (empty? entries) (store! {"l" nil "e" []})
                      (node! entries (apply max (map :height entries))))]
-        {:root (:cid root) :blocks @blocks}))))
+        (:cid root)))))
+
+(defn build
+  "Collect a complete canonical MST and its encoded blocks."
+  [records]
+  (let [blocks (atom {}) root (write-tree! records #(swap! blocks assoc %1 %2))]
+    {:root root :blocks @blocks}))
 
 (defn visit-proof!
   "Visit hash-checked blocks on a search path without collecting their payloads.
@@ -148,12 +153,13 @@
     (reduce (fn [blocks path] (merge blocks (:blocks (proof (:root tree) path (:blocks tree) false))))
             {(:root tree) (get (:blocks tree) (:root tree))} targets)))
 
-(defn read-tree
-  "Validate an untrusted complete MST. Only traverses tree links, returning
-  path/CID mappings and reachable tree blocks. Rebuilding checks canonical
-  heights, intermediate nodes and maximal prefix compression as well as shape."
-  [root load-block]
-  (let [blocks (atom {}) records (atom {})]
+(defn visit-tree!
+  "Validate a complete MST and visit hash-checked nodes. Returns path/CID mappings
+  and the reachable node CID set, without retaining block payloads. Canonical
+  rebuilding checks heights, intermediate nodes and maximal prefix compression.
+  Visitors must stage effects until traversal and canonical verification finish."
+  [root load-block visit-node!]
+  (let [nodes (atom #{}) records (atom {})]
     (letfn [(link! [value nullable?]
               (when-not (or (and nullable? (nil? value))
                             (and (instance? pds.protocol.codec.Link value)
@@ -161,11 +167,12 @@
                 (codec/fail! "MST requires a CBOR CID link"))
               (:cid value))
             (walk! [cid lower upper depth]
-              (when (or (> depth 128) (contains? @blocks cid))
+              (when (or (> depth 128) (contains? @nodes cid))
                 (codec/fail! "Repeated or excessively deep MST node"))
               (let [data (load-block cid)]
                 (when-not (and data (= cid (codec/cid data))) (codec/fail! "Missing or corrupt MST node"))
-                (swap! blocks assoc cid data)
+                (swap! nodes conj cid)
+                (visit-node! cid data)
                 (let [node (codec/decode data)]
                   (when-not (and (map? node) (= #{"l" "e"} (set (keys node))) (vector? (get node "e")))
                     (codec/fail! "Invalid MST node"))
@@ -192,6 +199,13 @@
                     (doseq [[index [key child]] (map-indexed vector entries)]
                       (when child (walk! child key (or (first (get entries (inc index))) upper) (inc depth))))))))]
       (walk! root nil nil 0)
-      (when-not (= root (:root (build @records)))
+      (when-not (= root (write-tree! @records (fn [_ _])))
         (codec/fail! "MST is not the canonical tree for its records"))
-      {:root root :records @records :blocks @blocks})))
+      {:root root :records @records :nodes @nodes})))
+
+(defn read-tree
+  "Collect validated MST nodes for callers requiring a buffered block map."
+  [root load-block]
+  (let [blocks (atom {})
+        tree (visit-tree! root load-block #(swap! blocks assoc %1 %2))]
+    (-> tree (dissoc :nodes) (assoc :blocks @blocks))))

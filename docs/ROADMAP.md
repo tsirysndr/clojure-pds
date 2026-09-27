@@ -20,7 +20,7 @@ runnable and update this document as features land.
    cryptographic vectors. Do not substitute JSON hashes for repository CIDs.
 3. **Durable storage (in progress):** PostgreSQL migrations, transactions, account metadata, key
    storage, content-addressed blocks and blobs, restart/recovery tests.
-4. **Repositories (core, verified CAR import and staged streaming full/partial exports implemented; import streaming and performance pending):** deterministic Merkle Search Tree, signed version-3 commits,
+4. **Repositories (core, disk-staged verified imports and streaming full/partial exports implemented; performance work pending):** deterministic Merkle Search Tree, signed version-3 commits,
    atomic writes with swap checks, record CRUD, pagination, repository description,
    CAR import/export. Acceptance: reference implementation verifies our exports
    and we verify its exports, including deletion and concurrent writes.
@@ -105,8 +105,10 @@ remain required before a full client integration can be claimed. Preserve atomic
   Full repository exports also use staged stream bodies, traversing the stored
   commit graph one block at a time with a transaction-local PostgreSQL CID set.
   Partial CAR responses stream selected blocks or visit the MST proof path without
-  retaining proof payloads. Proxy responses and internal migration byte-array paths
-  remain buffered.
+  retaining proof payloads. Imports stage hash-checked blocks on disk, verify the
+  canonical graph with individual block reads, and retain only CID/path metadata.
+  Publication rechecks authorization and signs the verified root without rebuilding
+  the tree. Proxy responses and internal migration byte-array paths remain buffered.
 - PostgreSQL is the storage backend. Migrations are transactional, serialized by
   an advisory lock, and checked for changes using SHA-256. Integration tests use
   an isolated PostgreSQL cluster and disposable schemas. The server uses a

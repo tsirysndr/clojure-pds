@@ -68,6 +68,24 @@
                  sealed public head rev did)
     {:cid head :rev rev}))
 
+(defn commit-import!
+  "Sign an already verified, owned imported MST root without rebuilding it.
+  Caller holds the account/repository locks and installs all reachable blocks
+  and record mappings in this transaction before calling. Emits no event."
+  [conn settings current root source-rev]
+  (let [did (:did current)]
+    (signing-state/ready! conn did)
+    (when-not (seq (db/query conn "SELECT 1 FROM repo_block_owners WHERE did = ? AND cid = ?" did root))
+      (codec/fail! "Imported root must belong to the repository"))
+    (let [rev (next-tid (last (sort [(:rev current) source-rev])))
+          unsigned {"did" did "version" 3 "rev" rev "prev" nil "data" (codec/link root)}
+          private (crypto/unseal (:master-key settings) did (:signing_key current))
+          signed (assoc unsigned "sig" (crypto/sign "ES256" private (codec/encode unsigned)))
+          head (block! conn (codec/encode signed))]
+      (block-index/associate! conn did head)
+      (db/execute! conn "UPDATE repositories SET head = ?, rev = ? WHERE did = ?" head rev did)
+      {:cid head :rev rev})))
+
 (defn initialize!
   ([conn settings did] (initialize! conn settings did nil))
   ([conn settings did handle]

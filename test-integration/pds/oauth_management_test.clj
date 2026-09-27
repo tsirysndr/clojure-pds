@@ -63,8 +63,8 @@
     (is (= 200 (:status (handler (request manage (ByteArrayInputStream. car))))))
     (is (= [{:rkey "imported"}] (token/query "SELECT rkey FROM records")))
     (is (= 403 (:status (grants/call! handler env manage "createRecord" (grants/note "denied")))))
-    (let [before (imports/state) verify repository/verify-car]
-      (with-redefs [repository/verify-car (fn [& args]
+    (let [before (imports/state) verify repository/verify-blocks]
+      (with-redefs [repository/verify-blocks (fn [& args]
                                            (owner/mutate "UPDATE oauth_sessions SET revoked_at = now()")
                                            (apply verify args))]
         (is (= 401 (:status (handler (request manage (ByteArrayInputStream. car)))))))

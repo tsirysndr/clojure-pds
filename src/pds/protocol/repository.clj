@@ -11,7 +11,7 @@
        (= 113 (aget (codec/cid-bytes (:cid value)) 1))))
 
 (defn- verified-commit [{:keys [roots blocks]} did {:keys [algorithm public]} now-ms]
-  (let [head (first roots) content (get blocks head)]
+  (let [head (first roots) content (blocks head)]
      (when-not (and content (= head (codec/cid content))) (codec/fail! "CAR must contain a CBOR commit root"))
      (let [commit (codec/decode content)
            rev (get commit "rev") signature (get commit "sig")]
@@ -27,30 +27,45 @@
          (codec/fail! "Invalid repository signature"))
        {:head head :rev rev :commit commit :content content :root (:cid (get commit "data"))})))
 
+(defn- verify-blocks* [roots load-block did signing-key now-ms visit-record!]
+  (let [{:keys [head rev commit root]} (verified-commit {:roots roots :blocks load-block} did signing-key now-ms)
+        tree (mst/visit-tree! root load-block (fn [_ _]))
+        paths (mapv (fn [[path cid]]
+                      (let [[collection rkey :as parts] (str/split path #"/" -1)]
+                        (when-not (and (= 2 (count parts)) (syntax/nsid? collection) (syntax/record-key? rkey))
+                          (codec/fail! "Invalid repository record path"))
+                        {:collection collection :rkey rkey :cid cid})) (sort (:records tree)))
+        record-cids (set (vals (:records tree)))]
+    (doseq [cid record-cids]
+      (let [data (load-block cid)]
+        (when-not (and data (= cid (codec/cid data))) (codec/fail! "Missing or corrupt repository record"))
+        (let [value (codec/decode data 1000000)]
+          (when-not (and (map? value) (not (instance? pds.protocol.codec.Link value)))
+            (codec/fail! "Repository record must be an object"))
+          (visit-record! cid value))))
+    {:head head :rev rev :commit commit :root root :paths paths
+     :block-cids (into (conj (:nodes tree) head) record-cids)}))
+
+(defn verify-blocks
+  "Verify a complete v3 repository from CAR roots and an immutable block loader.
+  Returns only commit/path/CID metadata. Loads and checks record values individually,
+  without retaining their payloads. Unrelated blocks and arbitrary record links
+  never become owned. The caller must verify the entire CAR framing/hashes first."
+  ([roots load-block did signing-key]
+   (verify-blocks roots load-block did signing-key (System/currentTimeMillis)))
+  ([roots load-block did signing-key now-ms]
+   (verify-blocks* roots load-block did signing-key now-ms (fn [_ _]))))
+
 (defn verify-car
-  "Verify a complete version-3 repository against an explicitly trusted DID
-  and signing key. The first CAR root is the commit; unrelated blocks, previous
-  commits, blobs and links inside records are not followed or returned as owned.
-  Historical records are checked as data objects, not against today's Lexicons."
+  "Buffered complete-repository verification for callers needing block and record
+  maps. Uses the same canonical tree, path, identity and signature checks as the
+  streaming importer; historical objects do not require today's Lexicons."
   ([bytes did signing-key] (verify-car bytes did signing-key (System/currentTimeMillis)))
   ([bytes did signing-key now-ms]
-   (let [{:keys [blocks] :as decoded} (car/decode bytes)
-         {:keys [head rev commit content]} (verified-commit decoded did signing-key now-ms)]
-       (let [tree (mst/read-tree (:cid (get commit "data")) blocks)
-             paths (mapv (fn [[path cid]]
-                           (let [[collection rkey :as parts] (str/split path #"/" -1)]
-                             (when-not (and (= 2 (count parts)) (syntax/nsid? collection) (syntax/record-key? rkey))
-                               (codec/fail! "Invalid repository record path"))
-                             {:collection collection :rkey rkey :cid cid})) (sort (:records tree)))
-             records (into {} (map (fn [cid]
-                                    (let [data (get blocks cid)]
-                                      (when-not (and data (= cid (codec/cid data))) (codec/fail! "Missing or corrupt repository record"))
-                                      (let [value (codec/decode data 1000000)]
-                                        (when-not (and (map? value) (not (instance? pds.protocol.codec.Link value)))
-                                          (codec/fail! "Repository record must be an object"))
-                                        [cid value])))) (distinct (vals (:records tree))))]
-         {:head head :rev rev :commit commit :root (:root tree) :paths paths :records records
-          :blocks (merge {head content} (:blocks tree) (select-keys blocks (keys records)))}))))
+   (let [{:keys [roots blocks]} (car/decode bytes) records (atom {})
+         verified (verify-blocks* roots blocks did signing-key now-ms #(swap! records assoc %1 %2))]
+     (-> verified (dissoc :block-cids)
+         (assoc :records @records :blocks (select-keys blocks (:block-cids verified)))))))
 
 (defn verify-record
   "Authenticate a single record's inclusion/absence using a partial CAR. The

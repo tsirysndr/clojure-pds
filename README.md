@@ -251,8 +251,11 @@ retaining only reachable blocks, and signing a fresh destination commit. The new
 revision exceeds both the imported and local revisions. Active accounts publish
 a sync checkpoint; deactivated accounts remain private. Authorization is checked
 again after parsing, and concurrent repository changes return `409 InvalidSwap`.
-Imports are buffered, limited to 64 MiB and two simultaneous imports per process;
-capacity exhaustion returns `503 RepoImportBusy`. Blob bytes are transferred
+Imports stream hash-checked blocks into a private temporary file, with a 64 MiB
+encoded-input limit and two simultaneous imports per process. Verification and
+publication load blocks individually; CID/path metadata remains in memory.
+Capacity exhaustion returns `503 RepoImportBusy`. See [import resource limits](docs/REPO-IMPORT.md).
+Blob bytes are transferred
 separately using `uploadBlob`, including through inactive primary sessions.
 Imported historical record objects are preserved without current Lexicon checks.
 
@@ -426,15 +429,17 @@ a duplicate. Receipts are retained indefinitely; plan retention for larger syste
   responses for every implemented endpoint and all repository event variants
   against local and pinned upstream validators. Dynamic Lexicon resolution and
   external client/relay conformance remain unfinished.
-- MSTs match upstream root fixtures but are rebuilt per commit, O(n). Large repos
+- MSTs match upstream root fixtures; ordinary writes rebuild them, O(n). Large repos
   need incremental updates. Historical blocks are retained; exports contain the
   current graph. Public full CAR exports stream through private temporary files,
   visiting stored blocks without rebuilding the tree or buffering the whole CAR.
   `PDS_REPO_EXPORT_MAX_BYTES` defaults to 256 MiB, with two concurrent export slots;
   `getBlocks` and `getRecord` share those slots and stream partial CARs under their
   separate 63 MiB payload limit. See [repository export limits](docs/REPO-EXPORT.md).
-  CAR imports are buffered and replace the full current record set;
-  streaming import and historical repository-block garbage collection are unfinished.
+  CAR imports stage payloads on disk and replace the full current record set,
+  retaining CID/path metadata in memory. Imported canonical roots are reused when
+  signing the destination commit. Historical repository-block garbage collection
+  and large-repository performance work remain unfinished.
 - Commit events persist signed CAR proofs and previous-value operations for
   inductive verification. Records are limited to 1,000,000 encoded bytes and
   commit proofs to 2,000,000 bytes; oversized batches roll back. The upstream
