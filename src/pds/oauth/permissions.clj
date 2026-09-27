@@ -9,7 +9,7 @@
   (throw (ex-info "The application has not been granted this permission"
                   {:xrpc true :status 403 :error "insufficient_scope"})))
 (defn scopes [account] (set (str/split (:oauth-scope account "") #" ")))
-(defn- grants [account resource] (filter #(= resource (:resource %)) (scope/permissions (:oauth-scope account))))
+(defn- grants [account resource] (filter #(= resource (:resource %)) (mapcat scope/permissions (or (:oauth-permissions account) (str/split (:oauth-scope account "") #" ")))))
 (defn- generic? [account] (contains? (scopes account) "transition:generic"))
 (defn- resource! [account resource]
   (when-not (or (generic? account) (seq (grants account resource))) (denied!)))

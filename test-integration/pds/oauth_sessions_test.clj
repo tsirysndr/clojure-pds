@@ -92,7 +92,7 @@
                    SELECT ?, ?, ?, 0, client_id, snapshot, created_at, expires_at FROM oauth_sessions WHERE session_id = ?"
                   foreign (crypto/token) (:did another) id)
     (is (= 2 (count (list-owner state))))
-    (is (= #{:id :client-id :scope :permissions :created-at :expires-at} (set (keys (first (list-owner state))))))
+    (is (= #{:id :client-id :scope :permissions :permission-sets :created-at :expires-at} (set (keys (first (list-owner state))))))
     (is (= "atproto transition:generic" (:scope (first (list-owner state)))))
     (is (= 2 (count (list-owner (browser-test/act (:settings env) state "oauth/revoke" {"id" foreign})))))
     (is (nil? (:revoked_at (first (token/query "SELECT * FROM oauth_sessions WHERE session_id = ?" foreign)))))

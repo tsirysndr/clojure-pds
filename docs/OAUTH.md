@@ -2,9 +2,9 @@
 
 The PDS publishes OAuth discovery, PAR, browser authorization, token and revocation
 endpoints. DPoP resource authentication is connected to XRPC with transitional
-scopes and direct record, blob, RPC, account and identity permissions. Legacy
-session endpoints retain their existing behavior. Permission sets and deployed
-interoperability remain incomplete.
+scopes, direct record/blob/RPC/account/identity permissions, and dynamically
+resolved permission sets. Legacy session endpoints retain their existing behavior.
+Inactive-account migration and deployed interoperability remain incomplete.
 
 ## Proof verification and durable replay protection
 
@@ -153,9 +153,9 @@ Optional `dpop_jkt` values must match the proof's key.
 Only code responses, query response mode and S256 PKCE are accepted. State is
 required, redirects must match client metadata, and requested scopes must be
 declared by the client. The validator supports `atproto`, the three transitional
-scopes and the direct permissions documented below. Transitional chat additionally
-requires `transition:generic`. Permission sets remain pending and are rejected
-rather than authorized implicitly. Login hints and supported prompt values are preserved for
+scopes, direct permissions and authenticated `include:` permission sets documented
+below. Transitional chat additionally requires `transition:generic`. Login hints
+and supported prompt values are preserved for
 the browser authorization interface.
 
 Migration 026 reserves each PKCE challenge across all clients for 24 hours. The
@@ -256,8 +256,9 @@ when another published key can authenticate the client. A removed bound key or
 removed refresh grant permanently revokes the presented session. Temporary
 metadata-fetch failures reject the request without issuing tokens. Credential or
 account status changes invalidate access and refresh through `oauth_epoch`.
-Refresh scopes may narrow the access token's permission set, but cannot expand
-beyond the original authorization; omitting scope retains the original grant.
+Refresh may narrow the access token's scope strings, but cannot add strings beyond
+the original authorization; omitting scope retains the original grant. The
+permissions behind an included set may evolve within its namespace at refresh.
 
 `access-grant!` checks token/session expiry, revocation and account version inside
 a caller-owned transaction. It is a storage primitive, **not resource request
@@ -363,7 +364,7 @@ PostgreSQL and real HTTP/TLS tests cover nonce retries, wrong key/token/method/U
 replay after errors, concurrent requests, email filtering, writes, blob upload,
 account restrictions, key removal/restoration, metadata outages, lifecycle races,
 expiration and service/proxy scope enforcement. Direct granular permissions are
-described below; permission sets are not accepted by PAR yet.
+described below, including authenticated permission-set expansion.
 
 ## Direct granular permissions
 
@@ -411,11 +412,60 @@ checks use validated scope values, never the displayed descriptions.
 cover atomic denial, put create/update distinctions, pre-body upload denial,
 audience/method substitution and refresh narrowing. The upstream Node OAuth client
 completes signup, a scoped record write, refresh and revocation using granular
-permissions. Management grants are described below. Dynamically resolved
-`include:` permission sets remain the next implementation step. The
-[authenticated Lexicon resolver](LEXICON-RESOLUTION.md) verifies the DNS/DID and
-signed repository-record chain. Namespace-constrained expansion and a shared
-PostgreSQL cache are implemented; token/refresh/consent integration is pending.
+permissions. Management grants and dynamically resolved permission sets are
+described below.
+
+## Included permission sets
+
+Clients may request `include:com.example.authBasic`, optionally with a DID service
+audience such as `?aud=did:web:api.example.com%23appview`. As with direct scopes,
+the exact requested strings must appear in client metadata. The
+[authenticated Lexicon resolver and shared cache](LEXICON-RESOLUTION.md) establish
+DNS authority, verify the publisher's DID and signed repository record, then
+expand only the set's permitted namespace. Blob, account and identity authority
+must still be requested directly. Unknown or invalid declarations are ignored
+whole, never converted into broader permissions.
+
+PAR resolves the requested schemas after client/DPoP authentication and before
+opening the request-storage transaction. Migration 034 persists the verified
+schema versions alongside the pushed request. Browser interaction, consent and
+authorization-code snapshots retain those versions, even if the publisher or
+shared cache changes before code exchange. Clients cannot submit these snapshots.
+Missing uncached sets reject a new authorization with temporary unavailability.
+
+Consent groups sets by their localized title and namespace, shows their details,
+and lets the user expand the exact permissions. Language selection uses the
+browser's preferences with parent-language and default-text fallback. All content
+is inserted as text. The screen explains that sets can evolve within their
+namespaces when the app refreshes its session. Connected-app management shows the
+session's latest resolved sets with the same expandable presentation.
+
+Each access token stores an immutable array of effective direct permissions.
+Resource requests use that array without fetching Lexicons or re-expanding a live
+set. Initial issuance uses the approved schema snapshot. Refresh resolves requested
+sets outside account/session locks, then rechecks current grant state and atomically
+rotates tokens and updates session snapshots. Earlier access tokens retain their
+original authority until expiry or session revocation. Original scope strings stay
+fixed, including an inherited audience; narrowing a refresh cannot substitute a
+new set or audience. Existing pre-migration direct-scope tokens remain valid.
+
+A failed remote refresh can use the session's previous verified schema even after
+cache expiry/eviction. Other resolution failures leave a valid refresh token
+unconsumed. Account invalidation, revocation and refresh replay are rechecked before
+any issuance; replay still revokes the family when schema resolution fails.
+
+Requests allow at most 16 distinct sets and 4 MiB of serialized schema snapshots.
+The resolver checks a 30-second overall budget between and after bounded individual
+lookups. Expanded token permissions are limited to 10,000 scopes and 1,000,000
+characters. Requests exceeding these limits fail without issuing partial grants.
+
+Integration tests cover consent/code freezing, publisher changes between issuance
+and refresh, unchanged older access tokens, narrowing and audience isolation,
+forbidden cross-namespace/account/blob grants, expired-cache fallback, revocation
+during resolution, failure rollback and legacy token compatibility. The pinned
+upstream Node OAuth client also completes signup, a set-authorized write, refresh
+and revocation through the mounted HTTP endpoints. Chrome visual checks cover
+localized titles, literal markup-like text and long expanded permission wrapping.
 
 ## Account and identity management permissions
 
@@ -569,10 +619,8 @@ The process lifecycle test covers starting and stopping the registered worker.
 
 ## Remaining steps
 
-1. Connect permission-set expansion and the verified schema cache to PAR, fixed
-   access-token permission snapshots, refresh and permission-set consent.
-2. Account-status scopes and OAuth authorization for inactive migration accounts.
-3. Full browser/hardware ceremonies and deployed reference-client verification.
+1. Account-status scopes and OAuth authorization for inactive migration accounts.
+2. Full browser/hardware ceremonies and deployed reference-client verification.
 
 Sources: [AT Protocol OAuth profile](https://atproto.com/specs/oauth),
 [RFC 9449 DPoP](https://www.rfc-editor.org/rfc/rfc9449.html),

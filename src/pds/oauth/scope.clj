@@ -77,12 +77,11 @@
 
 (defn parse [value] (parse-value value false))
 (defn parse-include
-  "Parse include syntax separately until cache/token/consent integration enables
-  it at PAR. An include scope itself never grants direct resource authority."
+  "Parse include syntax. An include itself never grants direct resource authority."
   [value]
   (let [parsed (parse-value value true)] (when (= :include (:resource parsed)) parsed)))
 
-(defn supported? [value] (some? (parse value)))
+(defn supported? [value] (boolean (or (parse value) (parse-include value))))
 (defn permissions [value] (keep parse (str/split (or value "") #" ")))
 (defn- names [values] (str/join ", " (sort values)))
 (defn describe [value]

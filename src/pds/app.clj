@@ -11,6 +11,7 @@
             [pds.proxy :as proxy]
             [pds.security.web :as security-web]
             [pds.oauth.client :as oauth-client]
+            [pds.oauth.grants :as oauth-grants]
             [pds.oauth.resource :as oauth-resource]
             [pds.oauth.server :as oauth-server]
             [pds.rate-limit :as rate-limit]))
@@ -20,7 +21,8 @@
 (defn handler
   ([config] (handler config nil))
   ([config ds]
-   (let [banner (slurp (io/resource "pds/banner.txt") :encoding "UTF-8")
+   (let [config (if ds (oauth-grants/settings ds config) config)
+         banner (slurp (io/resource "pds/banner.txt") :encoding "UTF-8")
          resolver (when ds (oauth-client/resolver config))
          routes (merge (when ds (server-api/routes ds config))
                        (when ds (identity-api/routes ds config))

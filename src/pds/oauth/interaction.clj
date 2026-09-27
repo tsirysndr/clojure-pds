@@ -12,7 +12,7 @@
             [pds.oauth.dpop :as dpop]
             [pds.oauth.http :as http]
             [pds.oauth.par :as par]
-            [pds.oauth.scope :as scope]
+            [pds.oauth.grants :as grants]
             [pds.protocol.codec :as codec]
             [pds.security.factors :as factors]
             [pds.security.browser :as browser-session])
@@ -36,7 +36,7 @@
   (let [value (json/read-str (:snapshot row))]
     {:client-id (get value "client-id") :parameters (get value "parameters")
      :client-binding (into {} (map (fn [[k v]] [(keyword k) v]) (get value "client-binding")))
-     :dpop-jkt (get value "dpop-jkt")}))
+     :dpop-jkt (get value "dpop-jkt") :permission-sets (get value "permission-sets" {})}))
 (defn- load! [conn id browser lock?]
   (when-not (and (token? id) (token? browser)) (invalid!))
   (let [row (first (db/query conn (str "SELECT *, snapshot::text FROM oauth_interactions
@@ -50,9 +50,9 @@
   (when-not (and (token? value) (equal? (csrf row browser) value)) (invalid!)))
 (defn- view [row browser]
   (let [request (snapshot row)]
-    {:client-id (:client-id request) :parameters (:parameters request)
-     :permissions (scope/describe (get-in request [:parameters "scope"]))
-     :did (:did row) :csrf (csrf row browser)}))
+    (merge {:client-id (:client-id request) :parameters (:parameters request)
+            :did (:did row) :csrf (csrf row browser)}
+           (grants/describe (get-in request [:parameters "scope"]) (:permission-sets request)))))
 
 (defn start!
   "Consume a PAR URI and create an independent ten-minute browser interaction.

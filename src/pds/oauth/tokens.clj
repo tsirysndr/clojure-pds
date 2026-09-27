@@ -10,6 +10,7 @@
             [pds.oauth.client-auth :as client-auth]
             [pds.oauth.dpop :as dpop]
             [pds.oauth.http :as http]
+            [pds.oauth.grants :as grants]
             [pds.oauth.par :as par]
             [pds.oauth.pkce :as pkce]
             [pds.oauth.proof-store :as proofs])
@@ -24,6 +25,7 @@
 (defn- snapshot [row]
   (let [value (json/read-str (:snapshot row))]
     {:client-id (get value "client-id") :parameters (get value "parameters") :dpop-jkt (get value "dpop-jkt")
+     :permission-sets (get value "permission-sets" {})
      :client-binding (into {} (map (fn [[k v]] [(keyword k) v]) (get value "client-binding")))}))
 (defn- code? [value] (and (string? value) (boolean (re-matches #"[A-Za-z0-9_-]{43}" value))))
 (defn- refresh? [value] (and (string? value) (boolean (re-matches #"rt_[A-Za-z0-9_-]{43}" value))))
@@ -51,14 +53,15 @@
                    (or (not (granted "transition:chat.bsky")) (granted "transition:generic")))
       (http/fail! "invalid_scope" "Scope exceeds the original grant"))
     scope))
-(defn- mint! [conn row scope refresh-enabled?]
+(defn- mint! [conn row scope refresh-enabled? permission-sets]
   (let [time (now) deadline (.toInstant ^java.sql.Timestamp (:expires_at row))
         expires (min (+ (.getEpochSecond time) access-lifetime) (.getEpochSecond deadline))
         access (str "at_" (crypto/token)) refresh (when refresh-enabled? (str "rt_" (crypto/token)))
         original (get-in (snapshot row) [:parameters "scope"])]
     (when-not (< (dpop/now) expires) (invalid!))
-    (db/execute! conn "INSERT INTO oauth_tokens(token_hash, session_id, kind, scope, created_at, expires_at) VALUES (?, ?, 'access', ?, ?, ?)"
-                 (crypto/digest-token access) (:session_id row) scope time (Instant/ofEpochSecond expires))
+    (db/execute! conn "INSERT INTO oauth_tokens(token_hash, session_id, kind, scope, created_at, expires_at, permissions) VALUES (?, ?, 'access', ?, ?, ?, ?::jsonb)"
+                 (crypto/digest-token access) (:session_id row) scope time (Instant/ofEpochSecond expires)
+                 (json/write-str (grants/permissions scope permission-sets)))
     (when refresh
       (db/execute! conn "INSERT INTO oauth_tokens(token_hash, session_id, kind, scope, created_at, expires_at) VALUES (?, ?, 'refresh', ?, ?, ?)"
                    (crypto/digest-token refresh) (:session_id row) original time deadline))
@@ -86,9 +89,9 @@
                        id (:code_hash row) (:did row) (:account_epoch row) (:client-id request) (:snapshot row) time (.plusSeconds time lifetime))
           (db/execute! conn "UPDATE oauth_codes SET used_at = ? WHERE code_hash = ?" time (:code_hash row))
           (mint! conn (first (db/query conn "SELECT *, snapshot::text FROM oauth_sessions WHERE session_id = ?" id))
-                 (get-in request [:parameters "scope"]) refresh?))))))
+                 (get-in request [:parameters "scope"]) refresh? (:permission-sets request)))))))
 
-(defn- refresh! [conn candidate resolved params]
+(defn- refresh! [conn candidate resolved params resolution]
   (let [account (lock-account! conn (:did candidate))
         row (first (db/query conn "SELECT *, snapshot::text FROM oauth_sessions WHERE session_id = ? FOR UPDATE" (:session_id candidate)))
         token (first (db/query conn "SELECT * FROM oauth_tokens WHERE token_hash = ? AND kind = 'refresh' FOR UPDATE" (:token_hash candidate)))]
@@ -101,8 +104,14 @@
       :else
       (let [request (snapshot row) scope (requested-scope! request params)]
         (par/parameters! resolved (:parameters request))
-        (db/execute! conn "UPDATE oauth_tokens SET used_at = ? WHERE token_hash = ?" (now) (:token_hash token))
-        (mint! conn row scope true)))))
+        ;; Replay/account checks above take priority even if remote resolution
+        ;; failed. Nothing consumes a valid refresh token on a resolution error.
+        (when-let [failure (:failure resolution)] (throw failure))
+        (let [snapshots (grants/merge-snapshots (:permission-sets request) (:sets resolution))]
+          (db/execute! conn "UPDATE oauth_sessions SET snapshot = jsonb_set(snapshot, '{permission-sets}', ?::jsonb) WHERE session_id = ?"
+                       (json/write-str snapshots) (:session_id row))
+          (db/execute! conn "UPDATE oauth_tokens SET used_at = ? WHERE token_hash = ?" (now) (:token_hash token))
+          (mint! conn row scope true snapshots))))))
 
 (defn- invalidate-binding! [ds candidate]
   (db/transact! ds
@@ -136,8 +145,11 @@
       (client-auth/invalid!))
     (client-auth/accept-request! ds resolved settings params proof context (when matches? (:client-binding request)))
     (when-not (and candidate matches?) (invalid!))
-    (let [result (db/transact! ds #(case grant "authorization_code" (exchange! % candidate resolved params)
-                                              "refresh_token" (refresh! % candidate resolved params)))]
+    (let [resolution (when (= "refresh_token" grant)
+                       (try {:sets (grants/resolve! ds settings (requested-scope! request params) (:permission-sets request))}
+                            (catch Exception e {:failure e})))
+          result (db/transact! ds #(case grant "authorization_code" (exchange! % candidate resolved params)
+                                              "refresh_token" (refresh! % candidate resolved params resolution)))]
       (if (:error result) (invalid!) result))))
 
 (defn access-grant!
@@ -151,11 +163,13 @@
         candidate (first (db/query conn "SELECT s.did, s.session_id FROM oauth_sessions s JOIN oauth_tokens t USING (session_id) WHERE t.token_hash = ? AND t.kind = 'access'" hash))
         account (when candidate (lock-account! conn (:did candidate)))
         row (when candidate (first (db/query conn "SELECT *, snapshot::text FROM oauth_sessions WHERE session_id = ? FOR UPDATE" (:session_id candidate))))
-        token-row (first (db/query conn "SELECT * FROM oauth_tokens WHERE token_hash = ? AND kind = 'access'" hash))]
+        token-row (first (db/query conn "SELECT *, permissions::text FROM oauth_tokens WHERE token_hash = ? AND kind = 'access'" hash))]
     (when-not (and row token-row (nil? (:revoked_at row)) (account-valid? account row)
                    (live? (:expires_at row)) (live? (:expires_at token-row))) (invalid!))
     {:did (:did row) :session-id (:session_id row) :client-id (:client_id row)
-     :scope (:scope token-row) :dpop-jkt (:dpop-jkt (snapshot row)) :client-binding (:client-binding (snapshot row))}))
+     :scope (:scope token-row)
+     :permissions (if (:permissions token-row) (json/read-str (:permissions token-row)) (grants/permissions (:scope token-row) {}))
+     :dpop-jkt (:dpop-jkt (snapshot row)) :client-binding (:client-binding (snapshot row))}))
 
 (defn handler [ds settings resolver]
   (http/wrap settings

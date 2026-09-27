@@ -79,10 +79,11 @@ namespace escapes, malformed declarations, audience inheritance, shared cache
 reopening, simultaneous refreshes, expired leases, revision rollback, cache
 capacity, signed-schema persistence and expiry during a failed network request.
 
-OAuth PAR still rejects `include:` until immutable token snapshots, refresh
-integration and consent presentation are connected. The parser exposes include
-syntax separately from currently admitted scopes. Dynamic record validation is
-also not yet connected to this resolver.
+OAuth PAR accepts `include:` and freezes the resolved schemas for consent and
+initial issuance. Access tokens store immutable effective permissions; refresh
+can update the session's schema snapshots. Consent and connected-app management
+show localized set summaries and expandable details. See [OAuth integration](OAUTH.md#included-permission-sets).
+Dynamic record validation is not yet connected to this resolver.
 
 Sources: [Lexicon publication and resolution](https://atproto.com/specs/lexicon#lexicon-publication-and-resolution),
 [permission sets](https://atproto.com/specs/permission#permission-sets).

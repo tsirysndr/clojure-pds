@@ -95,6 +95,10 @@ assert.ok(Array.isArray(consent.permissions));
 if (fixture.metadata.scope.includes('repo:com.example.note?action=create')) {
   assert.ok(consent.permissions.includes('Create public records in com.example.note.'));
 }
+if (fixture.metadata.scope.includes('include:')) {
+  assert.equal(consent['permission-sets'][0].title, 'Post and connect');
+  assert.deepEqual(consent['permission-sets'][0].permissions, ['Create public records in com.example.note.']);
+}
 const decision = (await browser(`${flow}/decide`, { approve: true }, consent.csrf)).json;
 const callback = new URL(decision.location);
 assert.equal(callback.origin + callback.pathname, 'https://app.example.com/callback');

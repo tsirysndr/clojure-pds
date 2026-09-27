@@ -291,12 +291,12 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
 ## Remaining work for a full PDS
 
 1. Integration of [authenticated dynamic schema resolution](LEXICON-RESOLUTION.md)
-   with record validation and OAuth permission sets, and expanded behavioral
+   with record validation, and expanded behavioral
    conformance/catalog coverage as endpoints and protocol features are added.
 2. Bounded identity caching,
    signing/rotation key lifecycle, conflicted-operation administration, and migration.
 3. Remaining administrative APIs, record/blob takedowns, and broader account recovery controls.
-4. OAuth authorization server: permission sets, account-status scopes/inactive
+4. OAuth authorization server: account-status scopes/inactive
    migration sessions and deployed reference-client interoperability.
    [DPoP replay protection, metadata/JWKS, confidential clients, PAR/PKCE, browser
    signup/consent, token rotation/revocation, owner session management and transitional
@@ -304,6 +304,9 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
    Direct collection/action, blob MIME, RPC audience/method, email/repository
    management and identity scopes are enforced and shown in consent. An upstream
    client flow covers granular grants; local TLS fixtures verify PLC management.
+   Permission sets use authenticated resolution, shared caching, namespace checks,
+   immutable access-token permissions and expandable localized consent. Another
+   upstream-client flow covers set-authorized signup, writes, refresh and revocation.
    Pinned upstream Node client tests verify public signup and confidential login,
    writes, refresh and revocation against a local HTTP fixture. Bounded grant
    cleanup preserves replay evidence until absolute session expiry.

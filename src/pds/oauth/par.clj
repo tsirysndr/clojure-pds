@@ -7,6 +7,7 @@
             [pds.oauth.client-auth :as client-auth]
             [pds.oauth.dpop :as dpop]
             [pds.oauth.http :as http]
+            [pds.oauth.grants :as grants]
             [pds.oauth.pkce :as pkce]
             [pds.oauth.scope :as scope]
             [pds.protocol.codec :as codec])
@@ -35,12 +36,13 @@
     (when-not (and (set/subset? requested declared) (every? scope/supported? requested)
                    (or (not (requested "transition:chat.bsky")) (requested "transition:generic")))
       (http/fail! "invalid_scope" "Requested scope is not available")))
+  (grants/validate-scope! (get params "scope"))
   ;; Persist only authorization parameters, never client assertions or arbitrary
   ;; extension fields. Future permissions support must extend validation first.
   (select-keys params ["response_type" "redirect_uri" "scope" "state" "code_challenge" "code_challenge_method"
                       "response_mode" "login_hint" "prompt"]))
 
-(defn- store! [conn client-id params {:keys [client-binding dpop-jkt]}]
+(defn- store! [conn client-id params {:keys [client-binding dpop-jkt]} permission-sets]
   (let [timestamp (dpop/now) now (Instant/ofEpochSecond timestamp)
         request-uri (str request-uri-prefix (crypto/token))]
     (db/execute! conn "DELETE FROM oauth_pkce_uses WHERE challenge_hash IN
@@ -51,10 +53,10 @@
                                   ON CONFLICT (challenge_hash) DO UPDATE SET expires_at = EXCLUDED.expires_at WHERE oauth_pkce_uses.expires_at <= ?"
                              (crypto/digest-token (get params "code_challenge")) (Instant/ofEpochSecond (+ timestamp 86400)) now))
       (http/fail! "invalid_request" "PKCE challenges must not be reused"))
-    (db/execute! conn "INSERT INTO oauth_par_requests(request_hash, client_id, parameters, client_binding, dpop_jkt, created_at, expires_at)
-                       VALUES (?, ?, ?::jsonb, ?::jsonb, ?, ?, ?)"
+    (db/execute! conn "INSERT INTO oauth_par_requests(request_hash, client_id, parameters, client_binding, dpop_jkt, created_at, expires_at, permission_sets)
+                       VALUES (?, ?, ?::jsonb, ?::jsonb, ?, ?, ?, ?::jsonb)"
                  (crypto/digest-token request-uri) client-id (json/write-str params) (json/write-str client-binding) dpop-jkt
-                 now (Instant/ofEpochSecond (+ timestamp request-lifetime)))
+                 now (Instant/ofEpochSecond (+ timestamp request-lifetime)) (json/write-str permission-sets))
     {:request_uri request-uri :expires_in request-lifetime}))
 
 (defn push! [ds resolver settings params proof]
@@ -67,7 +69,9 @@
                                                    {:method "POST" :url (str (:public-url settings) "/oauth/par") :jkt expected-jkt} nil)]
       ;; Authentication commits before grant logic; a rejected reuse needs fresh
       ;; proofs. Challenge reservation and request creation commit together.
-      (db/transact! ds #(store! % (:client-id resolved) validated authenticated)))))
+      (let [snapshots (grants/resolve! ds settings (get validated "scope") nil)]
+        (grants/permissions (get validated "scope") snapshots)
+        (db/transact! ds #(store! % (:client-id resolved) validated authenticated snapshots))))))
 
 (defn claim!
   "Take a request URI once for the matching client, inside the caller's browser
@@ -81,11 +85,12 @@
   (let [now (Instant/ofEpochSecond (dpop/now))
         row (first (db/query conn "UPDATE oauth_par_requests SET used_at = ?
                                   WHERE request_hash = ? AND client_id = ? AND expires_at > ? AND used_at IS NULL
-                                  RETURNING client_id, parameters::text, client_binding::text, dpop_jkt"
+                                  RETURNING client_id, parameters::text, client_binding::text, dpop_jkt, permission_sets::text"
                              now (crypto/digest-token request-uri) client-id now))]
     (when-not row (http/fail! "invalid_request_uri" "Invalid or expired request URI"))
     {:client-id (:client_id row) :parameters (json/read-str (:parameters row))
-     :client-binding (json/read-str (:client_binding row) :key-fn keyword) :dpop-jkt (:dpop_jkt row)}))
+     :client-binding (json/read-str (:client_binding row) :key-fn keyword) :dpop-jkt (:dpop_jkt row)
+     :permission-sets (json/read-str (:permission_sets row))}))
 
 (defn handler [ds settings resolver]
   (http/wrap settings

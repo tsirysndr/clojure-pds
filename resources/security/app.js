@@ -8,6 +8,40 @@ const scopeLabels = {
   'transition:email': 'Read your email address.',
   'transition:chat.bsky': 'Read and send your private Bluesky chat messages.',
 };
+function permissionText(set, field) {
+  const translations = Object.entries(set[`${field}:lang`] || {});
+  for (const language of navigator.languages || [navigator.language]) {
+    let candidate = language.toLowerCase();
+    while (candidate) {
+      const match = translations.find(([tag]) => tag.toLowerCase() === candidate);
+      if (match) return {text: match[1], lang: match[0]};
+      const separator = candidate.lastIndexOf('-');
+      candidate = separator < 0 ? '' : candidate.slice(0, separator);
+    }
+  }
+  return {text: set[field] || (field === 'title' ? set.nsid : ''), lang: ''};
+}
+function permissionItems(labels, sets = []) {
+  const items = labels.map(label => { const item = document.createElement('li'); item.className = 'wrap-anywhere'; item.textContent = label; return item; });
+  for (const set of sets) {
+    const item = document.createElement('li'); item.className = 'space-y-2 wrap-anywhere';
+    const title = document.createElement('p'); title.className = 'font-medium';
+    const titleText = permissionText(set, 'title'); title.textContent = titleText.text; if (titleText.lang) title.lang = titleText.lang;
+    const namespace = document.createElement('p'); namespace.className = 'text-xs text-muted'; namespace.textContent = set.nsid;
+    const detail = document.createElement('p'); detail.className = 'text-sm text-muted';
+    const detailText = permissionText(set, 'detail'); detail.textContent = detailText.text; if (detailText.lang) detail.lang = detailText.lang;
+    const expansion = document.createElement('details'); expansion.className = 'space-y-2';
+    const summary = document.createElement('summary'); summary.className = 'cursor-pointer text-sm font-medium text-brand'; summary.textContent = 'View permissions';
+    const permissions = document.createElement('ul'); permissions.className = 'list-disc space-y-2 pl-5 text-sm';
+    permissions.append(...permissionItems(set.permissions.length ? set.permissions : ['No additional permissions in this set.']));
+    expansion.append(summary, permissions); item.append(title, namespace, detail, expansion); items.push(item);
+  }
+  if (sets.length) {
+    const note = document.createElement('li'); note.className = 'list-none text-xs text-muted';
+    note.textContent = 'Permissions in these sets can change within their namespaces when this app refreshes its session.'; items.push(note);
+  }
+  return items;
+}
 const messages = {
   AuthenticationRequired: 'That account or password was not recognized.',
   InvalidPasskey: 'The passkey could not be verified. Please try again.',
@@ -42,7 +76,7 @@ function render(next) {
   if (screen === 'consent') {
     $('heading').textContent = 'Authorize application'; $('subtitle').textContent = 'Review the access you are granting';
     $('oauth-client').textContent = flow['client-id']; $('oauth-did').textContent = flow.did;
-    $('oauth-scopes').replaceChildren(...(flow.permissions || flow.parameters.scope.split(' ').map(scope => scopeLabels[scope] || scope)).map(label => { const li = document.createElement('li'); li.className = 'wrap-anywhere'; li.textContent = label; return li; }));
+    $('oauth-scopes').replaceChildren(...permissionItems(flow.permissions || flow.parameters.scope.split(' ').map(scope => scopeLabels[scope] || scope), flow['permission-sets']));
   }
   document.title = `${$('heading').textContent} · ${$('server-name').textContent}`;
   if (flowId) $('session-note').textContent = 'Authorization requests expire after ten minutes';
@@ -81,7 +115,7 @@ function renderSessions(page) {
     const client = document.createElement('p'); client.className = 'break-all text-sm font-medium'; client.textContent = session['client-id'];
     const dates = document.createElement('p'); dates.className = 'text-xs text-muted'; dates.textContent = `Connected ${new Date(session['created-at']).toLocaleString()} · Expires ${new Date(session['expires-at']).toLocaleString()}`;
     const scopes = document.createElement('ul'); scopes.className = 'list-disc space-y-2 pl-5 text-sm';
-    for (const label of session.permissions || session.scope.split(' ').map(scope => scopeLabels[scope] || scope)) { const entry = document.createElement('li'); entry.className = 'wrap-anywhere'; entry.textContent = label; scopes.append(entry); }
+    scopes.append(...permissionItems(session.permissions || session.scope.split(' ').map(scope => scopeLabels[scope] || scope), session['permission-sets']));
     const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'secondary text-danger'; remove.textContent = 'Disconnect'; remove.setAttribute('aria-label', `Disconnect session for ${session['client-id']}`);
     remove.addEventListener('click', () => run(async () => { if (confirm(`Disconnect this session for ${session['client-id']}?`)) { await action('oauth/revoke', {id: session.id}); notice('App session disconnected.'); } }));
     item.append(client, dates, scopes, remove); list.append(item);

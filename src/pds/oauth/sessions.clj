@@ -1,10 +1,11 @@
 (ns pds.oauth.sessions
   "Owner session management. Callers authenticate the owner and hold its account
   lock before invoking these operations; no credentials or token hashes leave here."
-  (:require [pds.db :as db]
+  (:require [clojure.data.json :as json]
+            [pds.db :as db]
             [pds.errors :as errors]
             [pds.oauth.dpop :as dpop]
-            [pds.oauth.scope :as scope])
+            [pds.oauth.grants :as grants])
   (:import [java.time Instant]))
 
 (def page-size 20)
@@ -19,7 +20,7 @@
   (transaction! conn)
   (when cursor (id! cursor))
   (let [rows (db/query conn "SELECT s.session_id, s.client_id, s.created_at, s.expires_at,
-                                   s.snapshot->'parameters'->>'scope' AS scope
+                                   s.snapshot->'parameters'->>'scope' AS scope, (s.snapshot->'permission-sets')::text AS permission_sets
                             FROM oauth_sessions s JOIN accounts a ON a.did = s.did
                             WHERE s.did = ? AND s.account_epoch = a.oauth_epoch AND a.status = 'active'
                               AND s.revoked_at IS NULL AND s.expires_at > ?
@@ -28,9 +29,10 @@
                        did (Instant/ofEpochSecond (dpop/now)) cursor cursor (inc page-size))
         page (vec (take page-size rows))]
     (cond-> {:items (mapv (fn [row]
-                           {:id (:session_id row) :client-id (:client_id row) :scope (:scope row) :permissions (scope/describe (:scope row))
-                            :created-at (str (.toInstant ^java.sql.Timestamp (:created_at row)))
-                            :expires-at (str (.toInstant ^java.sql.Timestamp (:expires_at row)))}) page)
+                           (merge {:id (:session_id row) :client-id (:client_id row) :scope (:scope row)
+                                   :created-at (str (.toInstant ^java.sql.Timestamp (:created_at row)))
+                                   :expires-at (str (.toInstant ^java.sql.Timestamp (:expires_at row)))}
+                                  (grants/describe (:scope row) (json/read-str (or (:permission_sets row) "{}"))))) page)
              :first-page (nil? cursor)}
       (> (count rows) page-size) (assoc :cursor (:session_id (last page))))))
 (defn revoke-owner! [conn did id]

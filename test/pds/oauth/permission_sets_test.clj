@@ -36,7 +36,7 @@
 (deftest include-syntax-and-admission-remain-separate
   (doseq [value [include include-aud (str "include?nsid=" nsid) (str "include:" nsid "?")]]
     (is (= nsid (:nsid (scope/parse-include value))))
-    (is (not (scope/supported? value)) "PAR must remain closed until token and consent integration"))
+    (is (scope/supported? value)))
   (doseq [bad [nil "" "include:*" "include:com.example.auth#main" "include:com.example.auth?aud=*"
                "include:com.example.auth?aud=" (str include "?nsid=" nsid)
                (str include-aud "&aud=did:web:other.example.com%23appview")

@@ -62,7 +62,7 @@
       (when-not (= current grant)
         (throw (ex-info "Invalid OAuth token" {:xrpc true :status 401 :error "invalid_token"})))
       (let [account (assoc (first (db/query conn "SELECT * FROM accounts WHERE did = ?" (:did current)))
-                           :oauth-scope (:scope current) :oauth-client-id (:client-id current)
+                           :oauth-scope (:scope current) :oauth-permissions (:permissions current) :oauth-client-id (:client-id current)
                            :session-id (:session-id current) :access-scope "oauth")]
         (permissions/endpoint! account request)
         account))))

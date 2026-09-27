@@ -7,6 +7,7 @@
             [pds.db-test :as fixture]
             [pds.http :as http]
             [pds.oauth-tokens-test :as token]
+            [pds.oauth-include-test :as includes]
             [pds.oauth.client-test :as metadata]
             [pds.oauth.jose :as jose]
             [pds.oauth.server :as server]
@@ -90,7 +91,7 @@
 (defn upstream-flow!
   ([confidential?] (upstream-flow! confidential? nil))
   ([confidential? requested-scope]
-  (let [env (token/env confidential?)
+  (let [env (if (and requested-scope (str/includes? requested-scope "include:")) (includes/env) (token/env confidential?))
         _ (swap! (:document env) merge (if confidential?
             {"scope" "atproto transition:generic transition:email" "token_endpoint_auth_signing_alg" "ES256"}
             {"token_endpoint_auth_method" "none"}))
@@ -116,4 +117,5 @@
 (when (= "true" (System/getenv "PDS_TEST_UPSTREAM"))
   (deftest upstream-public-signup (upstream-flow! false))
   (deftest upstream-granular-signup (upstream-flow! false "atproto repo:com.example.note?action=create account:email"))
-  (deftest upstream-confidential-login (upstream-flow! true)))
+  (deftest upstream-confidential-login (upstream-flow! true))
+  (deftest upstream-permission-set-signup (upstream-flow! false (str "atproto " includes/include))))
