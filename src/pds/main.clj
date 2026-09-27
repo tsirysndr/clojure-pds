@@ -13,6 +13,7 @@
             [pds.invites :as invites]
             [pds.identity :as identity]
             [pds.net :as net]
+            [pds.oauth.cleanup :as oauth-cleanup]
             [pds.plc-provision :as provision]
             [pds.proxy :as proxy]
             [pds.redis :as redis]
@@ -50,8 +51,13 @@
                                                  (finally (.close ^java.io.Closeable http-client))))))]
     (try
       (let [stop-email! (email/start! ds email-config)
-            stop-cleanup! (try (blob-cleanup/start! ds blob-store settings)
-                               (catch Throwable t (stop-email!) (throw t)))
+            stop-cleanup! (try
+                            (let [stop-blobs! (blob-cleanup/start! ds blob-store settings)]
+                              (try
+                                (let [stop-oauth! (oauth-cleanup/start! ds)]
+                                  #(try (stop-oauth!) (finally (stop-blobs!))))
+                                (catch Throwable t (stop-blobs!) (throw t))))
+                            (catch Throwable t (stop-email!) (throw t)))
             stop-provision! (try (provision/start! #(do (accounts/provision-one! ds settings nil)
                                                        (handles/process-one! ds settings nil)))
                                  (catch Throwable t (try (stop-email!) (finally (stop-cleanup!))) (throw t)))]

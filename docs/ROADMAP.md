@@ -65,7 +65,7 @@ rotating sessions, scoped app passwords, email recovery, schema-validated record
 implemented. See [the compatibility matrix](COMPATIBILITY.md) for exact coverage,
 verification evidence, and limits. Full PDS compatibility is not achieved yet.
 
-Next implementation series: [OAuth granular permissions and operational cleanup](OAUTH.md),
+Next implementation series: [OAuth granular permissions](OAUTH.md),
 then remaining identity/key lifecycle, migration, dynamic Lexicon resolution,
 administration, and relay conformance.
 Implemented endpoints now have pinned input validation and observed output/event

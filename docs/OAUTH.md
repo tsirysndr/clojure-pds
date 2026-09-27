@@ -268,8 +268,8 @@ and is mounted at `/oauth/token`.
 Tests exercise complete PAR/consent/code/token chains, private/public clients,
 wrong bindings, scope narrowing, absolute expiration, key removal/restoration,
 concurrent replay, account changes, insertion rollback and real HTTP token
-responses. Bounded cleanup of expired session/token/code rows remains operational
-work; used codes and refresh hashes must not be discarded while their family is live.
+responses. Bounded cleanup retains used codes and all token hashes until the
+family expires, as described below.
 
 ## Browser authorization and signup
 
@@ -440,12 +440,39 @@ signed proof targets; it does not bypass SDK or PDS cryptographic verification.
 This establishes local reference-client interoperability, not deployed DNS/TLS,
 a real browser ceremony or external AppView/relay compatibility.
 
+## Expired-grant cleanup
+
+The main process runs `pds.oauth.cleanup/collect!` once per minute. Each sweep
+locks at most 50 expired families and removes at most 1,000 token rows in total.
+It only removes a family after all its tokens have been collected; large refresh
+histories take several sweeps rather than triggering an unbounded cascading delete.
+A separate transaction removes at most 1,000 expired codes with no remaining
+family. Existing expiry/session indexes support the selections.
+
+Every token hash and its used code remain until the family's absolute expiry,
+including rotated, revoked and account-invalidated grants. This preserves replay
+revocation and lets an older token identify its family for logout. Expired grants
+may cease to be identifiable after collection; authenticated revocation of an
+unknown token still returns the required idempotent success response.
+
+`FOR UPDATE SKIP LOCKED` permits concurrent PDS workers and skips active family,
+token and code operations. Family collection takes session then token locks;
+code collection runs only after releasing them, preserving the code-then-session
+order of exchange/replay. SQL statements have a five-second deadline, failures
+roll back their batch, and a later sweep resumes orphan cleanup independently.
+Shutdown interrupts the worker between batches and closes its executor. Other
+short-lived OAuth proof, PAR and interaction ledgers retain their existing
+bounded cleanup on use.
+
+PostgreSQL tests cover batch limits, large families, expired-code/refresh replay
+retention, locked rows, concurrent refresh and collectors, rollback and resumption.
+The process lifecycle test covers starting and stopping the registered worker.
+
 ## Remaining steps
 
-1. Bounded expired-grant cleanup that retains replay evidence while sessions are live.
-2. Granular permission scopes and dynamically resolved permission sets, including
+1. Granular permission scopes and dynamically resolved permission sets, including
    permission-aware consent and enforcement in each resource operation.
-3. Full browser/hardware ceremonies and deployed reference-client verification.
+2. Full browser/hardware ceremonies and deployed reference-client verification.
 
 Sources: [AT Protocol OAuth profile](https://atproto.com/specs/oauth),
 [RFC 9449 DPoP](https://www.rfc-editor.org/rfc/rfc9449.html),
