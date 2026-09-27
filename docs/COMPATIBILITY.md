@@ -17,7 +17,7 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | `com.atproto.server` | `createAccount` | Configurable signup and service-authenticated destination preparation for existing web/PLC DIDs; inactive imports with new local keys; phone verification pending |
 | `com.atproto.server` | `createInviteCode`, `createInviteCodes`, `getAccountInviteCodes` | Admin-issued codes, bounded batches, account listing and concurrent redemption limits; no automatic grants |
 | `com.atproto.admin` | `disableInviteCodes`, `disableAccountInvites`, `enableAccountInvites` | Optional Basic admin credentials; code invalidation and future-grant policy |
-| `com.atproto.admin` | `getAccountInfo`, `getSubjectStatus`, `updateSubjectStatus` | Private account inspection and repoRef account takedowns; activation state preserved; record/blob subjects pending |
+| `com.atproto.admin` | `getAccountInfo`, `getSubjectStatus`, `updateSubjectStatus` | Private account inspection; account, record and blob takedowns; independent activation state and signed repository data preserved; [moderation semantics](MODERATION.md) |
 | `com.atproto.server` | `createSession`, `getSession`, `refreshSession`, `deleteSession` | Primary/app-password sessions, JWT type separation, single-use refresh, revocation |
 | `com.atproto.server` | `getServiceAuth` | Repository-key JWTs, exact audience/service reference, method and expiration checks, primary/app-password privilege policy; shared proxy privilege policy |
 | `com.atproto.server` | `createAppPassword`, `listAppPasswords`, `revokeAppPassword` | One-time secrets, scoped sessions, privileged flag, metadata-only listing, immediate revocation |
@@ -309,7 +309,7 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
    features are added, including deployed Lexicon publisher interoperability.
 2. Bounded identity caching,
    signing/rotation key lifecycle, conflicted-operation administration, and migration.
-3. Remaining administrative APIs, record/blob takedowns, and broader account recovery controls.
+3. Remaining administrative APIs and broader account recovery controls.
 4. OAuth authorization server: inactive migration sessions and deployed
    reference-client interoperability. Account-status permission semantics are not
    yet defined in the published permission specification.
@@ -328,8 +328,10 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
    Optional [TOTP and passkeys](ACCOUNT-SECURITY.md) include browser enrollment,
    removal and OAuth login integration; hardware/browser ceremony verification
    and broader recovery controls remain pending.
-5. External relay interoperability, event retention/compaction, and remaining
-   record/blob takedown semantics. [Opt-in relay announcements](RELAY.md) are
+5. External relay interoperability and event retention/compaction.
+   [Record/blob takedowns](MODERATION.md) now implement local indexed-read/blob
+   access controls; they do not erase signed sync data or remote copies.
+   [Opt-in relay announcements](RELAY.md) are
    implemented with durable schedules, bounded HTTPS, retries and fenced leases;
    local tests do not prove that a deployed relay accepts or consumes this PDS.
 6. Streaming proxy transfers and external reference-PDS migration and

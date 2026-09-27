@@ -39,7 +39,7 @@
       (db/execute! conn "DELETE FROM blobs WHERE did = ? AND cid = ?" did cid))))
 
 (defn metadata [conn did cid]
-  (first (db/query conn "SELECT did, cid, mime_type, size, storage_backend, object_key, object_bucket
+  (first (db/query conn "SELECT did, cid, mime_type, size, storage_backend, object_key, object_bucket, takedown_ref
                         FROM blobs WHERE did = ? AND cid = ?" did cid)))
 
 (defn store!
@@ -52,6 +52,8 @@
     ;; Serialize duplicates across PDS processes; the first MIME type wins.
     (lock! conn did cid)
     (or (when-let [existing (metadata conn did cid)]
+          (when (some? (:takedown_ref existing))
+            (errors/invalid! "Blob has been taken down and cannot be uploaded"))
           (when-not (referenced? conn did cid)
             (db/execute! conn "UPDATE blobs SET uploaded_at = now() WHERE did = ? AND cid = ?" did cid))
           existing)
@@ -68,7 +70,9 @@
           (metadata conn did cid)))))
 
 (defn read! [conn settings did cid]
-  (let [row (or (metadata conn did cid) (errors/raise! 400 "BlobNotFound" "Blob was not found"))
+  (let [row (metadata conn did cid)
+        _ (when (or (nil? row) (some? (:takedown_ref row)))
+            (errors/raise! 400 "BlobNotFound" "Blob was not found"))
         content (case (:storage_backend row)
                   "postgres" (:content (first (db/query conn "SELECT content FROM blobs WHERE did = ? AND cid = ?" did cid)))
                   "s3" (if-let [store (:blob-store settings)]

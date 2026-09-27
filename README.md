@@ -297,7 +297,10 @@ account takedowns through `getSubjectStatus`/`updateSubjectStatus` using a
 `com.atproto.admin.defs#repoRef` subject. Takedown blocks content, login, refresh,
 and invitations issued by the account. Removing it preserves a preexisting
 deactivation; users cannot lift a takedown with `activateAccount`. Changes produce
-ordered account-status events. Record/blob moderation is still pending.
+ordered account-status events. [Record and blob takedowns](docs/MODERATION.md)
+use strongRef/repoBlobRef subjects. Record flags hide indexed reads while
+preserving signed sync data; blob flags block downloads, reuploads and new
+references with both PostgreSQL and S3 storage.
 
 Passwords use Argon2id. Access tokens expire after 15 minutes; sessions have a
 90-day lifetime. Refresh tokens rotate once; replay revokes the session. Password

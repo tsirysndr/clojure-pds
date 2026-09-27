@@ -1,8 +1,10 @@
 (ns pds.moderation
-  (:require [pds.db :as db]
+  (:require [clojure.string :as str]
+            [pds.db :as db]
             [pds.errors :as errors]
             [pds.events :as events]
             [pds.invites :as invites]
+            [pds.protocol.codec :as codec]
             [pds.protocol.syntax :as syntax]))
 
 (defn account! [conn did]
@@ -17,10 +19,43 @@
    :deactivated {:applied (or (= "deactivated" (:status account))
                               (and (= "taken_down" (:status account)) (= "deactivated" (:status_before_takedown account))))}})
 
+(defn- cid! [cid]
+  (try (codec/cid-bytes cid)
+       (catch Exception _ (errors/invalid! "Invalid subject CID"))))
+
+(defn- content-target! [subject]
+  (case (get subject "$type")
+    "com.atproto.repo.strongRef"
+    (let [uri (get subject "uri")
+          _ (when-not (syntax/at-uri? uri) (errors/invalid! "Invalid record URI"))
+          [did collection rkey] (str/split (subs uri 5) #"/" -1)]
+      (when-not (and (syntax/did? did) collection rkey)
+        (errors/invalid! "Record moderation requires a DID-based record URI"))
+      {:did did :table "records" :where "did = ? AND collection = ? AND rkey = ?"
+       :params [did collection rkey]})
+    "com.atproto.admin.defs#repoBlobRef"
+    (let [did (get subject "did") cid (get subject "cid")]
+      (when-not (syntax/did? did) (errors/invalid! "Invalid DID"))
+      (cid! cid)
+      {:did did :table "blobs" :where "did = ? AND cid = ?" :params [did cid]})
+    (errors/invalid! "Unsupported moderation subject")))
+
+(defn- content-row! [conn {:keys [did table where params]}]
+  ;; Account lock matches writes, imports, uploads and deletion lock ordering.
+  (account! conn did)
+  (or (first (apply db/query conn (str "SELECT cid, takedown_ref FROM " table " WHERE " where " FOR UPDATE") params))
+      (errors/raise! 400 "NotFound" "Subject was not found")))
+
+(defn- takedown-view [reference]
+  (cond-> {:applied (some? reference)} (some? reference) (assoc :ref reference)))
+
 (defn get-status [conn params]
-  (when (or (contains? params "uri") (contains? params "blob"))
-    (errors/invalid! "Record and blob moderation is not implemented"))
-  (status-view (account! conn (get params "did"))))
+  (if-let [subject (cond
+                    (contains? params "blob") {"$type" "com.atproto.admin.defs#repoBlobRef" "did" (get params "did") "cid" (get params "blob")}
+                    (contains? params "uri") {"$type" "com.atproto.repo.strongRef" "uri" (get params "uri")})]
+    (let [row (content-row! conn (content-target! subject))]
+      {:subject (assoc subject "cid" (:cid row)) :takedown (takedown-view (:takedown_ref row))})
+    (status-view (account! conn (get params "did")))))
 
 (defn status-attr! [body field]
   (when (contains? body field)
@@ -31,10 +66,8 @@
         (errors/invalid! (str "Invalid " field " status")))
       attr)))
 
-(defn update-status! [conn body]
+(defn- update-account-status! [conn body]
   (let [subject (get body "subject")]
-    (when-not (= "com.atproto.admin.defs#repoRef" (get subject "$type"))
-      (errors/invalid! "Expected an account repoRef; record and blob moderation is not implemented"))
     (let [account (account! conn (get subject "did"))
           takedown (status-attr! body "takedown")
           deactivated (status-attr! body "deactivated")
@@ -55,6 +88,24 @@
         (events/account! conn (:did account) status)
         (when (= status "active") (events/sync! conn (:did account))))
       (dissoc (status-view (assoc account :status status :status_before_takedown base-status :takedown_ref reference)) :deactivated))))
+
+(defn update-status! [conn body]
+  (let [subject (get body "subject")]
+    (if (= "com.atproto.admin.defs#repoRef" (get subject "$type"))
+      (update-account-status! conn body)
+      (let [{:keys [table where params] :as target} (content-target! subject)
+            _ (when (= "records" table) (cid! (get subject "cid")))
+            row (content-row! conn target)
+            takedown (status-attr! body "takedown")
+            _ (status-attr! body "deactivated")
+            reference (if takedown
+                        (when (get takedown "applied") (get takedown "ref" (str (java.time.Instant/now))))
+                        (:takedown_ref row))]
+        ;; Like the reference PDS, a strongRef selects the current record at
+        ;; that URI; CID is not a swap condition. No repository commit is made.
+        (when takedown
+          (apply db/execute! conn (str "UPDATE " table " SET takedown_ref = ? WHERE " where) reference params))
+        {:subject subject :takedown (takedown-view reference)}))))
 
 (defn account-info [conn did]
   (let [account (account! conn did)

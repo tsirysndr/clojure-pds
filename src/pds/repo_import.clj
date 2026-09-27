@@ -47,7 +47,9 @@
           (fn [conn]
             (let [current (snapshot! conn settings request)
                   account (:account current) did (:did account)
-                  old-blobs (mapv :cid (db/query conn "SELECT DISTINCT cid FROM record_blob_refs WHERE did = ?" did))]
+                  old-blobs (mapv :cid (db/query conn "SELECT DISTINCT cid FROM record_blob_refs WHERE did = ?" did))
+                  takedowns (into {} (map (fn [row] [[(:collection row) (:rkey row)] (:takedown_ref row)]))
+                                 (db/query conn "SELECT collection, rkey, takedown_ref FROM records WHERE did = ? AND takedown_ref IS NOT NULL" did))]
               (when-not (= (version snapshot) (version current))
                 (errors/raise! 409 "InvalidSwap" "Account or repository changed during import; retry with its current state"))
               ;; Only verified reachable blocks gain ownership. Unrelated CAR
@@ -57,7 +59,8 @@
                 (block-index/associate! conn did cid))
               (db/execute! conn "DELETE FROM records WHERE did = ?" did)
               (doseq [{:keys [collection rkey cid]} (:paths verified)]
-                (db/execute! conn "INSERT INTO records(did, collection, rkey, cid) VALUES (?, ?, ?, ?)" did collection rkey cid)
+                (db/execute! conn "INSERT INTO records(did, collection, rkey, cid, takedown_ref) VALUES (?, ?, ?, ?, ?)"
+                             did collection rkey cid (get takedowns [collection rkey]))
                 (blob-refs/replace! conn did collection rkey (get (:records verified) cid)))
               ;; Re-sign with the destination's key and a revision newer than
               ;; both heads. Large replacements use a sync checkpoint, not an

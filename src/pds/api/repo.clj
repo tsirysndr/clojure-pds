@@ -104,7 +104,7 @@
         (when-not (#{"true" "false"} reverse) (errors/invalid! "reverse must be true or false"))
         (when (and cursor (not (syntax/record-key? cursor))) (errors/invalid! "Invalid cursor"))
         (let [rows (db/query conn (str "SELECT r.rkey, r.cid, b.content FROM records r JOIN repo_blocks b ON b.cid = r.cid
-                                        WHERE r.did = ? AND r.collection = ? AND (?::text IS NULL OR r.rkey COLLATE \"C\" "
+                                        WHERE r.did = ? AND r.collection = ? AND r.takedown_ref IS NULL AND (?::text IS NULL OR r.rkey COLLATE \"C\" "
                                        (if (= "true" reverse) "<" ">") " ? COLLATE \"C\") ORDER BY r.rkey COLLATE \"C\" "
                                        (if (= "true" reverse) "DESC" "ASC") " LIMIT ?")
                              (:did account) collection cursor cursor (inc limit))

@@ -65,10 +65,17 @@
 (defn- check-blobs! [conn did value]
   (when (map? value)
     (when (= "blob" (get value "$type"))
-      (let [blob (first (db/query conn "SELECT mime_type, size FROM blobs WHERE did = ? AND cid = ?"
+      (let [blob (first (db/query conn "SELECT mime_type, size FROM blobs WHERE did = ? AND cid = ? AND takedown_ref IS NULL"
                                  did (:cid (get value "ref"))))]
         (when-not (and blob (= (:mime_type blob) (get value "mimeType")) (= (:size blob) (get value "size")))
           (errors/invalid! "Blob is missing or does not match its metadata")))))
+  ;; The reference index also recognizes historical cid/mimeType objects.
+  ;; Applying moderation to both shapes avoids creating a new indexed reference
+  ;; to a taken-down blob by changing only its JSON representation.
+  (when (and (map? value) (not (contains? value "$type")) (contains? value "cid"))
+    (doseq [cid (blob-refs/references (select-keys value ["cid" "mimeType"]))]
+      (when (seq (db/query conn "SELECT 1 FROM blobs WHERE did = ? AND cid = ? AND takedown_ref IS NOT NULL" did cid))
+        (errors/invalid! "Blob has been taken down"))))
   (doseq [v (cond (map? value) (vals value) (vector? value) value :else [])]
     (check-blobs! conn did v)))
 (defn record-value!
@@ -136,7 +143,7 @@
 (defn record [conn did collection rkey]
   (path! collection rkey)
   (when-let [row (first (db/query conn "SELECT r.cid, b.content FROM records r JOIN repo_blocks b ON b.cid = r.cid
-                                      WHERE r.did = ? AND r.collection = ? AND r.rkey = ?" did collection rkey))]
+                                      WHERE r.did = ? AND r.collection = ? AND r.rkey = ? AND r.takedown_ref IS NULL" did collection rkey))]
     {:uri (str "at://" did "/" collection "/" rkey) :cid (:cid row)
      :value (codec/to-json (codec/decode (:content row)))}))
 (defn export-car [conn did]

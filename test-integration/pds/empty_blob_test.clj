@@ -83,7 +83,9 @@
               (is (= [] (rows "SELECT * FROM record_blob_refs")))
               (with-redefs [db/migrations all] (is (db/migrate! fixture/*ds*)))
               (is (= before (rows "SELECT head, rev FROM repositories")))
-              (is (= record-before (rows "SELECT * FROM records")))
+              ;; Later moderation metadata defaults to unset; existing record
+              ;; fields and signed repository state remain unchanged.
+              (is (= (mapv #(assoc % :takedown_ref nil) record-before) (rows "SELECT * FROM records")))
               (is (= [{:cid (codec/cid 85 empty)}] (rows "SELECT cid FROM record_blob_refs")))
               (db/transact! fixture/*ds* #(blobs/store! % settings did empty "image/png"))
               (with-open [conn (db/connection fixture/*ds*)]
