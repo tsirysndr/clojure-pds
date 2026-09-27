@@ -120,8 +120,11 @@ existing sessions, refresh rotation/replay rejection, private preferences,
 moderation state, binary blobs, signed writes and WebSocket replay. The pinned
 upstream verifier checks the restored stream's repository signatures. New events
 must advance past the saved sequence numbers. Failure cases cover refusing an
-existing database/backup, checksum corruption and transactional rollback of a
-damaged archive with a matching checksum. Temporary databases and archive files
+existing database/backup, checksum corruption and transactional rollback after a
+deliberately invalid post-data index definition with a matching checksum. The
+fixture preserves readable archive framing and verifies that index creation
+follows data loading; it does not depend on an arbitrary archive-tail truncation
+causing a restore error. Temporary databases and archive files
 are removed afterward.
 
 With the S3 emulator, the same drill verifies restored metadata can retrieve

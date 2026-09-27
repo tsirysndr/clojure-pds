@@ -1,6 +1,7 @@
 (ns pds.backup-test
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is]]
             [pds.accounts :as accounts]
             [pds.app :as app]
@@ -53,8 +54,8 @@
         (doseq [name (reverse @created)]
           (with-open [c (db/connection admin)] (db/execute! c (str "DROP DATABASE " name " WITH (FORCE)"))))))))
 
-(defn command [env action folder]
-  (let [builder (ProcessBuilder. ^java.util.List ["python3" "scripts/database-backup.py" action (str folder)])
+(defn run-command [env arguments]
+  (let [builder (ProcessBuilder. ^java.util.List arguments)
         child-env (.environment builder)]
     (doseq [key ["PGSERVICE" "PGSERVICEFILE" "PGOPTIONS" "PGHOSTADDR"]] (.remove child-env key))
     (.putAll child-env env)
@@ -62,9 +63,27 @@
     (let [process (.start builder) output (future (slurp (.getInputStream process)))]
       (try
         (when-not (.waitFor process 60 TimeUnit/SECONDS)
-          (throw (ex-info "Backup command timed out" {:action action})))
+          (throw (ex-info "Backup test command timed out" {})))
         {:exit (.exitValue process) :output (deref output 5000 "output timeout")}
         (finally (when (.isAlive process) (.destroyForcibly process)))))))
+
+(defn command [env action folder]
+  (run-command env ["python3" "scripts/database-backup.py" action (str folder)]))
+
+(defn corrupt-index! [dump]
+  ;; SQL definitions in a custom archive's TOC are uncompressed. Change one
+  ;; fixed-width token in our own post-data index, preserving all framing/data.
+  ;; An arbitrary tail truncation need not remove anything pg_restore uses.
+  (let [before "CREATE INDEX backup_restore_probe_idx ON public.backup_restore_probe USING btree"
+        after  "CREATE INDEX backup_restore_probe_idx ON public.backup_restore_probe USING bogus"
+        bytes (Files/readAllBytes (.toPath dump))
+        text (String. bytes "ISO-8859-1") offset (.indexOf text before)]
+    (when-not (and (= (count before) (count after)) (<= 0 offset) (= offset (.lastIndexOf text before)))
+      (throw (ex-info "Expected exactly one backup restore probe index definition" {})))
+    (with-open [file (java.io.RandomAccessFile. dump "rw")]
+      (.seek file offset)
+      (.write file (.getBytes after "US-ASCII")))
+    after))
 
 (defn snapshot [ds]
   (with-open [c (db/connection ds)]
@@ -157,25 +176,42 @@
               folder (io/file directory "backup")]
           (try
             (seed! source (api/settings))
+            (with-open [c (db/connection source)]
+              (db/execute! c "CREATE TABLE backup_restore_probe (value integer);
+                              INSERT INTO backup_restore_probe VALUES (42);
+                              CREATE INDEX backup_restore_probe_idx ON backup_restore_probe (value)"))
             (is (= 0 (:exit (command source-env "backup" folder))))
             (with-open [c (db/connection target)] (db/execute! c "CREATE TABLE sentinel (value text); INSERT INTO sentinel VALUES ('keep')"))
             (is (= 1 (:exit (command target-env "restore" folder))))
             (with-open [c (db/connection target)]
               (is (= [{:value "keep"}] (db/query c "SELECT * FROM sentinel")))
               (db/execute! c "DROP TABLE sentinel"))
-            (let [dump (io/file folder "database.dump") manifest (io/file folder "manifest.json")]
+            (let [dump (io/file folder "database.dump") manifest (io/file folder "manifest.json")
+                  original (Files/readAllBytes (.toPath dump))]
               (with-open [file (java.io.RandomAccessFile. dump "rw")] (.setLength file (- (.length file) 1024)))
               (is (= 1 (:exit (command {} "verify" folder))))
               (is (= 1 (:exit (command target-env "restore" folder))))
-              (is (= {} (snapshot target)))
-              ;; Even a matching checksum cannot turn a damaged archive into a
-              ;; successful restore; pg_restore must fail and roll back DDL/data.
-              (spit manifest (json/write-str (assoc (json/read-str (slurp manifest))
-                                                    "size" (.length dump)
-                                                    "sha256" (.formatHex (HexFormat/of) (codec/sha256 (Files/readAllBytes (.toPath dump)))))))
-              (is (= 0 (:exit (command {} "verify" folder))))
-              (is (= 1 (:exit (command target-env "restore" folder))))
-              (is (= {} (snapshot target))))
+              (is (empty? (keys (snapshot target))))
+              ;; Restore intact framing and data, then introduce a known SQL
+              ;; error in post-data. A matching checksum verifies integrity of
+              ;; those bytes, but pg_restore must roll back the preceding work.
+              (Files/write (.toPath dump) original (make-array java.nio.file.OpenOption 0))
+              (let [invalid-index (corrupt-index! dump)
+                    restore-tool (if-let [bin (System/getenv "PG_BIN")] (str (io/file bin "pg_restore")) "pg_restore")
+                    rendered (run-command {} [restore-tool "--no-owner" "--no-acl" "--file=-" (str dump)])
+                    copy-at (.indexOf ^String (:output rendered) "COPY public.backup_restore_probe (value) FROM stdin;")
+                    index-at (.indexOf ^String (:output rendered) invalid-index)]
+                (is (zero? (:exit rendered)) "The archive remains readable")
+                (is (<= 0 copy-at))
+                (is (> index-at copy-at) "The injected failure occurs after table data loading")
+                (spit manifest (json/write-str (assoc (json/read-str (slurp manifest))
+                                                      "size" (.length dump)
+                                                      "sha256" (.formatHex (HexFormat/of) (codec/sha256 (Files/readAllBytes (.toPath dump)))))))
+                (is (= 0 (:exit (command {} "verify" folder))))
+                (let [result (command target-env "restore" folder)]
+                  (is (= 1 (:exit result)))
+                  (is (str/includes? (:output result) "pg_restore failed") "Failure must reach PostgreSQL, not preflight verification"))
+                (is (empty? (keys (snapshot target))) "DDL and data are rolled back together")))
             (finally (doseq [file (reverse (file-seq directory))] (io/delete-file file))))))))
   (when-let [endpoint (System/getenv "PDS_TEST_S3_ENDPOINT")]
     (deftest database-backup-preserves-external-blob-locators
