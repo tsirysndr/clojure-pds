@@ -16,6 +16,7 @@
         org.slf4j/slf4j-api {:mvn/version "2.0.20"}
         dnsjava/dnsjava {:mvn/version "3.6.5"}
         org.postgresql/postgresql {:mvn/version "42.7.13"}
+        com.zaxxer/HikariCP {:mvn/version "7.1.0"}
         org.bouncycastle/bcprov-jdk18on {:mvn/version "1.86"}
         software.amazon.awssdk/s3 {:mvn/version "2.55.6"
                                   :exclusions [software.amazon.awssdk/apache5-client

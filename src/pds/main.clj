@@ -20,7 +20,7 @@
             [pds.relay :as relay]
             [pds.s3 :as s3]))
 
-(defn -main [& _]
+(defn- run-server! [ds]
   (let [email-config (email/settings)
         blob-config (s3/settings (System/getenv))
         rate-config (redis/settings (System/getenv))
@@ -32,7 +32,6 @@
                         (relay/settings (System/getenv))
                         (blob-cleanup/settings (System/getenv))
                         (auth/settings (System/getenv)) {:email-enabled (boolean email-config)})
-        ds (db/datasource (db/settings))
         _ (db/migrate! ds)
         blob-store (s3/open-store blob-config)
         limiter (try (redis/open-limiter rate-config)
@@ -50,7 +49,8 @@
                               (try (when blob-store (.close ^java.io.Closeable blob-store))
                                    (finally (try (when (instance? java.io.Closeable limiter)
                                                    (.close ^java.io.Closeable limiter))
-                                                 (finally (.close ^java.io.Closeable http-client))))))]
+                                                 (finally (try (.close ^java.io.Closeable http-client)
+                                                               (finally (.close ^java.io.Closeable ds))))))))]
     (try
       (let [stop-email! (email/start! ds email-config)
             stop-cleanup! (try
@@ -84,3 +84,10 @@
                 (try (.removeShutdownHook runtime hook) (catch IllegalStateException _)))))
           (catch Throwable e (try (stop-provision!) (finally (try (stop-email!) (finally (stop-cleanup!))))) (throw e))))
       (finally (stop-dependencies!)))))
+
+(defn -main [& _]
+  ;; Covers configuration, migration and dependency startup failures. The
+  ;; shutdown hook also closes the pool, after HTTP and background workers,
+  ;; because the JVM need not wait for this main thread after hooks finish.
+  (with-open [ds (db/open-pool! (db/settings) (db/pool-settings))]
+    (run-server! ds)))

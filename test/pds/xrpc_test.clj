@@ -27,3 +27,12 @@
     (is (= 500 (:status response)))
     (is (= {"error" "InternalServerError" "message" "An internal server error occurred"}
            (json/read-str (:body response))))))
+
+(deftest database-acquisition-timeouts-are-retryable-and-sanitized
+  (let [handler (xrpc/router {"/busy" {:method :get
+                                       :handler (fn [_] (throw (java.sql.SQLTransientConnectionException. "secret JDBC settings")))}})
+        response (handler {:request-method :get :uri "/busy"})]
+    (is (= 503 (:status response)))
+    (is (= "1" (get-in response [:headers "Retry-After"])))
+    (is (= {"error" "ServiceUnavailable" "message" "Database connections are temporarily unavailable"}
+           (json/read-str (:body response))))))

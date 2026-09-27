@@ -33,6 +33,9 @@
                 allow (assoc-in [:headers "Allow"] allow)
                 (= status 401) (assoc-in [:headers "WWW-Authenticate"] (or www-authenticate "Bearer"))))
             (error-response 500 "InternalServerError" "An internal server error occurred")))
+        (catch java.sql.SQLTransientConnectionException _
+          (assoc-in (error-response 503 "ServiceUnavailable" "Database connections are temporarily unavailable")
+                    [:headers "Retry-After"] "1"))
         (catch Exception _
           ;; Do not expose exception messages (which may contain credentials).
           (binding [*out* *err*] (println "XRPC handler failed"))

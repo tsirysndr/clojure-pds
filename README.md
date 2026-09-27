@@ -93,6 +93,8 @@ to avoid wrapping Rebel in a second readline tool.
 | `PDS_DATABASE_URL` | `jdbc:postgresql://127.0.0.1:5432/clojure_pds` | PostgreSQL JDBC URL |
 | `PDS_DATABASE_USER` | `pds` | Database role |
 | `PDS_DATABASE_PASSWORD` | empty | Database password |
+| `PDS_DB_POOL_SIZE` | `20` | Maximum PostgreSQL connections per server; 1–256; [pool lifecycle](docs/DATABASE.md) |
+| `PDS_DB_POOL_TIMEOUT_MS` | `5000` | Maximum wait to borrow a connection; 500–60,000 ms |
 | `PDS_BLOB_BACKEND` | `postgres` | `postgres` or `s3`; [S3 settings](docs/S3.md) |
 | `PDS_RATE_LIMIT_BACKEND` | `memory` | `memory` or `redis`; [Redis settings](docs/REDIS.md) |
 | `PDS_RECORD_WRITE_RATE_LIMIT_ENABLED` | `true` | `false` disables record-write limits; [write budget settings](docs/REDIS.md#record-write-overrides) |

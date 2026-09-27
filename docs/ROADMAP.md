@@ -88,7 +88,9 @@ remain required before a full client integration can be claimed. Preserve atomic
   worker waits for each send callback with a deadline before producing another frame.
 - PostgreSQL is the storage backend. Migrations are transactional, serialized by
   an advisory lock, and checked for changes using SHA-256. Integration tests use
-  an isolated PostgreSQL cluster and disposable schemas.
+  an isolated PostgreSQL cluster and disposable schemas. The server uses a
+  [bounded connection pool](DATABASE.md), with configurable capacity and borrow
+  deadlines, transaction cleanup and startup/shutdown ownership.
 - Remote identity fetches use a shared Jetty client with HTTPS certificate and
   hostname verification, validated public socket addresses, bounded responses
   and deadlines, and manual redirect validation. Cookies and transparent

@@ -189,6 +189,12 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   A transactional ownership migration traverses retained commit/MST history;
   it does not grant ownership from arbitrary record links. Public block requests
   cannot retrieve blocks belonging only to a different account.
+- The server owns a [configurable HikariCP connection pool](DATABASE.md), shared
+  by HTTP and background work. Real PostgreSQL tests verify bounded acquisition,
+  rollback and JDBC state reset on reuse, concurrent transactions, replacement
+  of terminated connections, sanitized overload responses, startup failure
+  cleanup and pooled account/record HTTP requests. Process tests cover startup
+  and shutdown. Deployment load/failover testing remains pending.
 - Durable commit events contain signed CAR slices, mutation operations with previous
   CIDs, and previous revision/MST links. Upstream verification inverts mixed create,
   update, delete, and empty commits back to the previous root. Oversized proof
@@ -332,7 +338,7 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
    define separate state-transfer mechanisms.
 7. Streaming repository import, S3 orphan and historical-block reclamation,
    incremental MST mutation, streaming, quotas and bulk blob-backend migration.
-8. PostgreSQL connection pooling, account-specific abuse controls, metrics/logging,
+8. Account-specific abuse controls, metrics/logging, database load/failover testing,
    operational deployment/TLS and backup/restore drills. Push CI is configured;
    its first GitHub execution still requires a push.
 

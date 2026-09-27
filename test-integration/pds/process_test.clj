@@ -13,6 +13,7 @@
         env (.environment builder)]
     (doseq [name ["PDS_EMAIL_WORKER_URL" "PDS_EMAIL_WORKER_TOKEN" "PDS_EMAIL_FROM" "PDS_RELAY_URLS" "PDS_RELAY_INTERVAL_SECONDS"]] (.remove env name))
     (.putAll env {"PDS_DATABASE_URL" (.getURL fixture/*ds*)
+                 "PDS_DB_POOL_SIZE" "2" "PDS_DB_POOL_TIMEOUT_MS" "1000"
                  "PDS_DATABASE_USER" (.getUser fixture/*ds*) "PDS_DATABASE_PASSWORD" (.getPassword fixture/*ds*)
                  "PDS_MASTER_KEY" (crypto/b64 (crypto/random-bytes 32))
                  "PDS_HOST" "127.0.0.1" "PDS_PORT" "0" "PDS_HOSTNAME" "localhost"

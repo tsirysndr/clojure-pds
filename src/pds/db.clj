@@ -1,7 +1,8 @@
 (ns pds.db
   (:require [clojure.java.io :as io]
             [clojure.string :as str])
-  (:import [java.sql Connection Timestamp]
+  (:import [com.zaxxer.hikari HikariDataSource]
+           [java.sql Connection Timestamp]
            [java.security MessageDigest]
            [java.util HexFormat]
            [javax.sql DataSource]
@@ -16,13 +17,47 @@
      {:url url :user (get env "PDS_DATABASE_USER" "pds")
       :password (get env "PDS_DATABASE_PASSWORD" "")})))
 
-(defn datasource [{:keys [url user password]}]
+(defn pool-settings
+  ([] (pool-settings (System/getenv)))
+  ([env]
+   (let [read-setting (fn [key default minimum maximum]
+                        (let [n (try (Long/parseLong (get env key (str default)))
+                                     (catch Exception _ 0))]
+                          (when-not (<= minimum n maximum)
+                            (throw (ex-info (str key " must be between " minimum " and " maximum) {})))
+                          n))]
+     {:maximum-size (read-setting "PDS_DB_POOL_SIZE" 20 1 256)
+      :timeout-ms (read-setting "PDS_DB_POOL_TIMEOUT_MS" 5000 500 60000)})))
+
+(defn datasource
+  "Unpooled datasource for short-lived tools and isolated test fixtures."
+  [{:keys [url user password]}]
   (doto (PGSimpleDataSource.)
     (.setURL url) (.setUser user) (.setPassword password)
     (.setConnectTimeout 5) (.setSocketTimeout 30)
+    (.setTcpKeepAlive true)
     (.setApplicationName "clojure-pds")))
 
 (defn connection ^Connection [^DataSource ds] (.getConnection ds))
+
+(defn open-pool!
+  "Open and verify an owned pool. Call close after all database users stop."
+  ^HikariDataSource [database-settings {:keys [maximum-size timeout-ms]}]
+  (let [pool (doto (HikariDataSource.)
+               (.setDataSource (datasource database-settings))
+               (.setMaximumPoolSize maximum-size)
+               (.setMinimumIdle 0)
+               (.setConnectionTimeout timeout-ms)
+               (.setValidationTimeout (min 2000 (quot timeout-ms 2)))
+               (.setInitializationFailTimeout 1)
+               (.setAutoCommit true)
+               (.setTransactionIsolation "TRANSACTION_READ_COMMITTED"))]
+    (try
+      (with-open [_ (connection pool)] pool)
+      (catch Throwable _
+        (.close pool)
+        ;; Driver exceptions can include the JDBC URL or credentials.
+        (throw (ex-info "Unable to connect to the configured PostgreSQL database" {}))))))
 
 (defn- bind! [stmt params]
   (doseq [[i value] (map-indexed vector params)]
@@ -53,7 +88,9 @@
     (.setAutoCommit conn false)
     (try
       (let [result (f conn)] (.commit conn) result)
-      (catch Throwable t (.rollback conn) (throw t)))))
+      (catch Throwable t
+        (try (.rollback conn) (catch Throwable rollback (.addSuppressed t rollback)))
+        (throw t)))))
 
 (def migrations ["001-storage.sql" "002-email.sql" "003-sessions.sql" "004-repo-events.sql"
                  "005-blob-storage.sql" "006-app-passwords.sql" "007-account-lifecycle.sql"
