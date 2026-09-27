@@ -20,7 +20,7 @@
 
 (defn- snapshot! [conn settings request]
   (let [account (auth/authenticate! conn settings request {:allow-deactivated? true})]
-    (auth/require-primary! account)
+    (auth/require-management! account :account "repo")
     {:account account :repo (repo/state conn (:did account))
      :source-document (:source_document (first (db/query conn "SELECT source_document::text FROM account_imports WHERE did = ?" (:did account))))}))
 

@@ -38,6 +38,7 @@
                                         "blob" ["accept" #{"accept"} #{"accept"}]
                                         "rpc" ["lxm" #{"lxm"} #{"lxm" "aud"}]
                                         "account" ["attr" #{} #{"attr" "action"}]
+                                        "identity" ["attr" #{} #{"attr"}]
                                         (invalid!))
             params (parameters/parse! (or query "") arrays)
             _ (when-not (set/subset? (set (keys params)) allowed) (invalid!))
@@ -61,10 +62,12 @@
                                  (or (= "*" audience) (service? audience))
                                  (not (and (= "*" audience) (some #{"*"} methods)))) (invalid!))
                   {:resource :rpc :methods (set methods) :audience audience})
-          ;; Other account/identity operations are enabled only when their
-          ;; resource handlers implement the corresponding management checks.
-          "account" (do (when-not (and (= "email" (get params "attr")) (= "read" (get params "action" "read"))) (invalid!))
-                        {:resource :account :attribute "email" :action "read"}))))
+          "account" (let [attribute (get params "attr") action (get params "action" "read")]
+                      (when-not (and (#{"email" "repo"} attribute) (#{"read" "manage"} action)) (invalid!))
+                      {:resource :account :attribute attribute :action action})
+          "identity" (let [attribute (get params "attr")]
+                       (when-not (#{"handle" "*"} attribute) (invalid!))
+                       {:resource :identity :attribute attribute}))))
     (catch Exception _ nil)))
 
 (defn supported? [value] (some? (parse value)))
@@ -72,7 +75,7 @@
 (defn- names [values] (str/join ", " (sort values)))
 (defn describe [value]
   (mapv (fn [token]
-          (let [{:keys [resource collections actions accept methods audience]} (parse token)]
+          (let [{:keys [resource collections actions accept methods audience attribute action]} (parse token)]
             (case resource
               :transition (get {"atproto" "Confirm your account identity."
                                 "transition:generic" "Create, change, and delete public records; upload media; access preferences and app services."
@@ -81,5 +84,12 @@
               :repo (str (str/capitalize (names actions)) " public records in " (if (collections "*") "all collections" (names collections)) ".")
               :blob (str "Upload media of these types: " (names accept) ".")
               :rpc (str "Call " (if (methods "*") "any API method" (names methods)) " at " (if (= "*" audience) "any service" audience) ".")
-              :account "Read your email address and verification status."
+              :account (case [attribute action]
+                         ["email" "read"] "Read your email address and verification status."
+                         ["email" "manage"] "Read, verify, and change your email address."
+                         ["repo" "manage"] "Replace your entire public repository from a backup."
+                         "No additional access to your public repository.")
+              :identity (if (= "*" attribute)
+                          "Change your handle and DID document, including identity keys and hosting service."
+                          "Change your account handle.")
               token))) (str/split (or value "") #" ")))

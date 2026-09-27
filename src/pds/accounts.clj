@@ -222,6 +222,7 @@
 (defn require-email! [settings]
   (when-not (:email-enabled settings) (errors/raise! 503 "EmailUnavailable" "Email delivery is not configured")))
 (defn request-confirmation! [conn settings account]
+  (permissions/account! account "email" "manage")
   (require-email! settings) (issue-email! conn account "confirm-email"))
 (defn request-reset! [ds settings body]
   (require-email! settings)
@@ -240,6 +241,7 @@
                             (crypto/digest-token token) purpose did did email email))]
     (or row (errors/raise! 400 "InvalidToken" "Invalid or expired email token"))))
 (defn confirm! [conn account body]
+  (permissions/account! account "email" "manage")
   (let [address (get body "email")]
     (when-not (= address (:email account)) (errors/invalid! "Email does not match account"))
     (consume-token! conn "confirm-email" (get body "token") (:did account) address)
@@ -309,14 +311,15 @@
           (events/account! conn did "deleted"))))))
 
 (defn request-email-update! [conn settings account]
-  (auth/require-primary! account)
+  (auth/require-management! account :account "email")
   (when (:email_confirmed account)
     (require-email! settings)
     (issue-email! conn account "update-email"))
   {:tokenRequired (boolean (:email_confirmed account))})
 
 (defn update-email! [conn settings account body]
-  (auth/require-primary! account)
+  (auth/require-management! account :account "email")
+  (when (and (:oauth-scope account) (contains? body "emailAuthFactor")) (permissions/denied!))
   (require-email! settings)
   (let [address (str/lower-case (request/string! (get body "email") "email"))
         changed? (not= address (:email account))
@@ -338,6 +341,8 @@
     (when (or changed? (not= factor (:email_auth_factor account)))
       (db/execute! conn "DELETE FROM account_tokens WHERE did = ?" (:did account))
       (db/execute! conn "DELETE FROM email_outbox WHERE payload->>'to' = ?" (:email account))
-      (db/execute! conn "UPDATE sessions SET revoked = true WHERE did = ? AND id <> ?" (:did account) (:session-id account)))
+      (if (:oauth-scope account)
+        (db/execute! conn "UPDATE sessions SET revoked = true WHERE did = ?" (:did account))
+        (db/execute! conn "UPDATE sessions SET revoked = true WHERE did = ? AND id <> ?" (:did account) (:session-id account))))
     (when changed?
       (issue-email! conn (assoc account :email address :email_confirmed false :email_auth_factor false) "confirm-email"))))

@@ -82,8 +82,7 @@
     (is (= "alice@example.com" (get-in (call handler (request env email :get session-path)) [:json "email"])))
     (doseq [[method nsid] [[:post "com.atproto.identity.updateHandle"] [:post "com.atproto.server.updateEmail"]
                            [:post "com.atproto.server.deactivateAccount"] [:post "com.atproto.server.createAppPassword"]
-                           [:post "com.atproto.repo.importRepo"] [:get "com.atproto.server.getAccountInviteCodes"]
-                           [:get "com.atproto.repo.listMissingBlobs"]]]
+                           [:post "com.atproto.repo.importRepo"] [:get "com.atproto.server.getAccountInviteCodes"]]]
       (is (= 403 (:status (call handler (request env generic method (str "/xrpc/" nsid))
                                (if (= nsid "com.atproto.identity.updateHandle") {"handle" "other.example.com"} {})))) nsid))
     (let [legacy (accounts/login! fixture/*ds* (:settings env) owner/credentials)

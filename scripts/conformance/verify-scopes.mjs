@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { RepoPermission, BlobPermission, RpcPermission, AccountPermission } from '@atproto/oauth-scopes';
+import { RepoPermission, BlobPermission, RpcPermission, AccountPermission, IdentityPermission } from '@atproto/oauth-scopes';
 const fixtures = JSON.parse(await readFile(process.argv[2], 'utf8'));
-const classes = { repo: RepoPermission, blob: BlobPermission, rpc: RpcPermission, account: AccountPermission };
+const classes = { repo: RepoPermission, blob: BlobPermission, rpc: RpcPermission, account: AccountPermission, identity: IdentityPermission };
 for (const { scope, permission: expected } of fixtures) {
   const actual = classes[expected.resource].fromString(scope);
   assert.ok(actual, scope);
@@ -28,6 +28,10 @@ for (const { scope, permission: expected } of fixtures) {
           && (expected.methods.includes('*') || expected.methods.includes(lxm)));
       }
     }
+  } else if (expected.resource === 'identity') {
+    assert.equal(actual.attr, expected.attribute);
+    assert.equal(actual.matches({ attr: '*' }), expected.attribute === '*');
+    assert.equal(actual.matches({ attr: 'handle' }), true);
   } else {
     assert.equal(actual.attr, expected.attribute);
     assert.deepEqual(actual.action, [expected.action]);

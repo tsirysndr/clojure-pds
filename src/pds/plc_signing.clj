@@ -10,7 +10,7 @@
 
 (defn- snapshot! [conn settings request]
   (let [account (auth/authenticate! conn settings request {:allow-deactivated? true :allow-taken-down? true})]
-    (auth/require-primary! account)
+    (auth/require-management! account :identity "*")
     (let [identity (first (db/query conn "SELECT * FROM plc_identities WHERE did = ? AND status = 'ready'" (:did account)))]
       (when-not identity (errors/raise! 400 "UnsupportedDID" "This account has no managed PLC rotation key"))
       (when (seq (db/query conn "SELECT 1 FROM handle_updates WHERE did = ?" (:did account)))

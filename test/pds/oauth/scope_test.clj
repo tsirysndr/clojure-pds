@@ -14,7 +14,8 @@
    "blob:application/ld+json" "blob?accept=application/ld%2Bjson"
    "rpc:com.example.getNote?aud=*" "rpc:*?aud=did:web:api.example.com%23appview"
    "rpc?lxm=com.example.getNote&lxm=com.example.getFeed&aud=did:web:api.example.com%23appview"
-   "account:email" "account?attr=email&action=read"])
+   "account:email" "account?attr=email&action=read" "account:email?action=manage"
+   "account:repo?action=manage" "account:repo" "identity:handle" "identity:*" "identity?attr=*"])
 (def invalid-scopes
   [nil "" "repo" "repo:" "repo:com.example.*" "repo:com.example.note?action=read" "repo:com.example.note?future=narrow"
    "repo:com.example.note?collection=com.example.other" "repo?collection=" "repo:com.example.note?action="
@@ -26,7 +27,7 @@
    "rpc:com.example.read?aud=*&inheritAud=true" "rpc:com.example.read?aud=did:key:zFoo%23service"
    "rpc:com.example.read?aud=did:web:api.example.com:path%23service" "rpc:com.example.read?aud=did:web:api.example.com%253A8443%23service" "rpc:com.example.read?aud=did:web:api.example.com%23"
    "account:email?attr=email" "account:email?action=read&action=read" "account:*"
-   "account:email?future=narrow" "identity:*" "account:email?action=manage" "account:repo?action=manage"
+   "account:email?future=narrow" "identity:handle?action=read" "account:email?action=write" "account:status?action=manage"
    "include:com.example.permissions" "atproto?x=1" "Repo:com.example.note"])
 (defn denied? [f] (try (f) false (catch clojure.lang.ExceptionInfo e (= "insufficient_scope" (:error (ex-data e))))))
 

@@ -2,9 +2,9 @@
 
 The PDS publishes OAuth discovery, PAR, browser authorization, token and revocation
 endpoints. DPoP resource authentication is connected to XRPC with transitional
-scopes and direct record, blob, RPC and email-read permissions. Legacy session
-endpoints retain their existing behavior. Management permissions, permission sets
-and deployed interoperability remain incomplete.
+scopes and direct record, blob, RPC, account and identity permissions. Legacy
+session endpoints retain their existing behavior. Permission sets and deployed
+interoperability remain incomplete.
 
 ## Proof verification and durable replay protection
 
@@ -154,8 +154,8 @@ Only code responses, query response mode and S256 PKCE are accepted. State is
 required, redirects must match client metadata, and requested scopes must be
 declared by the client. The validator supports `atproto`, the three transitional
 scopes and the direct permissions documented below. Transitional chat additionally
-requires `transition:generic`. Management scopes and permission sets remain pending
-and are rejected rather than authorized implicitly. Login hints and supported prompt values are preserved for
+requires `transition:generic`. Permission sets remain pending and are rejected
+rather than authorized implicitly. Login hints and supported prompt values are preserved for
 the browser authorization interface.
 
 Migration 026 reserves each PKCE challenge across all clients for 24 hours. The
@@ -347,7 +347,7 @@ The currently advertised scopes are enforced as follows:
 
 | Scope | Resource behavior |
 | --- | --- |
-| `atproto` | Identity-only grants may call `getSession`; no write or proxy authority |
+| `atproto` | `getSession`, recommended public DID credentials and missing-blob metadata; no write or proxy authority |
 | `transition:generic` | Record writes, blob uploads, and permitted service-auth/proxy calls |
 | `transition:email` | Adds email, confirmation and email-factor fields to `getSession` |
 | `transition:chat.bsky` | Adds all `chat.bsky.*` service methods, together with `transition:generic` |
@@ -363,7 +363,7 @@ PostgreSQL and real HTTP/TLS tests cover nonce retries, wrong key/token/method/U
 replay after errors, concurrent requests, email filtering, writes, blob upload,
 account restrictions, key removal/restoration, metadata outages, lifecycle races,
 expiration and service/proxy scope enforcement. Direct granular permissions are
-described below; management scopes and permission sets are not accepted by PAR yet.
+described below; permission sets are not accepted by PAR yet.
 
 ## Direct granular permissions
 
@@ -411,8 +411,54 @@ checks use validated scope values, never the displayed descriptions.
 cover atomic denial, put create/update distinctions, pre-body upload denial,
 audience/method substitution and refresh narrowing. The upstream Node OAuth client
 completes signup, a scoped record write, refresh and revocation using granular
-permissions. Account management, identity management and dynamically resolved
-`include:` permission sets remain the next implementation steps.
+permissions. Management grants are described below. Dynamically resolved
+`include:` permission sets remain the next implementation step.
+
+## Account and identity management permissions
+
+| Scope | Authorized operations |
+| --- | --- |
+| `account:email?action=manage` | Read email, request/consume confirmation tokens, request/complete email changes |
+| `account:repo?action=manage` | Import a complete signed repository CAR |
+| `account:repo` | No additional authority; repository information is already public |
+| `identity:handle` | Change the account handle and its DID-document alias |
+| `identity:*` | Change the handle, request PLC signing approval, sign and submit PLC operations |
+
+These grants satisfy the specific operation's permission check without turning an
+OAuth account into a primary-password session. They do not authorize app-password
+creation, factor enrollment/removal, account deletion or status changes. Legacy
+primary/app-password requirements remain unchanged. Unspecified account actions
+default to `read`; `manage` includes read access. Identity wildcard includes handle
+permission. Consent and connected-app descriptions identify the wider authority.
+
+Email confirmation and email changes retain the existing address-bound, one-use
+email challenges. A confirmed current address still requires its update token.
+OAuth `updateEmail` rejects explicit `emailAuthFactor` fields; clients cannot use
+that field to configure a factor. Changing the address clears the old address's
+email factor as in the existing account lifecycle. Confirmation/security changes
+advance the account epoch and invalidate existing OAuth grants, including the
+calling grant. OAuth email updates revoke all legacy sessions; the opaque OAuth
+session ID is never used as a legacy UUID. The new address receives a confirmation
+message through the configured email outbox/Worker.
+
+Import permission is distinct from collection write permissions. Import validates
+the signed CAR, DID, block ownership and repository state, then rechecks the OAuth
+grant before committing. Revocation during verification prevents any mutation.
+Handle updates retain domain-control verification and durable PLC reconciliation.
+Full PLC control still requires a managed rotation key, a current verified audit,
+and a one-use email token before signing. Submission retains signature and local
+credential constraints. Operations that release locks for external work reload
+authentication and permissions before persisting the result.
+
+Active OAuth accounts may read recommended public DID credentials and missing-blob
+metadata with `atproto` alone, matching the reference endpoints. Existing OAuth
+account-epoch/status checks still reject inactive or invalidated sessions; these
+grants do not yet add authorization for an inactive migration destination.
+
+Tests cover read/manage isolation, email proof and epoch invalidation, legacy
+session revocation, forbidden factor/account actions, signed imports and mid-import
+revocation, handle-only isolation, and PLC handle/sign/submit flows against a local
+TLS directory. Scope parser/matcher comparisons include the management scopes.
 
 ## Revocation and owner session management
 
@@ -520,9 +566,10 @@ The process lifecycle test covers starting and stopping the registered worker.
 
 ## Remaining steps
 
-1. Account/identity management scopes and dynamically resolved permission sets,
-   including fixed access-token permission snapshots and permission-set consent.
-2. Full browser/hardware ceremonies and deployed reference-client verification.
+1. Dynamically resolved permission sets, including fixed access-token permission
+   snapshots and permission-set consent.
+2. Account-status scopes and OAuth authorization for inactive migration accounts.
+3. Full browser/hardware ceremonies and deployed reference-client verification.
 
 Sources: [AT Protocol OAuth profile](https://atproto.com/specs/oauth),
 [RFC 9449 DPoP](https://www.rfc-editor.org/rfc/rfc9449.html),

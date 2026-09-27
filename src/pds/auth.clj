@@ -5,6 +5,7 @@
             [pds.db :as db]
             [pds.errors :as errors]
             [pds.oauth.resource :as oauth-resource]
+            [pds.oauth.permissions :as permissions]
             [pds.protocol.codec :as codec])
   (:import [java.security MessageDigest]
            [java.time Instant]
@@ -26,6 +27,16 @@
 (defn require-primary! [account]
   (when-not (= "com.atproto.access" (:access-scope account))
     (errors/raise! 403 "AuthRequired" "A primary-password session is required")))
+(defn require-management!
+  "Explicit OAuth authority or a primary legacy session, without converting an
+  OAuth account into a primary-password identity."
+  [account resource attribute]
+  (if (:oauth-scope account)
+    (case resource
+      :account (permissions/account! account attribute "manage")
+      :identity (permissions/identity! account attribute)
+      (permissions/denied!))
+    (require-primary! account)))
 (defn jwt [settings type claims]
   (let [head (crypto/b64 (codec/utf8 (json/write-str {"alg" "HS256" "typ" type})))
         payload (crypto/b64 (codec/utf8 (json/write-str claims)))
