@@ -18,6 +18,8 @@
     "app.bsky.graph.verification",
     "app.bsky.labeler.service",
     "chat.bsky.actor.declaration",
+    "app.bsky.actor.getPreferences",
+    "app.bsky.actor.putPreferences",
     "com.atproto.admin.disableAccountInvites",
     "com.atproto.admin.disableInviteCodes",
     "com.atproto.admin.enableAccountInvites",
@@ -78,6 +80,8 @@
     "com.atproto.sync.subscribeRepos"
   ],
   "endpointRoots": [
+    "app.bsky.actor.getPreferences",
+    "app.bsky.actor.putPreferences",
     "com.atproto.admin.disableAccountInvites",
     "com.atproto.admin.disableInviteCodes",
     "com.atproto.admin.enableAccountInvites",
@@ -139,7 +143,9 @@
   ],
   "schemas": {
     "app.bsky.actor.defs": "46ad2031e7358d9ce28f7c9782ccb02f50182e3268129762055037585448fc6e",
+    "app.bsky.actor.getPreferences": "4d7f456f41eb76a0d39b909c7fe4fd22d811293054669f54080392c3f9c53598",
     "app.bsky.actor.profile": "b6f4de76b2e516db6532de4c97963b70e9d9eae205808328d0a45f4bd0941234",
+    "app.bsky.actor.putPreferences": "ce0b29359dd1a2a9f773b7fd380610faa8e0c3247cbe0072f1dd35e72c2e6e83",
     "app.bsky.actor.status": "749b7ab41d30782f58c52fa20f9b2cc4fc94a7a8ff43412dda87d69cf0fb698d",
     "app.bsky.embed.defs": "c9db5f67269836b6f1c147eb507685548f0cdbe2ac6bbd31f1d0c9eb796fd42e",
     "app.bsky.embed.external": "0193c2f4704b4a1ad94e3c747b386530f4ec277c0d6336882e4ba5d8980c9ba1",

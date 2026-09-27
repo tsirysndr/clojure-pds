@@ -5,6 +5,7 @@
             [pds.api.admin :as admin-api]
             [pds.api.identity :as identity-api]
             [pds.api.repo :as repo-api]
+            [pds.api.preferences :as preferences-api]
             [pds.api.blob :as blob-api]
             [pds.api.sync :as sync-api]
             [pds.firehose :as firehose]
@@ -25,7 +26,10 @@
    (let [config (if ds (record-validation/settings (oauth-grants/settings ds config)) config)
          banner (slurp (io/resource "pds/banner.txt") :encoding "UTF-8")
          resolver (when ds (oauth-client/resolver config))
+         fallback (if ds (proxy/handler ds config)
+                      (fn [_] (xrpc/error-response 404 "MethodNotImplemented" "Endpoint is not implemented")))
          routes (merge (when ds (server-api/routes ds config))
+                       (when ds (preferences-api/routes ds config fallback))
                        (when ds (identity-api/routes ds config))
                        (when ds (admin-api/routes ds config))
                        (when ds (repo-api/routes ds config))
@@ -47,9 +51,7 @@
                                        :inviteCodeRequired (boolean (:invite-required config))
                                        :blobUploadLimit blob-api/max-size
                                        :availableUserDomains (if (and ds (:signup-enabled config))
-                                                               [(str "." (:user-domain config))] [])}))}})
-         fallback (if ds (proxy/handler ds config)
-                      (fn [_] (xrpc/error-response 404 "MethodNotImplemented" "Endpoint is not implemented")))]
+                                                               [(str "." (:user-domain config))] [])}))}})]
      (-> (xrpc/router routes fallback)
          (oauth-resource/wrap ds config resolver)
          (security-web/wrap ds config)

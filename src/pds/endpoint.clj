@@ -8,7 +8,8 @@
             [pds.protocol.codec :as codec]))
 
 (defn context [uri method]
-  (when (str/starts-with? uri "/xrpc/com.atproto.")
+  (when (and (str/starts-with? uri "/xrpc/")
+             (or (str/starts-with? uri "/xrpc/com.atproto.") (contains? @lexicon/catalog (subs uri 6))))
     (let [id (subs uri 6) schema (get-in @lexicon/catalog [id "defs" "main"])
           expected ({"query" :get "procedure" :post "subscription" :get} (get schema "type"))]
       (when-not (and expected (= method expected))

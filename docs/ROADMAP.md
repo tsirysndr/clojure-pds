@@ -53,10 +53,12 @@ runnable and update this document as features land.
    Acceptance: relay consumes commits and reconnects without losing events.
    [Relay discovery](RELAY.md) is opt-in, with durable per-relay scheduling,
    bounded HTTPS delivery, retries and cross-process leases.
-10. **Service integration and migration (authenticated buffered proxy, service tokens/replay protection, destination preparation, data transfer and verified activation implemented):** authenticated service proxy, service
+10. **Service integration and migration (authenticated buffered proxy, service tokens/replay protection, destination preparation, public data/private preference transfer and verified activation implemented):** authenticated service proxy, service
     auth tokens, account migration/import/export and PLC operations.
     Acceptance: an external client reads and writes through this PDS and an
     account migrates between this implementation and a reference PDS.
+    [Private preferences](PREFERENCES.md) support inactive transfer, primary-only
+    personal details, RPC-scoped OAuth access, status counts and deletion cleanup.
 11. **Operations and conformance:** rate limits, quotas, structured logs, metrics,
     backup/restore, deployment/TLS, CI, compatibility matrix and end-to-end tests.
     Acceptance: restore a backup, replay sync, and run the complete compatibility

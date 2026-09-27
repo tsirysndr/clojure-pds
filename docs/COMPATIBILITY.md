@@ -12,6 +12,7 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 
 | Namespace | Methods | Scope |
 | --- | --- | --- |
+| `app.bsky.actor` | `getPreferences`, `putPreferences` | Private ordered preferences, inactive primary-session transfer, protected personal details, derived age flags, and RPC-scoped OAuth access; explicit alternate-AppView proxying |
 | `com.atproto.server` | `describeServer` | Service DID, hosted suffix when signup is open, blob limit |
 | `com.atproto.server` | `createAccount` | Configurable signup and service-authenticated destination preparation for existing web/PLC DIDs; inactive imports with new local keys; phone verification pending |
 | `com.atproto.server` | `createInviteCode`, `createInviteCodes`, `getAccountInviteCodes` | Admin-issued codes, bounded batches, account listing and concurrent redemption limits; no automatic grants |
@@ -136,7 +137,7 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   cache bounds/expiry, revocation and concurrent put-action changes.
   Invalid batches roll back records, blocks and commits. CID string formats are
   restricted to the blessed AT Protocol CID set; see fixture notes.
-- The catalog now contains 95 schemas covering the record roots and all 58
+- The catalog now contains 97 schemas covering the record roots and all 60
   implemented XRPC endpoints and their references. JSON inputs and typed query
   parameters enforce required/nullable fields, formats, nested references/unions,
   and scalar/array constraints at the existing request-reading boundaries.
@@ -151,7 +152,7 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   WebSocket frames without changing production handlers. Local schema checks and
   the pinned upstream validator check JSON bodies, media types, empty procedure
   responses, frame envelopes, native bytes/CID links, all five message variants
-  and error payloads. Required coverage includes all 58 implemented endpoints and
+  and error payloads. Required coverage includes all 60 implemented endpoints and
   `#commit`, `#sync`, `#identity`, `#account`, `#info`, plus error frames. Negative
   checker tests ensure missing fields, null optional values, wrong content types
   and malformed envelopes fail. HTTP/WebSocket tests additionally connect a
@@ -242,7 +243,9 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   import, blob upload, credential transfer, activation and deactivation over HTTP.
   Counters are account scoped: owned blocks (including history), indexed records,
   distinct expected blob CIDs and uploaded blob metadata (including unreferenced
-  blobs). Private state is not implemented and reports zero. `validDid` checks
+  blobs), plus stored private preference entries. Derived age flags are not counted.
+  [Private preference tests](PREFERENCES.md) cover inactive transfer, hidden personal
+  details, replacement, namespace isolation, RPC permissions, and deletion. `validDid` checks
   fresh remote signing key/PDS credentials and PLC rotation authority, independently
   of handle binding, account activation and content completeness. Lookup failures
   return false; authorization is checked again after network I/O, and credential
@@ -323,8 +326,10 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
    record/blob takedown semantics. [Opt-in relay announcements](RELAY.md) are
    implemented with durable schedules, bounded HTTPS, retries and fenced leases;
    local tests do not prove that a deployed relay accepts or consumes this PDS.
-6. Remaining migration private-state APIs, streaming proxy transfers, and external
-   AppView/labeler/client/relay end-to-end tests.
+6. Streaming proxy transfers and external reference-PDS migration and
+   AppView/labeler/client/relay end-to-end tests. Bluesky private preferences can
+   now be exported/imported locally; other applications and external services may
+   define separate state-transfer mechanisms.
 7. Streaming repository import, S3 orphan and historical-block reclamation,
    incremental MST mutation, streaming, quotas and bulk blob-backend migration.
 8. PostgreSQL connection pooling, account-specific abuse controls, metrics/logging,

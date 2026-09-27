@@ -368,6 +368,10 @@ described below, including authenticated permission-set expansion.
 
 ## Direct granular permissions
 
+Bluesky [private preference endpoints](PREFERENCES.md) enforce RPC method/audience
+permissions. Ordinary preferences are available to authorized OAuth clients;
+personal details remain primary-session-only and survive restricted replacements.
+
 PAR accepts these resource permissions in addition to the transitional scopes:
 
 | Scope examples | Granted operation |

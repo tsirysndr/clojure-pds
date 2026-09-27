@@ -20,6 +20,8 @@ RECORD_ROOTS = [
 ]
 
 ENDPOINT_ROOTS = [
+    "app.bsky.actor.getPreferences",
+    "app.bsky.actor.putPreferences",
     "com.atproto.admin.disableAccountInvites",
     "com.atproto.admin.disableInviteCodes",
     "com.atproto.admin.enableAccountInvites",

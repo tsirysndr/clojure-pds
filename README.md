@@ -111,6 +111,9 @@ add numbered SQL files and register them in `pds.db/migrations`.
 
 ## Hosted identities and accounts
 
+Bluesky [private preferences and migration](docs/PREFERENCES.md) are stored locally
+through `app.bsky.actor.getPreferences` and `putPreferences`.
+
 Set `PDS_HOSTNAME=pds.example.com`, `PDS_PUBLIC_URL=https://pds.example.com`,
 `PDS_USER_DOMAIN=example.com`, and `PDS_ENABLE_SIGNUP=true` to provision handles
 such as `alice.example.com`. Configure wildcard DNS and HTTPS reverse proxying to

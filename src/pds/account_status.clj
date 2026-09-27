@@ -48,10 +48,11 @@
                              "SELECT (SELECT count(*) FROM repo_block_owners WHERE did = ?) AS blocks,
                                      (SELECT count(*) FROM records WHERE did = ?) AS records,
                                      (SELECT count(DISTINCT cid) FROM record_blob_refs WHERE did = ?) AS expected,
-                                     (SELECT count(*) FROM blobs WHERE did = ?) AS imported"
-                             did did did did))]
+                                     (SELECT count(*) FROM blobs WHERE did = ?) AS imported,
+                                     COALESCE((SELECT jsonb_array_length(preferences) FROM account_preferences WHERE did = ?), 0) AS private"
+                             did did did did did))]
           {:activated (= "active" (:status account))
            :validDid (and valid? (= (identity-version snapshot) (identity-version current)))
            :repoCommit (:head state) :repoRev (:rev state)
            :repoBlocks (:blocks counts) :indexedRecords (:records counts)
-           :privateStateValues 0 :expectedBlobs (:expected counts) :importedBlobs (:imported counts)})))))
+           :privateStateValues (:private counts) :expectedBlobs (:expected counts) :importedBlobs (:imported counts)})))))

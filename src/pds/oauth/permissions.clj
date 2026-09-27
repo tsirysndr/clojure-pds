@@ -64,4 +64,5 @@
        "/xrpc/com.atproto.repo.deleteRecord" "/xrpc/com.atproto.repo.applyWrites") (resource! account :repo)
       "/xrpc/com.atproto.repo.uploadBlob" (resource! account :blob)
       "/xrpc/com.atproto.server.getServiceAuth" (resource! account :rpc)
+      ("/xrpc/app.bsky.actor.getPreferences" "/xrpc/app.bsky.actor.putPreferences") (resource! account :rpc)
       (denied!))))

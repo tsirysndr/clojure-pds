@@ -37,7 +37,7 @@
 (defn wrap [handler]
   (fn [request]
     (let [response (handler request) uri (:uri request)
-          id (when (str/starts-with? uri "/xrpc/com.atproto.") (subs uri 6))]
+          id (when (str/starts-with? uri "/xrpc/") (subs uri 6))]
       (when id (observe-response! id response))
       (if (and id (:websocket response))
         (update-in response [:websocket :on-open]

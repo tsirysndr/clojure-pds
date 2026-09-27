@@ -108,6 +108,8 @@
         (let [call #(api/xrpc client port %1 %2 %3 %4)
               app-password (get-in (call "POST" "com.atproto.server.createAppPassword" {"name" "app"} access) [:body "password"])
               app-login (call "POST" "com.atproto.server.createSession" {"identifier" did "password" app-password} nil)]
+          (is (= 200 (:status (call "POST" "app.bsky.actor.putPreferences"
+                                   {"preferences" [{"$type" "app.bsky.actor.defs#adultContentPref" "enabled" false}]} access))))
           (is (= 403 (:status (call "POST" "com.atproto.server.requestAccountDelete" nil (get-in app-login [:body "accessJwt"])))))
           (is (= 200 (:status (call "POST" "com.atproto.server.deactivateAccount" {} access))))
           (is (= 200 (:status (call "POST" "com.atproto.server.requestAccountDelete" nil access))))
@@ -128,7 +130,7 @@
             (let [account (first (db/query conn "SELECT * FROM accounts WHERE did = ?" did))]
               (is (= "deleted" (:status account)))
               (is (nil? (:email account))) (is (nil? (:password_hash account))))
-            (doseq [table ["repositories" "records" "blobs" "sessions" "app_passwords" "account_tokens"]]
+            (doseq [table ["repositories" "records" "blobs" "sessions" "app_passwords" "account_tokens" "account_preferences"]]
               (is (empty? (db/query conn (str "SELECT * FROM " table " WHERE did = ?") did))))
             (is (= 1 (:count (first (db/query conn "SELECT count(*) AS count FROM blob_delete_jobs"))))))
           (let [broken (reify blobs/ObjectDeletion (delete-object! [_ _ _] (throw (ex-info "private provider details" {}))))]

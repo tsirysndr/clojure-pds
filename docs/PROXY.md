@@ -4,6 +4,8 @@ Unknown `/xrpc/<NSID>` routes can be forwarded to a DID service using the
 `atproto-proxy: did:web:service.example.com#service` request header. The caller
 must supply a current local access token for an active account. Existing local
 routes take precedence, including their method and authentication requirements.
+The two [private preference endpoints](PREFERENCES.md) are an explicit exception:
+an `atproto-proxy` audience different from their local audience selects the proxy.
 The proxy supports GET, HEAD and POST. Invalid NSIDs and requests without a
 selected service retain the ordinary `MethodNotImplemented` response.
 
