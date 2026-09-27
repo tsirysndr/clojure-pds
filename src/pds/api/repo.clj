@@ -11,6 +11,7 @@
             [pds.protocol.syntax :as syntax]
             [pds.repo :as repo]
             [pds.repo-import :as repo-import]
+            [pds.repo-export :as repo-export]
             [pds.record-validation :as record-validation]
             [pds.request :as request]))
 
@@ -149,9 +150,5 @@
    "/xrpc/com.atproto.sync.getRepo"
    {:method :get :handler (fn [r]
                            (let [params (request/query-params r)]
-                             (db/transact! ds
-                               (fn [conn]
-                                 (let [account (accounts/resolve-account conn (get params "did"))]
-                                   {:status 200 :headers {"Content-Type" "application/vnd.ipld.car"}
-                                    ;; A full export is also a valid response to an incremental request.
-                                    :body (repo/export-car conn (:did account))})))))}})
+                             ;; A full export is valid for an incremental request.
+                             (repo-export/response! ds settings (get params "did"))))}})

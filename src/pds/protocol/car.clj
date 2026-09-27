@@ -1,25 +1,35 @@
 (ns pds.protocol.car
   (:require [pds.protocol.codec :as codec])
-  (:import [java.io ByteArrayInputStream ByteArrayOutputStream]
+  (:import [java.io ByteArrayInputStream ByteArrayOutputStream OutputStream]
            [java.util Arrays]))
 
-(defn- write-varint! [^ByteArrayOutputStream out n]
+(defn- write-varint! [^OutputStream out n]
   (loop [n n]
     (if (< n 128) (.write out (int n))
         (do (.write out (bit-or 128 (bit-and 127 n))) (recur (unsigned-bit-shift-right n 7))))))
-(defn- frame! [^ByteArrayOutputStream out ^bytes data]
+(defn- frame! [^OutputStream out ^bytes data]
   (write-varint! out (alength data)) (.write out data))
+
+(defn write-header! [out root]
+  (frame! out (codec/encode {"version" 1 "roots" (if root [(codec/link root)] [])})))
+
+(defn write-block! [^OutputStream out id data]
+  (when-not (and (bytes? data) (= id (codec/cid (aget (codec/cid-bytes id) 1) data)))
+    (codec/fail! "Missing or corrupt CAR block"))
+  (let [cid-data (codec/cid-bytes id)]
+    (write-varint! out (+ (alength cid-data) (alength ^bytes data)))
+    (.write out cid-data) (.write out ^bytes data)))
+
+(defn write!
+  "Write a CAR to a caller-owned OutputStream without closing it."
+  [out root blocks]
+  (write-header! out root)
+  (doseq [id (concat (when root [root]) (sort (disj (set (keys blocks)) root)))]
+    (write-block! out id (get blocks id))))
 
 (defn encode [root blocks]
   (let [out (ByteArrayOutputStream.)]
-    (frame! out (codec/encode {"version" 1 "roots" (if root [(codec/link root)] [])}))
-    (doseq [id (concat (when root [root]) (sort (disj (set (keys blocks)) root)))]
-      (let [data (get blocks id)]
-        (when-not (and data (= id (codec/cid (aget (codec/cid-bytes id) 1) data)))
-          (codec/fail! "Missing or corrupt CAR block"))
-        (let [cid-data (codec/cid-bytes id)]
-          (write-varint! out (+ (alength cid-data) (alength ^bytes data)))
-          (.write out cid-data) (.write out ^bytes data))))
+    (write! out root blocks)
     (.toByteArray out)))
 
 (defn- read-varint [^ByteArrayInputStream in]

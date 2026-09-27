@@ -1,0 +1,50 @@
+# Full repository exports
+
+`com.atproto.sync.getRepo` returns a complete CAR containing the current signed
+commit, its MST and record blocks. A `since` query still receives a full export;
+incremental export optimization is not implemented. Account status and pending
+signing-key rotation checks continue to apply. Record takedowns preserve signed
+repository data, so those records remain in full sync exports.
+
+The exporter traverses stored MST edges and leaf records, without following links
+inside record values. It excludes historical commits/records that are no longer
+reachable. Every emitted block must belong to the account and match its CID.
+Shared CIDs are written once, using a temporary PostgreSQL table whose lifetime
+is the export transaction. This requires the database role's `TEMPORARY` privilege
+([granted to `PUBLIC` by default in PostgreSQL](https://www.postgresql.org/docs/18/ddl-priv.html)). The exporter retains only the
+current traversal path and individual blocks in the JVM, rather than a full map
+of record bytes or the entire encoded CAR. It does not rebuild the MST.
+
+Preparation holds the account and repository locks for a consistent snapshot.
+The CAR is written to a private mode-0600 file in the JVM temporary directory,
+opened with `DELETE_ON_CLOSE`. After the database transaction commits, an owned
+HTTP body streams that file with 64 KiB writes and backpressure. A slow client
+holds no database connection or account lock. Success, HEAD, disconnect, write
+failure and server shutdown close the response body and release its file/slot.
+Preparation failures close the file and roll back the temporary database state
+before any partial CAR is served.
+
+`PDS_REPO_EXPORT_MAX_BYTES` bounds each encoded CAR, including framing. The
+default is 268435456 (256 MiB); allowed values are 1048576–17179869184
+(1 MiB–16 GiB). Exceeding it returns `413 PayloadTooLarge`; increase it if a
+repository outgrows the configured limit. Two process-wide slots cover both
+preparation and HTTP delivery; exhaustion returns `503 RepoExportBusy`.
+Allocate up to twice the configured limit for temporary CAR payload, separately
+from the blob staging budget, plus filesystem and PostgreSQL temporary-table
+overhead. Disk I/O failures return a sanitized `503 RepoExportUnavailable`.
+
+The current import verifier still has its independent 64 MiB buffered limit.
+Raising the export limit does not raise import capacity. Internal byte-array CAR
+helpers and partial `getBlocks`/`getRecord` responses remain buffered. Large-repo
+load tests, bulk read optimization and deployed relay/migration verification
+remain pending; this change establishes bounded payload handling, not a measured
+production throughput claim.
+
+Tests compare the new export against the complete existing block set, validate
+signatures and reachable records, exercise duplicate content and arbitrary links,
+check concurrent-write snapshot boundaries, and verify cleanup after corruption,
+capacity exhaustion and size-limit failures. Existing HTTP sync tests pass the
+actual response bytes to the pinned upstream repository/proof verifier.
+Repeated exports also reuse one pooled connection past pgjdbc's statement-cache
+threshold, including after a failed transaction, with no temporary state left
+behind and the connection available before response-body consumption.

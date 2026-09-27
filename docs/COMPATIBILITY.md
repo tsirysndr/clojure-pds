@@ -37,7 +37,7 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | `com.atproto.repo` | `importRepo` | Primary session, complete signed v3 CAR, atomic record replacement and destination re-signing; active sync checkpoint or private inactive import; buffered 64 MiB limit |
 | `com.atproto.repo` | `uploadBlob` | Authenticated, maximum 5 MiB, account ownership; inactive primary sessions supported |
 | `com.atproto.repo` | `listMissingBlobs` | Account-scoped referenced CIDs absent from blob metadata, distinct CID pagination and a representative record URI; inactive primary sessions supported |
-| `com.atproto.sync` | `getRepo`, `getLatestCommit`, `getRepoStatus`, `listRepos` | Full CAR export and local repository metadata; no incremental export optimization |
+| `com.atproto.sync` | `getRepo`, `getLatestCommit`, `getRepoStatus`, `listRepos` | Staged streaming full CAR export and local repository metadata; no incremental export optimization |
 | `com.atproto.sync` | `getBlocks`, `getRecord` | Repository-owned historical blocks; signed MST inclusion/absence proofs; rootless block CARs |
 | `com.atproto.sync` | `subscribeRepos` | Binary CBOR WebSocket stream; durable replay, cursor errors, bounded sends/backlog, account filtering; external relay integration pending |
 | `com.atproto.sync` | `getBlob`, `listBlobs` | Binary round trip; distinct current record references, CID pagination and exclusive `since` revision filtering |
@@ -223,7 +223,18 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   (30-second deadline). Real socket tests cover multiple chunks, empty bodies,
   HEAD/204/304 suppression, declared-length mismatches, read failures, slow-client
   backpressure, disconnect and shutdown cleanup. Blob downloads adopt this
-  contract; CAR and proxy responses remain buffered.
+  contract, as do full repository exports; partial CAR and proxy responses remain buffered.
+- `getRepo` walks the current stored commit/MST graph and emits one hash-checked
+  block at a time into an owned temporary file. It does not rebuild the MST or
+  collect record payloads into a whole-repository map. A transaction-local
+  PostgreSQL table deduplicates shared CIDs and drops on commit/rollback. Account
+  and repository locks protect preparation; all database resources are released
+  before HTTP delivery. Export tests compare complete block sets, preserve
+  signed takedown records, exclude history/arbitrary record links, verify
+  concurrent snapshot consistency, and cover limit/corruption/capacity cleanup.
+  Existing socket and pinned upstream sync tests verify the resulting CARs.
+  `PDS_REPO_EXPORT_MAX_BYTES` defaults to 256 MiB (1 MiB–16 GiB); two process-wide
+  staging/delivery slots bound temporary CAR payload. See [export limits](REPO-EXPORT.md).
 - Blob downloads verify size and CID incrementally before responding. PostgreSQL
   returns bytea slices of at most 64 KiB, and S3 reads at most the recorded size
   plus one byte. A private temporary file avoids holding the whole blob in the
