@@ -7,6 +7,7 @@
             [pds.config :as config]
             [pds.db :as db]
             [pds.handles :as handles]
+            [pds.master-keys :as master-keys]
             [pds.net :as net]
             [pds.plc-keys :as keys]
             [pds.signing-keys :as signing-keys]))
@@ -38,7 +39,8 @@
       (with-open [ds (db/open-pool! (db/settings env) (db/pool-settings env))]
         (db/migrate! ds)
         (let [result (if (= "status" command) (execute! ds {} parsed)
-                      (with-open [client (net/open-client)]
+                      (with-open [lease (master-keys/open-lease! (db/datasource (db/settings env)) (master-keys/key! env "PDS_MASTER_KEY"))
+                                  client (net/open-client)]
                         (execute! ds (merge (config/load-config env) (accounts/settings env) (auth/settings env)
                                             {:http-client client}) parsed)))]
           {:exit (case (:state result) "failed" 1 ("pending" "working") 2 0) :result result})))

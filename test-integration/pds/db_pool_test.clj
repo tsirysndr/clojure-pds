@@ -8,6 +8,7 @@
             [pds.email :as email]
             [pds.http :as http]
             [pds.main :as main]
+            [pds.master-keys :as master-keys]
             [pds.net :as net]
             [pds.oauth.cleanup :as oauth-cleanup]
             [pds.plc-provision :as provision]
@@ -125,16 +126,24 @@
         (finally ((:stop! server)))))))
 
 (deftest startup-failures-close-pool-and-started-dependencies
-  (doseq [stage [:migration :blob :redis :net :email :blob-cleanup :oauth-cleanup :provision :http :relay]]
+  (doseq [stage [:migration :lease :blob :redis :net :email :blob-cleanup :oauth-cleanup :provision :http :relay]]
     (let [ds (pool 1) opened (atom []) closed (atom [])
           start (fn [name result]
                   (if (= stage name) (throw (ex-info "startup-failure" {}))
                       (do (swap! opened conj name) result)))
           stop (fn [name] #(do (is (false? (.isClosed ds)) "Pool closes after its users")
+                               (is (not (some #{:lease} @closed)) "Maintenance lease outlives workers")
                                (swap! closed conj name)))
           resource (fn [name] (reify java.io.Closeable (close [_] ((stop name)))))]
       (with-redefs [db/open-pool! (fn [& _] ds)
                     db/migrate! (fn [_] (when (= stage :migration) (throw (ex-info "startup-failure" {}))))
+                    master-keys/open-lease! (fn [& _]
+                                              (start :lease
+                                                     (let [closed? (atom false)]
+                                                       (reify java.io.Closeable
+                                                         (close [_]
+                                                           (when (compare-and-set! closed? false true)
+                                                             (swap! closed conj :lease)))))))
                     auth/settings (fn [_] {})
                     email/settings (fn [] nil)
                     s3/open-store (fn [_] (start :blob (resource :blob)))

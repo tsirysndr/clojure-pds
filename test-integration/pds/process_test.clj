@@ -2,12 +2,14 @@
   (:require [clojure.java.io :as io]
             [clojure.test :refer [deftest is use-fixtures]]
             [pds.crypto :as crypto]
+            [pds.db :as db]
             [pds.db-test :as fixture]
+            [pds.master-keys :as master-keys]
             [pds.http-test :as http-test])
   (:import [java.net.http HttpClient]
            [java.util.concurrent TimeUnit]))
 (use-fixtures :each fixture/isolated-database)
-(deftest documented-main-starts-and-stops
+(defn process-lifecycle! [lose-lease?]
   (let [java (str (System/getProperty "java.home") "/bin/java")
         builder (ProcessBuilder. ^java.util.List [java "-cp" (System/getProperty "java.class.path") "clojure.main" "-m" "pds.main"])
         env (.environment builder)]
@@ -44,11 +46,25 @@
         (let [result (deref ready 20000 :timeout)]
           (is (map? result))
           (is (pos-int? (:port result)) (pr-str result))
+          (is (= "ready" (:state (master-keys/status! fixture/*ds*))))
+          (let [key (crypto/unb64 (.get env "PDS_MASTER_KEY"))]
+            (is (= "PdsRunning"
+                   (try (master-keys/rewrap! fixture/*ds* key (crypto/random-bytes 32) (master-keys/fingerprint key))
+                        (catch clojure.lang.ExceptionInfo e (:master-key-error (ex-data e)))))))
           (when (:port result)
             (with-open [client (HttpClient/newHttpClient)]
-              (is (= 200 (.statusCode (http-test/request client (:port result) "GET" "/xrpc/_health")))))))
+              (is (= 200 (.statusCode (http-test/request client (:port result) "GET" "/xrpc/_health"))))))
+          (when lose-lease?
+            (with-open [conn (db/connection fixture/*ds*)]
+              (is (= [true] (mapv :stopped (db/query conn "SELECT pg_terminate_backend(pid) AS stopped FROM pg_stat_activity
+                                                          WHERE datname = current_database() AND application_name = 'clojure-pds/master-key-lease'")))))
+            (is (.waitFor process 15 TimeUnit/SECONDS) "Lost maintenance lease stops HTTP and workers")
+            (when-not (.isAlive process) (is (not (zero? (.exitValue process)))))))
         (finally
           (.destroy process)
           (is (.waitFor process 10 TimeUnit/SECONDS) "Shutdown hook completes")
           (when (.isAlive process) (.destroyForcibly process))
           (.close reader))))))
+
+(deftest documented-main-starts-and-stops (process-lifecycle! false))
+(deftest server-shuts-down-when-its-maintenance-lease-is-lost (process-lifecycle! true))

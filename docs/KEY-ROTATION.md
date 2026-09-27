@@ -5,8 +5,9 @@ a new secp256k1 key, replaces the old key at the same position in `rotationKeys`
 and preserves the other keys and their priority, aliases, services and repository
 verification methods. A separate command rotates the P-256 repository signing key
 for managed PLC and hosted web identities, creating a new signed repository head.
-User recovery-key replacement, recovery forks and master-key rewrapping remain
-separate work.
+User recovery-key replacement and recovery forks remain separate lifecycle work.
+[Offline master-key rewrapping](MASTER-KEY.md) changes encryption at rest without
+changing these public signing/control keys.
 
 ## Operator commands
 

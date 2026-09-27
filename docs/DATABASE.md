@@ -9,7 +9,9 @@ can shrink to zero idle connections. It uses Hikari's default idle retirement,
 connection lifetime and keepalive intervals.
 
 Size the total across all PDS processes within PostgreSQL's connection budget,
-leaving room for administration, migrations and other applications. HTTP requests
+including one additional dedicated maintenance-lease connection per serving
+process and identity-rotation CLI, and leave room for administration, migrations
+and other applications. HTTP requests
 and background work compete for this same budget. The limit bounds database
 connections, not the number of waiting HTTP requests. XRPC requests that time out
 borrowing a connection receive a sanitized 503 `ServiceUnavailable` with
@@ -26,7 +28,7 @@ Database credentials and TLS parameters continue to come from
 Startup verifies database connectivity before applying transactional migrations.
 Startup failures close the pool, including failures during configuration,
 migrations or later dependency initialization. Shutdown stops the relay worker,
-HTTP server and remaining workers before closing the database pool. Closure is
+HTTP server and remaining workers before closing the database pool and releasing the maintenance lease. Closure is
 idempotent and also runs inside the JVM shutdown hook.
 
 Each transaction owns one borrowed connection. Commit or rollback precedes
@@ -34,8 +36,10 @@ returning it; closing an uncommitted connection rolls it back. JDBC auto-commit,
 read-only and transaction isolation changes are reset on reuse. Connections
 default to read-committed isolation. Use `SET LOCAL` inside a transaction for
 SQL session settings: a pool does not reset arbitrary SQL `SET` commands,
-temporary tables or session-level advisory locks. Production code uses
-transaction-scoped advisory locks. Do not keep connections while doing remote
+temporary tables or session-level advisory locks. Ordinary transactions use
+transaction-scoped advisory locks. The [master-key maintenance lease](MASTER-KEY.md)
+uses a dedicated unpooled session, never a borrowed request-pool connection; its
+PostgreSQL endpoint must preserve session affinity. Do not keep connections while doing remote
 network calls or nest connection acquisition in an existing transaction.
 
 The migration CLI and disposable integration fixture factory retain unpooled

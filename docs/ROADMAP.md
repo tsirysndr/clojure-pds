@@ -117,7 +117,9 @@ remain required before a full client integration can be claimed. Preserve atomic
   preserves recovery priority, and installs encrypted replacement keys only after
   confirmation. Signing-key rotation re-signs the existing MST root, preserves records
   and emits identity/sync checkpoints; hosted web rotation is atomic locally.
-  Recovery/master-key lifecycle, migration conformance and conflicted-operation
+  [Offline master-key rewrapping](MASTER-KEY.md) preserves encrypted secrets and
+  queued operations, invalidates legacy credentials, and prevents mismatched-key
+  startup. Recovery-key lifecycle, migration conformance and conflicted-operation
   administration remain pending. General PLC resolution verifies audit history and derives the current document, including
   for hosted accounts. It does not fall back to a stale local snapshot. Directory
   timestamps and history completeness/freshness remain trusted assertions.

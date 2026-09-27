@@ -26,6 +26,8 @@ mise exec -- clojure -M:run
 The master key encrypts repository signing keys and derives a distinct session
 signing key. Back it up separately from PostgreSQL. Losing/changing it without a
 key migration makes existing private keys unreadable and invalidates sessions.
+Use the [offline master-key rotation command](docs/MASTER-KEY.md) to re-encrypt
+stored secrets atomically; it invalidates legacy sessions and app passwords.
 See the [backup/restore workflow](docs/BACKUP.md) for checksummed PostgreSQL
 archives, coordinated S3 backups, recovery steps and the isolated restore drill.
 

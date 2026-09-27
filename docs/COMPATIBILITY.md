@@ -316,13 +316,17 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
 
 1. Expanded behavioral conformance/catalog coverage as endpoints and protocol
    features are added, including deployed Lexicon publisher interoperability.
-2. Recovery/master-key lifecycle, conflicted-operation administration and deployed
+2. Recovery-key lifecycle, conflicted-operation administration and deployed
    migration/key-rotation conformance. [Managed control/signing-key rotation](KEY-ROTATION.md)
    has an operator CLI, durable retries and public completion receipts. Signing-key
    rotation preserves the MST root and records, pauses signed work during pending
    PLC publication and emits identity/sync checkpoints after confirmation. Local
    TLS/PostgreSQL/HTTP/WebSocket tests and upstream CAR verification cover these paths;
    public-directory and relay interoperability remain unverified.
+   [Offline master-key rewrapping](MASTER-KEY.md) covers repository/PLC keys, pending
+   replacements and TOTP secrets with atomic rollback and startup key checks.
+   Legacy sessions/app passwords are invalidated; OAuth access/refresh and queued
+   PLC operations survive. Deployment secret-store cutover remains operator-managed.
 3. Remaining administrative APIs and broader account recovery controls.
 4. OAuth authorization server: inactive migration sessions and deployed
    reference-client interoperability. Account-status permission semantics are not

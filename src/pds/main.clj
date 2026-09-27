@@ -12,6 +12,7 @@
             [pds.firehose :as firehose]
             [pds.invites :as invites]
             [pds.identity :as identity]
+            [pds.master-keys :as master-keys]
             [pds.net :as net]
             [pds.oauth.cleanup :as oauth-cleanup]
             [pds.plc-provision :as provision]
@@ -20,7 +21,7 @@
             [pds.relay :as relay]
             [pds.s3 :as s3]))
 
-(defn- run-server! [ds]
+(defn- run-server! [ds lease]
   (let [email-config (email/settings)
         blob-config (s3/settings (System/getenv))
         rate-config (redis/settings (System/getenv))
@@ -32,7 +33,6 @@
                         (relay/settings (System/getenv))
                         (blob-cleanup/settings (System/getenv))
                         (auth/settings (System/getenv)) {:email-enabled (boolean email-config)})
-        _ (db/migrate! ds)
         blob-store (s3/open-store blob-config)
         limiter (try (redis/open-limiter rate-config)
                      (catch Throwable t
@@ -50,7 +50,8 @@
                                    (finally (try (when (instance? java.io.Closeable limiter)
                                                    (.close ^java.io.Closeable limiter))
                                                  (finally (try (.close ^java.io.Closeable http-client)
-                                                               (finally (.close ^java.io.Closeable ds))))))))]
+                                                               (finally (try (.close ^java.io.Closeable ds)
+                                                                             (finally (.close ^java.io.Closeable lease))))))))))]
     (try
       (let [stop-email! (email/start! ds email-config)
             stop-cleanup! (try
@@ -78,7 +79,11 @@
             (try
               (.addShutdownHook runtime hook)
               (println (str "clojure-pds " app/version " listening on " (:host settings) ":" port))
-              @stopped
+              (loop []
+                (when (= ::check (deref stopped 1000 ::check))
+                  (when-not (master-keys/live? lease)
+                    (throw (ex-info "Master-key maintenance lease lost; shutting down" {})))
+                  (recur)))
               (finally
                 (stop-all!)
                 (try (.removeShutdownHook runtime hook) (catch IllegalStateException _)))))
@@ -90,4 +95,7 @@
   ;; shutdown hook also closes the pool, after HTTP and background workers,
   ;; because the JVM need not wait for this main thread after hooks finish.
   (with-open [ds (db/open-pool! (db/settings) (db/pool-settings))]
-    (run-server! ds)))
+    (db/migrate! ds)
+    (with-open [lease (master-keys/open-lease! (db/datasource (db/settings))
+                                             (:master-key (auth/settings (System/getenv))))]
+      (run-server! ds lease))))

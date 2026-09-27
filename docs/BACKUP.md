@@ -48,7 +48,8 @@ encryption, scheduling, retention, off-site storage or PostgreSQL WAL archiving.
 - The exact `PDS_MASTER_KEY`. Keep a recoverable encrypted copy separate from the
   database archive. Losing it prevents recovery of repository/PLC signing keys
   and other encrypted secrets. Restoring a database with a different key is not
-  a supported key rotation.
+  a supported key rotation. Use [offline master-key rewrapping](MASTER-KEY.md)
+  for an intentional change and retain each backup's matching key.
 - Deployment configuration: public URL, user domain, DID method, database schema,
   email Worker settings, S3 configuration, OAuth/identity configuration and other
   secrets. Do not publish them alongside a backup manifest.
