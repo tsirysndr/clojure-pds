@@ -458,6 +458,9 @@ a duplicate. Receipts are retained indefinitely; plan retention for larger syste
   retaining CID/path metadata in memory. Imported canonical roots are reused when
   signing the destination commit. Historical repository-block garbage collection
   and large-repository performance work remain unfinished.
+  `com.atproto.sync.listReposByCollection` enumerates active repositories holding
+  records in one collection through an indexed keyset scan (limit 1–2000, default
+  500).
 - Commit events persist signed CAR proofs and previous-value operations for
   inductive verification. Records are limited to 1,000,000 encoded bytes and
   commit proofs to 2,000,000 bytes; oversized batches roll back. The upstream

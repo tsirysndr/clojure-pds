@@ -99,7 +99,7 @@
                  "014-plc-provisioning.sql" "015-handle-updates.sql" "016-plc-signing-tokens.sql"
                  "017-plc-submissions.sql" "018-service-token-replay.sql" "019-account-imports.sql"
                  "020-record-blob-references.sql" "021-record-revisions.sql" "022-blob-lifecycle.sql"
-                 "023-empty-blobs.sql" "024-oauth-dpop.sql" "025-oauth-client-assertions.sql" "026-oauth-par.sql" "027-oauth-interactions.sql" "028-totp.sql" "029-passkeys.sql" "030-browser-sessions.sql" "031-oauth-tokens.sql" "032-oauth-session-list.sql" "033-oauth-permission-set-cache.sql" "034-oauth-permission-snapshots.sql" "035-relay-announcements.sql" "036-private-preferences.sql" "037-content-takedowns.sql" "038-plc-key-rotation.sql" "039-signing-key-rotation.sql" "040-master-key-lifecycle.sql" "041-authenticator-recovery.sql" "042-plc-reconciliation.sql" "043-plc-recovery-keys.sql" "044-reserved-signing-keys.sql"])
+                 "023-empty-blobs.sql" "024-oauth-dpop.sql" "025-oauth-client-assertions.sql" "026-oauth-par.sql" "027-oauth-interactions.sql" "028-totp.sql" "029-passkeys.sql" "030-browser-sessions.sql" "031-oauth-tokens.sql" "032-oauth-session-list.sql" "033-oauth-permission-set-cache.sql" "034-oauth-permission-snapshots.sql" "035-relay-announcements.sql" "036-private-preferences.sql" "037-content-takedowns.sql" "038-plc-key-rotation.sql" "039-signing-key-rotation.sql" "040-master-key-lifecycle.sql" "041-authenticator-recovery.sql" "042-plc-reconciliation.sql" "043-plc-recovery-keys.sql" "044-reserved-signing-keys.sql" "045-records-by-collection.sql"])
 
 (defn migrate! [ds]
   (transact!

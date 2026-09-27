@@ -123,3 +123,38 @@
                 (is (= did (get payload "did"))))
               (is (= (conj (set (keys (:blocks tree))) old-cid head current-head (:root empty-tree))
                      (set (map :cid (db/query conn "SELECT cid FROM repo_block_owners WHERE did = ?" did))))))))))))
+
+(deftest repositories-enumerate-by-record-collection
+  (let [settings (api/settings)
+        create #(accounts/create! fixture/*ds* settings {"handle" (str % ".example.com") "email" (str % "@example.com") "password" "test-password"})
+        alice (create "alice") bob (create "bob") carol (create "carol")
+        write #(db/transact! fixture/*ds* (fn [conn] (repo/apply-writes! conn settings %1 %2 nil)))
+        server (http/start! settings (app/handler settings fixture/*ds*))]
+    (doseq [account [alice bob carol]]
+      (write (:did account) [{:action :create :collection "com.example.note" :rkey "self"
+                              :value {"$type" "com.example.note"}}]))
+    (write (:did alice) [{:action :create :collection "com.example.other" :rkey "self"
+                          :value {"$type" "com.example.other"}}
+                         {:action :create :collection "com.example.note" :rkey "second"
+                          :value {"$type" "com.example.note"}}])
+    (db/transact! fixture/*ds* #(db/execute! % "UPDATE accounts SET status = 'deactivated' WHERE did = ?" (:did carol)))
+    (try
+      (with-open [client (HttpClient/newHttpClient)]
+        (let [call #(api/xrpc client (:port server) "GET" % nil nil)
+              repos #(get-in (call (str "com.atproto.sync.listReposByCollection?" %)) [:body "repos"])
+              active (sort [(:did alice) (:did bob)])]
+          (is (= 400 (:status (call "com.atproto.sync.listReposByCollection"))))
+          (is (= 400 (:status (call "com.atproto.sync.listReposByCollection?collection=not-an-nsid"))))
+          (is (= 400 (:status (call "com.atproto.sync.listReposByCollection?collection=com.example.note&cursor=bad"))))
+          (is (= 400 (:status (call "com.atproto.sync.listReposByCollection?collection=com.example.note&limit=2001"))))
+          (is (= [] (repos "collection=com.example.missing")))
+          (is (= [(:did alice)] (mapv #(get % "did") (repos "collection=com.example.other"))))
+          (let [result (:body (call "com.atproto.sync.listReposByCollection?collection=com.example.note"))]
+            (is (= active (mapv #(get % "did") (get result "repos"))) "Duplicate records list once; inactive repositories are excluded")
+            (is (nil? (get result "cursor"))))
+          (let [first-page (:body (call "com.atproto.sync.listReposByCollection?collection=com.example.note&limit=1"))
+                second-page (:body (call (str "com.atproto.sync.listReposByCollection?collection=com.example.note&limit=1&cursor="
+                                              (get first-page "cursor"))))]
+            (is (= active (mapv #(get-in % ["repos" 0 "did"]) [first-page second-page])))
+            (is (nil? (get second-page "cursor"))))))
+      (finally ((:stop! server))))))

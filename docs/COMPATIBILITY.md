@@ -39,7 +39,7 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | `com.atproto.repo` | `importRepo` | Primary session, complete signed v3 CAR, atomic record replacement and destination re-signing; active sync checkpoint or private inactive import; disk-staged 64 MiB limit |
 | `com.atproto.repo` | `uploadBlob` | Authenticated, maximum 5 MiB, account ownership; inactive primary sessions supported |
 | `com.atproto.repo` | `listMissingBlobs` | Account-scoped referenced CIDs absent from blob metadata, distinct CID pagination and a representative record URI; inactive primary sessions supported |
-| `com.atproto.sync` | `getRepo`, `getLatestCommit`, `getRepoStatus`, `listRepos` | Staged streaming full CAR export and local repository metadata; no incremental export optimization |
+| `com.atproto.sync` | `getRepo`, `getLatestCommit`, `getRepoStatus`, `listRepos`, `listReposByCollection` | Staged streaming full CAR export and local repository metadata; indexed active-repository enumeration by record collection; no incremental export optimization |
 | `com.atproto.sync` | `getBlocks`, `getRecord` | Repository-owned historical blocks; signed MST inclusion/absence proofs; rootless block CARs |
 | `com.atproto.sync` | `subscribeRepos` | Binary CBOR WebSocket stream; durable replay, cursor errors, bounded sends/backlog, account filtering; external relay integration pending |
 | `com.atproto.sync` | `getBlob`, `listBlobs` | Binary round trip; distinct current record references, CID pagination and exclusive `since` revision filtering |
@@ -152,7 +152,7 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   cache bounds/expiry, revocation and concurrent put-action changes.
   Invalid batches roll back records, blocks and commits. CID string formats are
   restricted to the blessed AT Protocol CID set; see fixture notes.
-- The catalog now contains 106 schemas covering the record roots and all 69
+- The catalog now contains 107 schemas covering the record roots and all 70
   implemented XRPC endpoints and their references. JSON inputs and typed query
   parameters enforce required/nullable fields, formats, nested references/unions,
   and scalar/array constraints at the existing request-reading boundaries.
@@ -167,7 +167,7 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   WebSocket frames without changing production handlers. Local schema checks and
   the pinned upstream validator check JSON bodies, media types, empty procedure
   responses, frame envelopes, native bytes/CID links, all five message variants
-  and error payloads. Required coverage includes all 69 implemented endpoints and
+  and error payloads. Required coverage includes all 70 implemented endpoints and
   `#commit`, `#sync`, `#identity`, `#account`, `#info`, plus error frames. Negative
   checker tests ensure missing fields, null optional values, wrong content types
   and malformed envelopes fail. HTTP/WebSocket tests additionally connect a

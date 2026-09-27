@@ -84,7 +84,7 @@
                                     "com.example.recursive" {"type" "ref" "ref" "#main"} {})))))
 
 (deftest pinned-catalog-and-validation-modes
-  (is (= 106 (count (lexicon/load-catalog))))
+  (is (= 107 (count (lexicon/load-catalog))))
   (doseq [[id schema] @lexicon/catalog
           node (tree-seq coll? #(if (map? %) (vals %) (seq %)) schema)
           :when (map? node)

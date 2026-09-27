@@ -147,6 +147,19 @@
                                               ORDER BY r.did COLLATE \"C\" LIMIT ?" cursor cursor (inc limit))
                           page (paginated rows limit :did #(assoc % :active true))]
                       (-> page (assoc :repos (:items page)) (dissoc :items)))))
+   "/xrpc/com.atproto.sync.listReposByCollection"
+   (query-route ds (fn [conn params]
+                    (let [collection (get params "collection") limit (request/limit! params 500 2000)
+                          cursor (get params "cursor")]
+                      (when-not (syntax/nsid? collection) (errors/invalid! "Invalid collection"))
+                      (when (and cursor (not (syntax/did? cursor))) (errors/invalid! "Invalid cursor"))
+                      (let [rows (db/query conn "SELECT r.did FROM records r JOIN accounts a ON a.did = r.did
+                                                WHERE r.collection = ? AND r.takedown_ref IS NULL AND a.status = 'active'
+                                                AND NOT EXISTS (SELECT 1 FROM handle_updates h WHERE h.did = r.did AND h.operation_kind = 'signing')
+                                                AND (?::text IS NULL OR r.did COLLATE \"C\" > ? COLLATE \"C\")
+                                                GROUP BY r.did ORDER BY r.did COLLATE \"C\" LIMIT ?" collection cursor cursor (inc limit))
+                            page (paginated rows limit :did identity)]
+                        (-> page (assoc :repos (:items page)) (dissoc :items))))))
    "/xrpc/com.atproto.sync.getRepo"
    {:method :get :handler (fn [r]
                            (let [params (request/query-params r)]

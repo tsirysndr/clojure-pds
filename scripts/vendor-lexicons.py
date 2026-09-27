@@ -88,6 +88,7 @@ ENDPOINT_ROOTS = [
     "com.atproto.sync.getRepoStatus",
     "com.atproto.sync.listBlobs",
     "com.atproto.sync.listRepos",
+    "com.atproto.sync.listReposByCollection",
     "com.atproto.sync.subscribeRepos",
 ]
 ROOTS = RECORD_ROOTS + ENDPOINT_ROOTS
