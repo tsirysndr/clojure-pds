@@ -165,3 +165,29 @@
         (fail! "PLC audit nullification flags disagree with recovery rules")))
     (let [head (peek (:chain result))]
       {:head (:cid head) :data (operation-data did (:operation head)) :nullified (:nullified result)})))
+
+(defn pending-disposition!
+  "Classify a queued signed operation against a fully verified audit. Superseded
+  means a delayed submission cannot replace the observed history. Never infer
+  cancellation from elapsed wall time, a rejected POST, or a missing parent."
+  [did entries operation]
+  (let [audit (verify-audit! did entries)
+        cid (operation-cid operation)
+        seen (into #{} (map #(get % "cid")) entries)
+        parent (get operation "prev")
+        canonical (filterv #(not (get % "nullified")) entries)
+        index (first (keep-indexed #(when (= parent (get %2 "cid")) %1) canonical))]
+    (cond
+      (contains? seen cid) (if (contains? (:nullified audit) cid) :superseded :accepted)
+      (contains? (:nullified audit) parent) :superseded
+      (nil? index) :unresolved
+      :else
+      (let [previous (get (nth canonical index) "operation")
+            keys (get (normalize previous) "rotationKeys")
+            signer (signer! keys operation)
+            child (get-in canonical [(inc index) "operation"])]
+        (if (and child
+                 (>= (.indexOf ^java.util.List keys signer)
+                     (.indexOf ^java.util.List keys (signer! keys child))))
+          :superseded
+          :unresolved)))))

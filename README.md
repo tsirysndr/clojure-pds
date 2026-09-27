@@ -181,8 +181,10 @@ confirmation. Unrelated DID fields are preserved; changed signing keys or PDS
 endpoints require migration instead. Custom-domain proof is rechecked before
 submission. A `503 IdentityUpdatePending` leaves a durable job: retry the same
 handle or let the background worker finish. Pending jobs block a different handle
-change and account deletion. Permanent conflicts retain the reservation; there is
-no cancellation/reconciliation admin API yet. Inspect `handle_updates.status`
+change and account deletion. Permanent conflicts retain the reservation. The local
+[PLC reconciliation CLI](docs/PLC-RECONCILIATION.md) can adopt compatible external
+changes and safely superseded jobs using explicitly reviewed operation CIDs.
+Inspect `handle_updates.status`
 and `last_error` for sanitized status. `getRecommendedDidCredentials` returns the
 account's public repository key, PDS endpoint, handle and available rotation keys.
 

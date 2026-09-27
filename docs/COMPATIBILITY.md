@@ -111,7 +111,16 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   and reservation migration. A did:web account retains its original hostname;
   custom handles are resolved externally even when stored locally. Conflicting
   PLC jobs retain reservations and block deletion or another target until resolved;
-  cancellation/admin reconciliation remains unfinished.
+  the explicit [operator reconciliation CLI](PLC-RECONCILIATION.md) adopts compatible
+  verified external history, including recovery forks and descendants retaining
+  queued keys. It requires expected local/queued/remote CIDs and proves that a
+  delayed queued submission cannot replace the observed history before deleting
+  a job. Tests cover concurrent operators, stale workers, transactional rollback,
+  key corruption, handle collision/proof, CID/material races and repeat receipts.
+  Signing adoption preserves records and emits identity/sync checkpoints; canceled
+  signing jobs also restore an active account's checkpoint. The pinned PLC library
+  independently verifies delayed-operation authority. Recovery-fork submission
+  and public-directory deployment remain unverified.
 - PLC signing proofs use the transactional email outbox, expire after 30 minutes,
   and are bound to account, current address and purpose. Tests verify one-use
   consumption under concurrent requests, expiry, cross-account and app-password
@@ -316,7 +325,7 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
 
 1. Expanded behavioral conformance/catalog coverage as endpoints and protocol
    features are added, including deployed Lexicon publisher interoperability.
-2. Recovery-key lifecycle, conflicted-operation administration and deployed
+2. Recovery-key lifecycle, recovery-fork submission and deployed
    migration/key-rotation conformance. [Managed control/signing-key rotation](KEY-ROTATION.md)
    has an operator CLI, durable retries and public completion receipts. Signing-key
    rotation preserves the MST root and records, pauses signed work during pending

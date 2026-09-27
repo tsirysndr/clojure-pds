@@ -98,10 +98,11 @@ replace a pending rotation. Ordinary repository work can continue because its
 signing key and published verification method are unchanged.
 
 A conflicting directory head or invalid audit fails closed. The queued operation
-and encrypted replacement key remain available for diagnosis; there is no automatic
-cancellation, recovery fork or conflict-adoption command yet. Do not delete queue
+and encrypted replacement key remain available for diagnosis. The explicit
+[PLC reconciliation procedure](PLC-RECONCILIATION.md) can adopt compatible verified
+history and resolve safely superseded jobs. Do not delete queue
 rows after an ambiguous submission: the directory may already have accepted the
-replacement key. Operator conflict reconciliation remains on the roadmap.
+replacement key. Recovery-fork submission remains a separate unimplemented flow.
 
 The replacement preserves priority according to the
 [PLC key rotation and recovery rules](https://web.plc.directory/spec/v0.1/did-plc).
@@ -149,7 +150,8 @@ Both rotation types use the same queue, leases and confirmation rules. Competing
 handle changes, PLC submissions, other rotations and deletion cannot replace a
 pending job. A local rollback after directory acceptance retains the encrypted
 replacement for the next worker; stale workers cannot install it twice. There is
-no automatic cancellation or adoption of conflicting directory changes.
+no automatic cancellation or adoption of conflicting directory changes. Use the
+explicit [operator reconciliation procedure](PLC-RECONCILIATION.md) when appropriate.
 Provisioning and prepared migration destinations must finish first.
 
 Historical commits and already issued service JWTs retain their original
