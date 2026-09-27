@@ -29,6 +29,7 @@ ENDPOINT_ROOTS = [
     "com.atproto.admin.getAccountInfo",
     "com.atproto.admin.getAccountInfos",
     "com.atproto.admin.getSubjectStatus",
+    "com.atproto.admin.searchAccounts",
     "com.atproto.admin.updateAccountEmail",
     "com.atproto.admin.updateAccountPassword",
     "com.atproto.admin.updateSubjectStatus",

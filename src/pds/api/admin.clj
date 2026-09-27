@@ -23,6 +23,8 @@
    (server/json-route :get (authenticated ds settings #(moderation/account-info %1 (get (request/query-params %2) "did"))))
    "/xrpc/com.atproto.admin.getAccountInfos"
    (server/json-route :get (authenticated ds settings #(moderation/account-infos %1 (request/query-params %2))))
+   "/xrpc/com.atproto.admin.searchAccounts"
+   (server/json-route :get (authenticated ds settings #(moderation/search-accounts %1 (request/query-params %2))))
    "/xrpc/com.atproto.admin.getSubjectStatus"
    (server/json-route :get (authenticated ds settings #(moderation/get-status %1 (request/query-params %2))))
    "/xrpc/com.atproto.admin.updateSubjectStatus"

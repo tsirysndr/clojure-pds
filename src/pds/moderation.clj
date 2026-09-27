@@ -5,7 +5,8 @@
             [pds.events :as events]
             [pds.invites :as invites]
             [pds.protocol.codec :as codec]
-            [pds.protocol.syntax :as syntax]))
+            [pds.protocol.syntax :as syntax]
+            [pds.request :as request]))
 
 (defn account! [conn did]
   (when-not (syntax/did? did) (errors/invalid! "Invalid DID"))
@@ -107,8 +108,8 @@
           (apply db/execute! conn (str "UPDATE " table " SET takedown_ref = ? WHERE " where) reference params))
         {:subject subject :takedown (takedown-view reference)}))))
 
-(defn account-info [conn did]
-  (let [account (account! conn did)
+(defn- account-view [conn account]
+  (let [did (:did account)
         invited-by (first (db/query conn "SELECT c.* FROM invite_codes c JOIN invite_uses u ON u.code = c.code WHERE u.used_by = ?" did))]
     (cond-> {:did did :handle (:handle account)
              :indexedAt (str (.toInstant ^java.sql.Timestamp (:created_at account)))
@@ -117,6 +118,20 @@
       (:email account) (assoc :email (:email account))
       (:invite_note account) (assoc :inviteNote (:invite_note account))
       invited-by (assoc :invitedBy (invites/view conn invited-by)))))
+
+(defn account-info [conn did] (account-view conn (account! conn did)))
+
+(defn search-accounts [conn params]
+  (let [limit (request/limit! params 50 100)
+        email (some-> (get params "email") str/lower-case)
+        cursor (get params "cursor")
+        rows (db/query conn (str "SELECT * FROM accounts WHERE status IN ('active', 'deactivated', 'taken_down')"
+                                 " AND (?::text IS NULL OR lower(email) = ?)"
+                                 " AND (?::text IS NULL OR did COLLATE \"C\" > ? COLLATE \"C\")"
+                                 " ORDER BY did COLLATE \"C\" LIMIT ?")
+                       email email cursor cursor limit)]
+    (cond-> {:accounts (mapv #(account-view conn %) rows)}
+      (= (count rows) limit) (assoc :cursor (:did (last rows))))))
 
 (defn account-infos [conn params]
   {:infos (into [] (keep (fn [did]

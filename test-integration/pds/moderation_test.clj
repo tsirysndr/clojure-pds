@@ -78,3 +78,32 @@
               (is (= [nil "takendown" "deactivated" nil "deactivated" "takendown" "deactivated" nil]
                      (mapv #(get % "status") events)))))))
       (finally ((:stop! server))))))
+
+(deftest account-search-filters-by-email-and-paginates-by-did
+  (let [settings (assoc (api/settings) :admin-password invites-test/admin-password)
+        alice (accounts/create! fixture/*ds* settings (invites-test/signup "alice" nil))
+        bob (accounts/create! fixture/*ds* settings (invites-test/signup "bob" nil))
+        server (http/start! settings (app/handler settings fixture/*ds*)) port (:port server)]
+    (try
+      (with-open [client (HttpClient/newHttpClient)]
+        (let [call #(api/xrpc client port %1 %2 %3 %4)
+              admin #(invites-test/admin-call client port %1 %2 %3)]
+          (is (= 401 (:status (call "GET" "com.atproto.admin.searchAccounts" nil (:accessJwt alice)))))
+          (is (= 400 (:status (admin "GET" "com.atproto.admin.searchAccounts?limit=0" nil))))
+          (is (= [(:did alice)]
+                 (mapv #(get % "did")
+                       (get-in (admin "GET" "com.atproto.admin.searchAccounts?email=Alice@example.com" nil)
+                               [:body "accounts"]))))
+          (is (= [] (get-in (admin "GET" "com.atproto.admin.searchAccounts?email=missing@example.com" nil) [:body "accounts"])))
+          (let [first-page (:body (admin "GET" "com.atproto.admin.searchAccounts?limit=1" nil))
+                second-page (:body (admin "GET" (str "com.atproto.admin.searchAccounts?limit=1&cursor=" (get first-page "cursor")) nil))
+                dids (mapv #(get % "did") (concat (get first-page "accounts") (get second-page "accounts")))]
+            (is (= 1 (count (get first-page "accounts")) (count (get second-page "accounts"))))
+            (is (= #{(:did alice) (:did bob)} (set dids)))
+            (let [tail (:body (admin "GET" (str "com.atproto.admin.searchAccounts?limit=1&cursor=" (get second-page "cursor")) nil))]
+              (is (= [] (get tail "accounts")))
+              (is (nil? (get tail "cursor")))))
+          (let [together (:body (admin "GET" "com.atproto.admin.searchAccounts" nil))]
+            (is (= 2 (count (get together "accounts"))))
+            (is (nil? (get together "cursor"))))))
+      (finally ((:stop! server))))))

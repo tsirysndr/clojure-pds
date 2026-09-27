@@ -18,7 +18,7 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | `com.atproto.server` | `reserveSigningKey` | Public, bounded P-256 key reservations with sealed private material and 24-hour expiry; consumed by destination preparation for the same DID |
 | `com.atproto.server` | `createInviteCode`, `createInviteCodes`, `getAccountInviteCodes` | Admin-issued codes, bounded batches, account listing and concurrent redemption limits; no automatic grants |
 | `com.atproto.admin` | `disableInviteCodes`, `disableAccountInvites`, `enableAccountInvites` | Optional Basic admin credentials; code invalidation and future-grant policy |
-| `com.atproto.admin` | `getAccountInfo`, `getAccountInfos`, `getSubjectStatus`, `updateSubjectStatus` | Private account inspection, including deduplicated batches that skip unknown DIDs; account, record and blob takedowns; independent activation state and signed repository data preserved; [moderation semantics](MODERATION.md) |
+| `com.atproto.admin` | `getAccountInfo`, `getAccountInfos`, `searchAccounts`, `getSubjectStatus`, `updateSubjectStatus` | Private account inspection, including deduplicated batches that skip unknown DIDs and case-insensitive exact-email search with DID-keyset pagination; account, record and blob takedowns; independent activation state and signed repository data preserved; [moderation semantics](MODERATION.md) |
 | `com.atproto.admin` | `updateAccountPassword`, `updateAccountEmail`, `deleteAccount` | [Operator recovery/deletion](ADMIN-ACCOUNTS.md); session and proof invalidation, retained factors on recovery, transactional deletion and durable object cleanup |
 | `com.atproto.server` | `createSession`, `getSession`, `refreshSession`, `deleteSession` | Primary/app-password sessions, JWT type separation, single-use refresh, revocation |
 | `com.atproto.server` | `getServiceAuth` | Repository-key JWTs, exact audience/service reference, method and expiration checks, primary/app-password privilege policy; shared proxy privilege policy |
@@ -151,7 +151,7 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   cache bounds/expiry, revocation and concurrent put-action changes.
   Invalid batches roll back records, blocks and commits. CID string formats are
   restricted to the blessed AT Protocol CID set; see fixture notes.
-- The catalog now contains 102 schemas covering the record roots and all 65
+- The catalog now contains 103 schemas covering the record roots and all 66
   implemented XRPC endpoints and their references. JSON inputs and typed query
   parameters enforce required/nullable fields, formats, nested references/unions,
   and scalar/array constraints at the existing request-reading boundaries.
@@ -166,7 +166,7 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   WebSocket frames without changing production handlers. Local schema checks and
   the pinned upstream validator check JSON bodies, media types, empty procedure
   responses, frame envelopes, native bytes/CID links, all five message variants
-  and error payloads. Required coverage includes all 65 implemented endpoints and
+  and error payloads. Required coverage includes all 66 implemented endpoints and
   `#commit`, `#sync`, `#identity`, `#account`, `#info`, plus error frames. Negative
   checker tests ensure missing fields, null optional values, wrong content types
   and malformed envelopes fail. HTTP/WebSocket tests additionally connect a
