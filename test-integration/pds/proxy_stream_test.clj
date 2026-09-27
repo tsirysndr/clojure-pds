@@ -29,6 +29,15 @@
   (loop [left 250]
     (when (and (pos? left) (not (closed? channels))) (Thread/sleep 20) (recur (dec left))))
   (is (closed? channels)))
+(defn call-once-released
+  "The permit is released just after its staging channel closes; retry the
+  brief 503 window instead of racing that ordering."
+  [client port method account]
+  (loop [left 250]
+    (let [response (wire/call client port method path (:accessJwt account) {} nil)]
+      (if (and (= 503 (:status response)) (pos? left))
+        (do (Thread/sleep 20) (recur (dec left)))
+        response))))
 
 (deftest prepared-response-retains-the-permit-but-no-database-connection
   (upstream/with-service
@@ -102,18 +111,18 @@
                 (is (java.util.Arrays/equals data ^bytes (:raw response))))
               (wait-closed! @channels)
               (reset! respond (fn [exchange] (.set (.getResponseHeaders exchange) "Content-Length" "10000000") (.sendResponseHeaders exchange 200 -1)))
-              (let [response (wire/call client (:port server) "HEAD" path (:accessJwt account) {} nil)]
+              (let [response (call-once-released client (:port server) "HEAD" account)]
                 (is (= 200 (:status response)))
                 (is (= "10000000" (get-in response [:headers "content-length"])))
                 (is (zero? (alength ^bytes (:raw response)))))
               (reset! respond #(.sendResponseHeaders % 204 -1))
-              (is (= 204 (:status (wire/call client (:port server) "GET" path (:accessJwt account) {} nil))))
+              (is (= 204 (:status (call-once-released client (:port server) "GET" account))))
               (wait-closed! @channels)
               (reset! respond #(streaming/reply! % 429 (codec/utf8 "{\"error\":\"SlowDown\",\"message\":\"Try later\"}") false))
               (is (= {"error" "SlowDown" "message" "Try later"}
-                     (:body (wire/call client (:port server) "GET" path (:accessJwt account) {} nil))))
+                     (:body (call-once-released client (:port server) "GET" account))))
               (reset! respond #(streaming/reply! % 500 (codec/utf8 (str "{\"error\":\"LargeError\",\"message\":\"private\",\"padding\":\"" (apply str (repeat 65536 "x")) "\"}")) true))
-              (let [response (wire/call client (:port server) "GET" path (:accessJwt account) {} nil)]
+              (let [response (call-once-released client (:port server) "GET" account)]
                 (is (= 500 (:status response)))
                 (is (= "UpstreamFailure" (get-in response [:body "error"])))
                 (is (not (.contains ^String (String. ^bytes (:raw response) "UTF-8") "private"))))
@@ -140,5 +149,5 @@
               (when channel (wait-closed! [channel])))
             (reset! respond #(streaming/reply! % 200 (byte-array [7]) false))
             (with-open [client (HttpClient/newHttpClient)]
-              (is (= 200 (:status (wire/call client (:port server) "GET" path (:accessJwt account) {} nil))))))
+              (is (= 200 (:status (call-once-released client (:port server) "GET" account))))))
           (finally ((:stop! server))))))))
