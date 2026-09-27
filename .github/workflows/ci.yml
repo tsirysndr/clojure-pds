@@ -40,6 +40,8 @@ jobs:
       PDS_TEST_DATABASE_URL: jdbc:postgresql://127.0.0.1:5432/pds_test
       PDS_TEST_REDIS_URL: redis://127.0.0.1:6379/0
       PDS_TEST_UPSTREAM: 'true'
+      PDS_TEST_BACKUP: 'true'
+      PG_BIN: /usr/lib/postgresql/18/bin
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -64,6 +66,19 @@ jobs:
           node --check resources/security/app.js
       - name: Install pinned upstream conformance tools
         run: npm ci --prefix scripts/conformance --ignore-scripts
+      - name: Install PostgreSQL 18 backup tools
+        run: |
+          if [ ! -x "$PG_BIN/pg_dump" ]; then
+            sudo apt-get update
+            if ! apt-cache show postgresql-client-18 >/dev/null 2>&1; then
+              sudo install -d /usr/share/postgresql-common/pgdg
+              curl --fail --silent --show-error https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc >/dev/null
+              echo 'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main' | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+              sudo apt-get update
+            fi
+            sudo apt-get install -y postgresql-client-18
+          fi
+          "$PG_BIN/pg_dump" --version
       - name: Run Clojure, PostgreSQL, Redis, S3 and upstream conformance tests
         run: uv run scripts/test-s3.py
       - name: Test the email Worker contract

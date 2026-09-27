@@ -26,6 +26,8 @@ mise exec -- clojure -M:run
 The master key encrypts repository signing keys and derives a distinct session
 signing key. Back it up separately from PostgreSQL. Losing/changing it without a
 key migration makes existing private keys unreadable and invalidates sessions.
+See the [backup/restore workflow](docs/BACKUP.md) for checksummed PostgreSQL
+archives, coordinated S3 backups, recovery steps and the isolated restore drill.
 
 `GET /` returns the ASCII PDS banner. Health is liveness, not federation readiness:
 
@@ -49,7 +51,8 @@ mise exec -- clojure -M:repl        # Rebel Readline
 
 The GitHub Actions workflow `ci` runs on every push. It uses the mise-pinned JDK,
 PostgreSQL and Redis services, a local S3 emulator, the pinned upstream repository
-verifier, and the email Worker contract tests. It needs no deployment credentials.
+verifier, a PostgreSQL backup/restore drill, and the email Worker contract tests.
+It needs no deployment credentials.
 
 `PG_BIN=/path/to/postgresql/bin bash scripts/test-postgres.sh` selects another
 PostgreSQL installation. The script stops its temporary cluster after testing and

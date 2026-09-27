@@ -299,6 +299,12 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   empty content; HTTP round trips, bounded reads and upgrade preservation are tested.
 - A child-JVM test runs `pds.main`, checks HTTP health, and verifies graceful shutdown,
   including optional S3/Redis clients when the combined suite enables them.
+- An opt-in [PostgreSQL recovery drill](BACKUP.md), enabled in CI, uses the shipped
+  backup/restore CLI against fresh databases. It compares all tables and verifies
+  restored login/session behavior, private preferences, moderation flags, blobs,
+  signed writes, sequence advancement and real WebSocket replay with the upstream
+  verifier. It also tests corrupt archives and refusal to overwrite existing data.
+  S3 coverage verifies retained object locators, not provider disaster recovery.
 - Rate limiting defaults to bounded in-memory counters. Optional Redis uses atomic
   expiring counters; real Redis 8.2.3 tests cover concurrent budgets shared by two
   clients, expiry, reopen, isolation and failures. Forwarding headers remain ignored.
@@ -341,7 +347,8 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
 7. Streaming repository import, S3 orphan and historical-block reclamation,
    incremental MST mutation, streaming, quotas and bulk blob-backend migration.
 8. Account-specific abuse controls, metrics/logging, database load/failover testing,
-   operational deployment/TLS and backup/restore drills. Push CI is configured;
+   operational deployment/TLS, production PITR and external S3 recovery drills.
+   Local logical database backup/restore is tested. Push CI is configured;
    its first GitHub execution still requires a push.
 
 ## Source pins

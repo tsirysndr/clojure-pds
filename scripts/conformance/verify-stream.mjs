@@ -18,5 +18,5 @@ for (const raw of fixture.frames) {
     await verifyRepoCar(payload.blocks, fixture.did, fixture.didKey)
   } else assert.equal(payload.did, fixture.did)
 }
-assert.deepEqual(types, ['#identity', '#account', '#commit'])
+assert.deepEqual(types, fixture.expectedTypes ?? ['#identity', '#account', '#commit'])
 console.log('Upstream decoded real WebSocket frames and verified their signed repository')

@@ -65,6 +65,10 @@ runnable and update this document as features land.
     backup/restore, deployment/TLS, CI, compatibility matrix and end-to-end tests.
     Acceptance: restore a backup, replay sync, and run the complete compatibility
     suite against a pinned upstream revision.
+    The [logical database recovery drill](BACKUP.md) restores credentials, private
+    state, blobs and signed repositories into a new database, then verifies HTTP
+    behavior and WebSocket replay. Production PITR and external object-store
+    disaster recovery remain pending.
 
 ## Architecture decisions
 

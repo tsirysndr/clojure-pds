@@ -44,6 +44,8 @@ Real PostgreSQL pool tests cover exhaustion, reuse, rollback, JDBC state reset,
 concurrent transactions, broken-connection replacement, startup failure cleanup,
 and HTTP account/record operations with a one-connection pool. The process smoke
 test exercises actual server startup and shutdown. Full deployment load testing,
-database failover and backup/restore verification remain pending.
+database failover remain pending. The [logical backup/restore drill](BACKUP.md)
+verifies recovery into a fresh database; production disaster recovery remains
+deployment-specific.
 
 Configuration semantics: [HikariCP 7.1.0 documentation](https://github.com/brettwooldridge/HikariCP/tree/HikariCP-7.1.0#gear-configuration-knobs-baby).

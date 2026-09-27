@@ -2,7 +2,7 @@
 set -euo pipefail
 # Uses an isolated temporary cluster, never a developer's existing database.
 # Set PG_BIN to the directory containing initdb/pg_ctl (PostgreSQL 14+).
-PG_BIN="${PG_BIN:-/opt/homebrew/opt/postgresql@18/bin}"
+export PG_BIN="${PG_BIN:-/opt/homebrew/opt/postgresql@18/bin}"
 cluster_dir=$(mktemp -d "${TMPDIR:-/tmp}/clojure-pds-pg.XXXXXX")
 printf 'clojure-pds integration test\n' > "$cluster_dir/.test-cluster"
 port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')
