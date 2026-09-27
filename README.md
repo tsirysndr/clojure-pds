@@ -444,7 +444,10 @@ a duplicate. Receipts are retained indefinitely; plan retention for larger syste
   `PDS_FIREHOSE_MAX_BACKLOG` to 1,000 new events. Sends have a five-second deadline
   and only one message in flight. Configure your HTTPS proxy to pass WebSocket
   upgrades. The replay window currently limits queries, not physical event retention.
-- Blob uploads accept zero bytes through 5 MiB and are buffered. Bytes use PostgreSQL `bytea` by
+- Blob uploads accept zero bytes through 5 MiB and stream through private temporary
+  files, hashing before publication and rechecking authorization after the client
+  read. Sixteen upload slots cap staged payload at 80 MiB per process; overload
+  returns 503. Known-length streams persist bytes into PostgreSQL `bytea` by
   default or a [configurable S3-compatible backend](docs/S3.md). PostgreSQL always
   holds ownership and metadata. Temporary uploads are private until referenced;
   re-uploading them renews their grace period. `PDS_BLOB_TEMP_TTL_SECONDS` defaults
@@ -457,7 +460,7 @@ a duplicate. Receipts are retained indefinitely; plan retention for larger syste
   size/CID into private temporary files using 64 KiB reads, then stream with
   backpressure and automatic cleanup. Sixteen concurrent staging/delivery slots
   cap temporary payload at 80 MiB per process; excess downloads return 503.
-  Streaming uploads, MIME sniffing,
+  MIME sniffing,
   and discovering S3 orphans left by failed metadata commits remain unfinished.
 - Rate limits default to bounded, per-process memory with 120 requests/IP/minute.
   [Optional Redis](docs/REDIS.md) shares counters across instances. Untrusted

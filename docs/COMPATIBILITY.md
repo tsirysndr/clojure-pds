@@ -231,7 +231,18 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   bound staging plus delivery to 80 MiB of temporary payload per process; overflow
   returns `503 BlobDownloadBusy`. PostgreSQL/S3 tests cover 5 MiB downloads,
   corruption, empty blobs, missing objects, capacity release and disconnects.
-  Uploads, internal byte-array reads and remote migration downloads remain buffered.
+  Internal byte-array reads and remote migration downloads remain buffered.
+- Public blob uploads stage and hash client bytes in 64 KiB chunks without holding
+  database connections/account locks. Fixed-length and chunked HTTP bodies share
+  the zero-through-5-MiB limit. Publication rechecks session/OAuth authorization,
+  then uses known-length PostgreSQL `setBinaryStream` or an S3 content provider
+  with independent readers for signing/retry. Sixteen separate upload permits cap
+  temporary upload payload at 80 MiB; overload returns `503 BlobUploadBusy`.
+  Tests cover maximum-size persistence, real chunked requests and disconnects,
+  incomplete/oversized input, capacity and file cleanup, revocation during reads,
+  DPoP replay rejection, and byte-identical SDK retries. Publication still holds
+  the account/blob locks while persisting to the backend, preserving duplicate,
+  takedown and uncertain-commit behavior.
 - Signing keys use AES-256-GCM with account DID as associated data. Passwords use
   Argon2id. Sessions are persisted and checked on requests; reset/replay/logout
   revocation is tested. Machine-generated app passwords use keyed digests; tests

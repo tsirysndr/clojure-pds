@@ -3,6 +3,7 @@
             [pds.blobs :as blobs]
             [pds.http :as http]
             [pds.protocol.codec :as codec]
+            [pds.tempfile]
             [pds.s3 :as s3]))
 
 (def config {"PDS_BLOB_BACKEND" "s3" "PDS_S3_BUCKET" "pds-test-blobs"
@@ -47,4 +48,27 @@
           (is (every? #(= (str "/pds-test-blobs/" object-key) (:uri %)) @requests))
           (is (every? #(re-find #"^AWS4-HMAC-SHA256 Credential=test-access/" (get-in % [:headers "authorization"])) @requests))
           (is (every? #(= "temporary-session" (get-in % [:headers "x-amz-security-token"])) @requests))))
+      (finally ((:stop! server))))))
+
+(deftest streamed-upload-replays-identical-bytes-on-sdk-retry
+  (let [data (byte-array (* 1024 1024)) _ (.nextBytes (java.util.Random. 21) data)
+        cid (codec/cid 85 data) requests (atom []) opens (atom 0)
+        server (http/start! {:host "127.0.0.1" :port 0}
+                 (fn [request]
+                   (let [bytes (.readAllBytes ^java.io.InputStream (:body request))]
+                     (swap! requests conj {:uri (:uri request) :cid (codec/cid 85 bytes) :size (alength bytes)})
+                     (if (= 1 (count @requests))
+                       {:status 503 :headers {"Content-Type" "application/xml"}
+                        :body "<Error><Code>SlowDown</Code><Message>retry</Message></Error>"}
+                       {:status 200 :body ""}))))]
+    (try
+      (with-open [channel (pds.tempfile/open-channel!)
+                  store (s3/open-store (s3/settings (assoc config "PDS_S3_ENDPOINT" (str "http://127.0.0.1:" (:port server)))))]
+        (.write channel (java.nio.ByteBuffer/wrap data))
+        (let [result (blobs/put-stream! store "did:web:alice.test" cid
+                       #(do (swap! opens inc) (pds.tempfile/input channel)) (alength data) "application/octet-stream")]
+          (is (<= 2 (count @requests) 4))
+          (is (>= @opens 2))
+          (is (every? #(= {:uri (str "/pds-test-blobs/" (:object-key result)) :cid cid :size (alength data)} %) @requests))
+          (is (.isOpen channel))))
       (finally ((:stop! server))))))

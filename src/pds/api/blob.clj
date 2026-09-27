@@ -1,14 +1,13 @@
 (ns pds.api.blob
-  (:require [clojure.string :as str]
-            [pds.accounts :as accounts]
+  (:require [pds.accounts :as accounts]
             [pds.api.repo :as repo-api]
             [pds.api.server :as server]
             [pds.blobs :as blobs]
             [pds.blob-download :as download]
+            [pds.blob-upload :as upload]
             [pds.blob-refs :as blob-refs]
             [pds.db :as db]
             [pds.errors :as errors]
-            [pds.oauth.permissions :as permissions]
             [pds.protocol.syntax :as syntax]
             [pds.request :as request])
   (:import [java.io Closeable]))
@@ -16,18 +15,7 @@
 (def max-size blobs/max-size)
 (defn routes [ds settings]
   {"/xrpc/com.atproto.repo.uploadBlob"
-   (server/json-route
-    :post
-    (server/authenticated
-     ds settings {:allow-deactivated? true}
-     (fn [conn account r]
-       (let [type (some-> (get-in r [:headers "content-type"]) (str/split #";") first str/lower-case)
-             _ (when-not (and type (re-matches #"[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+" type))
-                 (errors/invalid! "A valid Content-Type is required"))
-             _ (permissions/blob! account type)
-             bytes (request/body-bytes r max-size)]
-         (let [stored (blobs/store! conn settings (:did account) bytes type)]
-           {:blob {:$type "blob" :ref {:$link (:cid stored)} :mimeType (:mime_type stored) :size (:size stored)}})))))
+   (server/json-route :post #(upload/upload! ds settings %))
    "/xrpc/com.atproto.repo.listMissingBlobs"
    (server/json-route :get
      (server/authenticated ds settings {:allow-deactivated? true}

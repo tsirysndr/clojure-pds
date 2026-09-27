@@ -1,7 +1,9 @@
 (ns pds.blobs
   (:require [pds.db :as db]
             [pds.errors :as errors]
-            [pds.protocol.codec :as codec]))
+            [pds.protocol.codec :as codec])
+  (:import [java.io InputStream]
+           [java.sql Connection]))
 
 (def max-size (* 5 1024 1024))
 
@@ -19,6 +21,11 @@
   (open-object! [store bucket key]
     "Return an owned InputStream. Closing must abort unread remote content,
     without draining it. The caller bounds reads and verifies length/hash."))
+
+(defprotocol ObjectUpload
+  (put-stream! [store did cid open-input size mime-type]
+    "Persist a verified, known-length body. open-input returns a fresh owned
+    stream from offset zero for each attempt. Return a fresh immutable locator."))
 
 (defn unavailable! [] (errors/raise! 503 "BlobUnavailable" "Blob storage is unavailable"))
 
@@ -47,6 +54,39 @@
   (first (db/query conn "SELECT did, cid, mime_type, size, storage_backend, object_key, object_bucket, takedown_ref
                         FROM blobs WHERE did = ? AND cid = ?" did cid)))
 
+(defn- existing! [conn did cid]
+  (when-let [existing (metadata conn did cid)]
+    (when (some? (:takedown_ref existing))
+      (errors/invalid! "Blob has been taken down and cannot be uploaded"))
+    (when-not (referenced? conn did cid)
+      (db/execute! conn "UPDATE blobs SET uploaded_at = now() WHERE did = ? AND cid = ?" did cid))
+    existing))
+
+(defn- insert-object! [conn did cid size mime-type {:keys [object-key object-bucket]}]
+  (db/execute! conn "INSERT INTO blobs(did, cid, mime_type, size, storage_backend, object_key, object_bucket)
+                    VALUES (?, ?, ?, ?, 's3', ?, ?)" did cid mime-type size object-key object-bucket))
+
+(defn store-stream!
+  "Publish an already verified, staged upload in the caller's account-locked
+  transaction. The staging owner keeps its file alive until commit/rollback."
+  [^Connection conn settings did {:keys [cid size open-input]} mime-type]
+  (when-not (and (integer? size) (<= 0 size max-size)) (errors/invalid! "Blob size is outside the allowed range"))
+  (lock! conn did cid)
+  (or (existing! conn did cid)
+      (do
+        (if-let [store (:blob-store settings)]
+          (insert-object! conn did cid size mime-type
+            (try (put-stream! store did cid open-input size mime-type)
+                 (catch Exception _ (unavailable!))))
+          (with-open [^InputStream input (open-input)
+                      stmt (.prepareStatement conn "INSERT INTO blobs(did, cid, mime_type, size, content) VALUES (?, ?, ?, ?, ?)")]
+            (.setString stmt 1 did) (.setString stmt 2 cid) (.setString stmt 3 mime-type)
+            (.setLong stmt 4 size)
+            ;; A known length lets pgjdbc send bytea without buffering it first.
+            (.setBinaryStream stmt (int 5) input (int size))
+            (.executeUpdate stmt)))
+        (metadata conn did cid))))
+
 (defn store!
   "Caller owns the transaction. Publish metadata only after object persistence.
   A failed DB commit may leave an unreferenced object; never delete it here since
@@ -56,20 +96,12 @@
     (when-not (<= 0 size max-size) (errors/invalid! "Blob size is outside the allowed range"))
     ;; Serialize duplicates across PDS processes; the first MIME type wins.
     (lock! conn did cid)
-    (or (when-let [existing (metadata conn did cid)]
-          (when (some? (:takedown_ref existing))
-            (errors/invalid! "Blob has been taken down and cannot be uploaded"))
-          (when-not (referenced? conn did cid)
-            (db/execute! conn "UPDATE blobs SET uploaded_at = now() WHERE did = ? AND cid = ?" did cid))
-          existing)
+    (or (existing! conn did cid)
         (do
           (if-let [store (:blob-store settings)]
-            (let [{:keys [object-key object-bucket]}
-                  (try (put-object! store did cid content mime-type)
-                       (catch Exception _ (unavailable!)))]
-              (db/execute! conn "INSERT INTO blobs(did, cid, mime_type, size, storage_backend, object_key, object_bucket)
-                                VALUES (?, ?, ?, ?, 's3', ?, ?)"
-                           did cid mime-type size object-key object-bucket))
+            (insert-object! conn did cid size mime-type
+              (try (put-object! store did cid content mime-type)
+                   (catch Exception _ (unavailable!))))
             (db/execute! conn "INSERT INTO blobs(did, cid, mime_type, size, content) VALUES (?, ?, ?, ?, ?)"
                          did cid mime-type size content))
           (metadata conn did cid)))))

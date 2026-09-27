@@ -11,6 +11,7 @@
            [software.amazon.awssdk.core.client.config ClientOverrideConfiguration]
            [software.amazon.awssdk.core.checksums RequestChecksumCalculation ResponseChecksumValidation]
            [software.amazon.awssdk.core.sync RequestBody]
+           [software.amazon.awssdk.http ContentStreamProvider]
            [software.amazon.awssdk.http.urlconnection UrlConnectionHttpClient]
            [software.amazon.awssdk.regions Region]
            [software.amazon.awssdk.services.s3 S3Client S3ClientBuilder S3Configuration]
@@ -80,6 +81,19 @@
       ;; is adopted later. Never drain an oversized or failed remote response.
       (proxy [FilterInputStream] [stream]
         (close [] (.abort stream)))))
+  blobs/ObjectUpload
+  (put-stream! [_ did cid open-input size mime-type]
+    (let [key (str (object-key prefix did cid) "/" (UUID/randomUUID))
+          request (-> (PutObjectRequest/builder) (.bucket bucket) (.key key) (.contentType mime-type) .build)
+          current (atom nil)
+          provider (reify ContentStreamProvider
+                     (newStream [_]
+                       (when-let [^java.io.InputStream previous @current] (.close previous))
+                       (let [input (open-input)] (reset! current input) input)))]
+      (try
+        (.putObject client ^PutObjectRequest request (RequestBody/fromContentProvider provider (long size) mime-type))
+        {:object-key key :object-bucket bucket}
+        (finally (when-let [^java.io.InputStream input @current] (.close input))))))
   blobs/ObjectDeletion
   (delete-object! [_ bucket key]
     (.deleteObject client ^DeleteObjectRequest (-> (DeleteObjectRequest/builder) (.bucket bucket) (.key key) .build)))

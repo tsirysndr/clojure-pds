@@ -4,12 +4,11 @@
             [pds.db :as db]
             [pds.errors :as errors]
             [pds.protocol.codec :as codec]
+            [pds.tempfile :as tempfile]
             [pds.response-body :as body])
   (:import [java.io FilterInputStream InputStream]
            [java.nio ByteBuffer]
            [java.nio.channels Channels FileChannel]
-           [java.nio.file Files StandardOpenOption]
-           [java.nio.file.attribute FileAttribute PosixFilePermissions]
            [java.security MessageDigest]
            [java.util.concurrent Semaphore]))
 
@@ -19,15 +18,7 @@
 (def chunk-size 65536)
 
 (defn- temporary-channel! []
-  (let [path (Files/createTempFile "pds-blob-" ".tmp"
-               (into-array FileAttribute [(PosixFilePermissions/asFileAttribute
-                                            (PosixFilePermissions/fromString "rw-------"))]))]
-    (try
-      ;; On supported Unix deployments DELETE_ON_CLOSE unlinks immediately;
-      ;; the descriptor remains usable and a process crash leaves no payload.
-      (FileChannel/open path (into-array StandardOpenOption
-                              [StandardOpenOption/READ StandardOpenOption/WRITE StandardOpenOption/DELETE_ON_CLOSE]))
-      (catch Throwable error (Files/deleteIfExists path) (throw error)))))
+  (tempfile/open-channel!))
 
 (defn- postgres-stream [conn did cid]
   (let [offset (atom 0)]

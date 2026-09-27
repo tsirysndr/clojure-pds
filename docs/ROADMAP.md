@@ -50,7 +50,7 @@ runnable and update this document as features land.
    caching, fixed access-token permissions, refresh updates and localized consent.
    OAuth inactive migration and deployed interoperability remain pending. Account
    status permissions await defined semantics in the published permission spec.
-8. **Blob APIs (verified disk-staged downloads, references, missing/since listing and temporary/reference cleanup implemented; uploads still buffered):** streaming upload/download, limits, ownership, record references,
+8. **Blob APIs (disk-staged streaming uploads/downloads, references, missing/since listing and temporary/reference cleanup implemented):** streaming upload/download, limits, ownership, record references,
    list/missing blobs and garbage collection. Acceptance: binary round trips,
    interrupted upload cleanup and no cross-account access leaks.
 9. **Sync and federation (queries, proofs, WebSocket firehose and relay announcements implemented; external relay pending):** durable ordered event log, sync queries, WebSocket
@@ -100,7 +100,9 @@ remain required before a full client integration can be claimed. Preserve atomic
   backpressure and cleanup on completion, HEAD, failure, disconnect and shutdown.
   Blob downloads use this transport after incremental size/CID verification in a
   private temporary file. PostgreSQL bytea reads use bounded SQL slices; S3 reads
-  are bounded streams. CAR/proxy responses and blob uploads remain buffered.
+  are bounded streams. Uploads stage and hash client bytes outside database locks,
+  reauthenticate, then stream into PostgreSQL or a repeatable S3 request body.
+  CAR/proxy responses and internal migration byte-array paths remain buffered.
 - PostgreSQL is the storage backend. Migrations are transactional, serialized by
   an advisory lock, and checked for changes using SHA-256. Integration tests use
   an isolated PostgreSQL cluster and disposable schemas. The server uses a
