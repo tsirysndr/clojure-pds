@@ -3,6 +3,7 @@
             [pds.crypto :as crypto]
             [pds.dns :as dns]
             [pds.errors :as errors]
+            [pds.identity.cache :as cache]
             [pds.net :as net]
             [pds.plc :as plc]
             [pds.protocol.codec :as codec]
@@ -26,13 +27,15 @@
     (str/replace value #"/$" "")))
 
 (defn settings [env]
-  (try {:plc-url (origin! (get env "PDS_PLC_URL" "https://plc.directory"))}
-       (catch Exception _ (throw (ex-info "PDS_PLC_URL must be an HTTPS origin" {:variable "PDS_PLC_URL"})))))
+  (merge (cache/settings env)
+         (try {:plc-url (origin! (get env "PDS_PLC_URL" "https://plc.directory"))}
+              (catch Exception _ (throw (ex-info "PDS_PLC_URL must be an HTTPS origin" {:variable "PDS_PLC_URL"}))))))
 
 (defn resolver
   "Explicit dependencies keep network resolution testable. Hosted lookups must
-  finish their database reads before returning; no transaction spans remote I/O."
-  [{:keys [http-client fetch txt-lookup local-handle local-document plc-url]
+  finish their database reads before returning; no transaction spans remote I/O.
+  Internal resolvers remain uncached unless explicitly given an identity-cache."
+  [{:keys [http-client fetch txt-lookup local-handle local-document plc-url identity-cache]
     :or {local-handle (constantly nil) local-document (constantly nil) plc-url "https://plc.directory"}}]
   (let [lookup (delay (dns/txt-lookup))]
     {:fetch (or fetch (fn [url options]
@@ -40,6 +43,7 @@
                        (net/fetch! http-client url options)))
      :txt-lookup (or txt-lookup #(@lookup %))
      :local-handle local-handle :local-document local-document :plc-url (origin! plc-url)
+     :identity-cache identity-cache
      :permits (Semaphore. 32)}))
 
 (defn- fetch! [resolver url options error]
@@ -48,13 +52,22 @@
          (if (:xrpc (ex-data e)) (throw e)
              (errors/raise! 502 error "Remote identity request failed")))))
 
+(defn- remote-value! [resolver key load-value]
+  (if-let [memo (:refresh-memo resolver)]
+    (if-let [entry (find @memo key)] (val entry)
+      (let [value (cache/lookup! (:identity-cache resolver) key true load-value)]
+        (swap! memo assoc key value) value))
+    (cache/lookup! (:identity-cache resolver) key false load-value)))
+
 (defn resolve-handle! [resolver handle]
   (when-not (syntax/handle? handle) (errors/invalid! "Invalid handle"))
   (let [handle (str/lower-case handle)]
     (or ((:local-handle resolver) handle)
         (do
           (when-not (resolvable-handle? handle) (errors/raise! 400 "HandleNotFound" "Handle cannot be resolved"))
-          (let [records (when (<= (+ 9 (count handle)) 253)
+          (remote-value! resolver [:handle handle]
+           (fn []
+            (let [records (when (<= (+ 9 (count handle)) 253)
                           (try ((:txt-lookup resolver) (str "_atproto." handle ".")) (catch Exception _ [])))
                 candidates (set (keep #(when (and (string? %) (str/starts-with? % "did=")
                                                   (supported-did? (subs % 4))) (subs % 4)) records))]
@@ -66,14 +79,16 @@
                   (when-not (= 200 status) (errors/raise! 502 "HandleResolutionFailed" "Handle endpoint returned an unexpected status"))
                   (let [did (try (str/trim (codec/text body)) (catch Exception _ nil))]
                     (when-not (supported-did? did) (errors/raise! 400 "HandleNotFound" "Handle has no supported DID"))
-                    did))))))))
+                    did))))))))))
 
 (defn resolve-did! [resolver did]
   (when-not (syntax/did? did) (errors/invalid! "Invalid DID"))
   (or ((:local-document resolver) did)
       (do
         (when-not (supported-did? did) (errors/raise! 400 "DidNotFound" "Unsupported DID"))
-        (let [plc? (str/starts-with? did "did:plc:")
+        (remote-value! resolver [:did did]
+         (fn []
+          (let [plc? (str/starts-with? did "did:plc:")
               url (if plc? (str (:plc-url resolver) "/" did "/log/audit")
                       (str "https://" (subs did 8) "/.well-known/did.json"))
               options (if plc? {:maximum (* 4 1024 1024) :timeout-ms 5000 :redirects 0}
@@ -89,7 +104,7 @@
                               (catch Exception _ (errors/raise! 502 "DidResolutionFailed" "Invalid DID document or PLC audit")))]
             (when (and plc? (nil? document)) (errors/raise! 400 "DidDeactivated" "PLC DID is tombstoned"))
             (when-not (= did (get document "id")) (errors/raise! 502 "DidResolutionFailed" "DID document identifier mismatch"))
-            document)))))
+            document)))))))
 
 (defn claimed-handle [document]
   (when (vector? (get document "alsoKnownAs"))
@@ -118,6 +133,19 @@
         handle (claimed-handle document)
         verified? (and handle (try (= did (resolve-handle! resolver handle)) (catch Exception _ false)))]
     {:did did :handle (if verified? handle "handle.invalid") :didDoc document}))
+
+(defn refresh-identity! [resolver identifier]
+  (when-not (syntax/at-identifier? identifier) (errors/invalid! "Invalid identifier"))
+  (let [handle (when-not (syntax/did? identifier) (str/lower-case identifier))]
+    (cache/invalidate! (:identity-cache resolver)
+      (fn [entries]
+        (let [did (if handle (get-in entries [[:handle handle] :value]) identifier)
+              claimed (claimed-handle (get-in entries [[:did did] :value]))]
+          (into (set [[:did did] [:handle handle] [:handle claimed]])
+                (keep (fn [[key entry]] (when (and did (= :handle (first key)) (= did (:value entry))) key))) entries))))
+    ;; Every remote binding visited by the bidirectional check is fetched anew.
+    ;; Memoization only avoids fetching the same handle twice in this request.
+    (resolve-identity! (assoc resolver :refresh-memo (atom {})) identifier)))
 
 (defn bounded-call! [resolver f]
   (let [^Semaphore permits (:permits resolver)]

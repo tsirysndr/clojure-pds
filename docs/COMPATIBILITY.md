@@ -27,7 +27,7 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | `com.atproto.server` | `requestEmailConfirmation`, `confirmEmail` | Durable email outbox, expiring one-use confirmation |
 | `com.atproto.server` | `requestEmailUpdate`, `updateEmail` | Proof to current confirmed address, old-token invalidation, optional email authentication factor |
 | `com.atproto.server` | `requestPasswordReset`, `resetPassword` | Same public result for known/unknown addresses; reset revokes sessions |
-| `com.atproto.identity` | `resolveHandle`, `resolveDid`, `resolveIdentity`, `refreshIdentity` | Hosted identities and remote DNS/HTTPS handles, did:web/PLC documents, bidirectional handle verification; uncached, bounded concurrency |
+| `com.atproto.identity` | `resolveHandle`, `resolveDid`, `resolveIdentity`, `refreshIdentity` | Hosted identities and remote DNS/HTTPS handles, did:web/PLC documents, bidirectional checks; bounded public cache, explicit refresh, fresh internal security checks |
 | `com.atproto.identity` | `updateHandle`, `getRecommendedDidCredentials` | Hosted/custom handles, durable audited PLC changes, stable web DID hostnames, public migration credentials; external migration conformance pending |
 | `com.atproto.identity` | `requestPlcOperationSignature`, `signPlcOperation` | Primary session plus one-use emailed proof; verified latest audit, partial credential overrides; returns an operation without submitting it |
 | `com.atproto.identity` | `submitPlcOperation` | Credential constraints, authorized successor signatures, durable directory reconciliation and atomic identity events; prepared destination identities supported; recovery forks pending |
@@ -63,9 +63,11 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   unrelated answer records. HTTP/TLS socket tests verify public-address checks,
   mixed DNS answers, redirect revalidation, byte bounds, cookie isolation, and
   certificate/hostname verification. PostgreSQL/HTTP tests cover hosted, remote,
-  deleted and service identities. Resolution uses no application cache yet;
-  `refreshIdentity` fetches fresh data. PLC resolution, including hosted accounts,
-  verifies the signed audit log and derives its canonical DID document. Tests cover
+  deleted and service identities. Public resolution uses a bounded, configurable
+  [identity cache](IDENTITY-CACHE.md); `refreshIdentity` fetches fresh data and
+  fences older in-flight lookups. Internal security-sensitive resolvers remain
+  uncached. Remote PLC lookups, including for hosted accounts, verify the signed
+  audit log and derive its canonical DID document before caching. Tests cover
   recovery/nullification, forged metadata, tombstones, and external migration
   replacing a stale local key/endpoint. Invalid audits fail without local fallback.
   Directory timestamps, completeness and freshness remain trusted over verified
@@ -313,8 +315,7 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
 
 1. Expanded behavioral conformance/catalog coverage as endpoints and protocol
    features are added, including deployed Lexicon publisher interoperability.
-2. Bounded identity caching,
-   signing/rotation key lifecycle, conflicted-operation administration, and migration.
+2. Signing/rotation key lifecycle, conflicted-operation administration, and migration.
 3. Remaining administrative APIs and broader account recovery controls.
 4. OAuth authorization server: inactive migration sessions and deployed
    reference-client interoperability. Account-status permission semantics are not

@@ -60,7 +60,8 @@
   (doseq [url ["http://plc.example.com" "https://user:password@plc.example.com" "https://plc.example.com/path"
                "https://plc.example.com?query=1" "https://plc.example.com/#fragment"]]
     (is (thrown? Exception (identity/settings {"PDS_PLC_URL" url}))))
-  (is (= {:plc-url "https://plc.example.com"} (identity/settings {"PDS_PLC_URL" "https://plc.example.com/"}))))
+  (is (= {:plc-url "https://plc.example.com" :identity-cache-ttl-ms 300000 :identity-cache-size 1024}
+         (identity/settings {"PDS_PLC_URL" "https://plc.example.com/"}))))
 
 (deftest did-resolution-and-bidirectional-handles
   (let [alice "did:web:alice.example.com"

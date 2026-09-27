@@ -91,6 +91,8 @@ to avoid wrapping Rebel in a second readline tool.
 | `PDS_HOSTNAME` | `localhost` | Service DID hostname |
 | `PDS_PUBLIC_URL` | `http://localhost:3000` | Public PDS origin; HTTPS outside loopback |
 | `PDS_USER_DOMAIN` | `PDS_HOSTNAME`, or `pds.localhost` if unset | Hosted handle suffix |
+| `PDS_IDENTITY_CACHE_TTL_SECONDS` | `300` | Public remote identity cache TTL; 0–3,600; `0` disables; [freshness policy](docs/IDENTITY-CACHE.md) |
+| `PDS_IDENTITY_CACHE_MAX_ENTRIES` | `1024` | Maximum cached/in-flight identity entries; 1–10,000 |
 | `PDS_ENABLE_SIGNUP` | `false` | Enable account creation |
 | `PDS_MASTER_KEY` | required | Stable base64url-encoded 32-byte master key |
 | `PDS_DATABASE_URL` | `jdbc:postgresql://127.0.0.1:5432/clojure_pds` | PostgreSQL JDBC URL |
@@ -139,8 +141,12 @@ verifies the directory's full signed audit history, then derives the current DID
 document, including for hosted accounts. External migration, recovery and rotation
 therefore supersede the local snapshot. Invalid audits fail without a stale local
 fallback; timestamps and history freshness still rely on the directory. Audits
-are bounded to 4 MiB and 10,000 operations, with redirects disabled. Resolution is
-currently uncached, with at most 32 concurrent identity requests per server instance.
+are bounded to 4 MiB and 10,000 operations, with redirects disabled. Public remote
+resolution uses a [bounded five-minute cache](docs/IDENTITY-CACHE.md), configurable
+or disabled through environment settings. `refreshIdentity` forces fresh lookup
+and invalidates related cached bindings. Hosted database reads and internal
+security-sensitive resolution remain uncached. At most 32 concurrent requests
+enter the public identity resolver per server instance.
 External end-to-end migration conformance remains unverified. The default localhost identities
 are development-only.
 

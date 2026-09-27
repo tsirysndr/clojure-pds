@@ -115,6 +115,10 @@ remain required before a full client integration can be claimed. Preserve atomic
   resolution verifies audit history and derives the current document, including
   for hosted accounts. It does not fall back to a stale local snapshot. Directory
   timestamps and history completeness/freshness remain trusted assertions.
+- Public identity endpoints use a bounded, configurable process-local cache with
+  explicit refresh and fencing of older in-flight lookups. Hosted identity checks
+  precede cache reads; internal security-sensitive resolvers remain uncached.
+  See [cache freshness and limits](IDENTITY-CACHE.md).
 - Track conformance honestly: unsupported features stay unsupported until their
   invariants are implemented. Health indicates process liveness, not federation
   readiness.

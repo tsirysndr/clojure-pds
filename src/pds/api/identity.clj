@@ -6,6 +6,7 @@
             [pds.db :as db]
             [pds.errors :as errors]
             [pds.identity :as identity]
+            [pds.identity.cache :as cache]
             [pds.handles :as handles]
             [pds.plc-signing :as plc-signing]
             [pds.plc-submission :as plc-submission]
@@ -37,7 +38,8 @@
 
 (defn routes [ds settings]
   (let [resolver (identity/resolver (merge settings {:local-handle #(local-handle ds settings %)
-                                                     :local-document #(local-document ds settings %)}))
+                                                     :local-document #(local-document ds settings %)
+                                                     :identity-cache (cache/create settings)}))
         route (fn [method f] {:method method :handler #(identity/bounded-call! resolver (fn [] (xrpc/response 200 (f %))))})]
     {"/xrpc/com.atproto.identity.submitPlcOperation"
      {:method :post :handler (fn [r]
@@ -62,6 +64,5 @@
      (route :get #(hash-map :didDoc (identity/resolve-did! resolver (get (request/query-params %) "did"))))
      "/xrpc/com.atproto.identity.resolveIdentity"
      (route :get #(identity/resolve-identity! resolver (get (request/query-params %) "identifier")))
-     ;; Resolution is uncached for now, so a refresh always fetches fresh data.
      "/xrpc/com.atproto.identity.refreshIdentity"
-     (route :post #(identity/resolve-identity! resolver (get (request/json-body %) "identifier")))}))
+     (route :post #(identity/refresh-identity! resolver (get (request/json-body %) "identifier")))}))

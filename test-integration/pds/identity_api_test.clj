@@ -3,6 +3,7 @@
             [clojure.test :refer [deftest is use-fixtures]]
             [pds.accounts :as accounts]
             [pds.app :as app]
+            [pds.auth :as auth]
             [pds.crypto :as crypto]
             [pds.db :as db]
             [pds.db-test :as fixture]
@@ -14,6 +15,8 @@
             [pds.plc-provision-test :as provision-test]
             [pds.plc-test :as plc-test]
             [pds.protocol.codec :as codec]
+            [pds.service-auth :as service-auth]
+            [pds.service-auth-test :as service-test]
             [pds.server-api-test :as api])
   (:import [java.net.http HttpClient]))
 (use-fixtures :each fixture/isolated-database)
@@ -54,6 +57,9 @@
             (is (= {"did" remote "handle" "remote.example.com" "didDoc" document} (:body resolved)))
             (is (= "ES256K" (:algorithm (identity/signing-key (get-in resolved [:body "didDoc"])))))
             (is (= "https://remote-pds.example.com" (identity/pds-endpoint (get-in resolved [:body "didDoc"])))))
+          (let [before @outbound]
+            (is (= 200 (:status (call "GET" "com.atproto.identity.resolveIdentity?identifier=remote.example.com" nil))))
+            (is (= before @outbound) "Repeated resolution uses cached remote bindings and verified documents"))
           (is (some #{(str "https://directory.example.com/" remote "/log/audit")} @outbound))
           (swap! audit conj (plc-test/row remote (plc-test/update-op genesis key {"alsoKnownAs" ["at://handle.invalid" "at://remote.example.com"]})
                                         "2026-01-01T01:00:00Z" false))
@@ -100,8 +106,57 @@
               (is (= "moved.example.net" (get-in (api/xrpc http (:port server) "POST" "com.atproto.identity.refreshIdentity"
                                                                  {"identifier" did} nil) [:body "handle"])))
               (reset! audit-body (json/write-str (plc/did-document (plc/operation-data did genesis))))
-              (is (= "DidResolutionFailed" (get-in (resolve) [:body "error"])) "Invalid audit cannot fall back to a local snapshot")
+              (is (= "DidResolutionFailed" (get-in (api/xrpc http (:port server) "POST" "com.atproto.identity.refreshIdentity"
+                                                             {"identifier" did} nil) [:body "error"]))
+                  "Refresh rejects an invalid audit and invalidates the cached document")
+              (is (= "DidResolutionFailed" (get-in (resolve) [:body "error"])) "Invalid audit cannot fall back to a local or cached snapshot")
               (reset! audit-body nil)
               (directory/ensure-operation! client origin did (plc-test/tombstone moved signer))
               (is (= "DidDeactivated" (get-in (resolve) [:body "error"])))))
           (finally ((:stop! server))))))))
+
+(deftest public-cache-disable-refresh-and-failure-behavior
+  (doseq [ttl [0 300000]]
+    (let [did "did:web:remote.example.net" calls (atom 0)
+          response (atom {:status 200 :body (codec/utf8 (json/write-str {"id" did "version" 1}))})
+          settings (assoc (api/settings) :identity-cache-ttl-ms ttl
+                          :fetch (fn [_ _] (swap! calls inc) @response))
+          server (http/start! settings (app/handler settings fixture/*ds*))]
+      (try
+        (with-open [client (HttpClient/newHttpClient)]
+          (let [resolve #(api/xrpc client (:port server) "GET" (str "com.atproto.identity.resolveDid?did=" did) nil nil)
+                refresh #(api/xrpc client (:port server) "POST" "com.atproto.identity.refreshIdentity" {"identifier" did} nil)]
+            (is (= 1 (get-in (resolve) [:body "didDoc" "version"])))
+            (reset! response {:status 200 :body (codec/utf8 (json/write-str {"id" did "version" 2}))})
+            (is (= (if (zero? ttl) 2 1) (get-in (resolve) [:body "didDoc" "version"])))
+            (is (= (if (zero? ttl) 2 1) @calls))
+            (is (= 2 (get-in (refresh) [:body "didDoc" "version"])))
+            (is (= 2 (get-in (resolve) [:body "didDoc" "version"])))
+            (reset! response {:status 503})
+            (is (= "DidResolutionFailed" (get-in (refresh) [:body "error"])))
+            (is (= "DidResolutionFailed" (get-in (resolve) [:body "error"])))
+            (reset! response {:status 200 :body (codec/utf8 (json/write-str {"id" did "version" 3}))})
+            (is (= 3 (get-in (resolve) [:body "didDoc" "version"])))))
+        (finally ((:stop! server)))))))
+
+(deftest public-cached-keys-do-not-authorize-migration-service-tokens
+  (let [did "did:web:source.example.net" old (crypto/keypair "ES256") new (crypto/keypair "ES256")
+        document (atom (service-test/document did old)) calls (atom 0)
+        settings (assoc (api/settings) :fetch (fn [_ _] (swap! calls inc) {:status 200 :body (codec/utf8 (json/write-str @document))}))
+        server (http/start! settings (app/handler settings fixture/*ds*))]
+    (try
+      (with-open [client (HttpClient/newHttpClient)]
+        (let [resolve #(api/xrpc client (:port server) "GET" (str "com.atproto.identity.resolveDid?did=" did) nil nil)
+              token (fn [key] (let [now (auth/now)]
+                                (service-auth/sign key did (:service-did settings) "com.atproto.server.createAccount" now (+ now 60))))
+              create #(api/xrpc client (:port server) "POST" "com.atproto.server.createAccount"
+                                {"did" did "handle" "migrated.example.com" "email" "migrated@example.com" "password" "migration-password"} (token %))]
+          (is (= @document (get-in (resolve) [:body "didDoc"])))
+          (reset! document (service-test/document did new))
+          (is (= (service-test/document did old) (get-in (resolve) [:body "didDoc"])))
+          (is (= 1 @calls))
+          (is (= "BadJwtSignature" (get-in (create old) [:body "error"])))
+          (is (= 2 @calls) "Migration verifies the current key rather than the public cached key")
+          (is (= 200 (:status (create new))))
+          (is (= 3 @calls))))
+      (finally ((:stop! server))))))
