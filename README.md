@@ -402,8 +402,9 @@ GET, HEAD and bounded POST transfers are supported with guarded HTTPS, fresh
 DID resolution, concurrency limits and existing memory/Redis rate limits. See
 [proxy configuration and behavior](docs/PROXY.md) for limits and verification.
 Responses are staged on disk before streaming to the client, with concurrency
-slots held through delivery. The default temporary response budget is 160 MiB;
-POST request bodies remain bounded in-memory buffers.
+slots held through delivery. POST request bodies are staged the same way before
+any remote work and sent with a known length. The default temporary proxy
+payload budget is 240 MiB (requests plus responses).
 
 ## Cloudflare Worker email
 

@@ -3,7 +3,7 @@
   (:import [java.io InputStream OutputStream]
            [java.net URI InetAddress InetSocketAddress]
            [java.util.concurrent CompletableFuture TimeUnit]
-           [org.eclipse.jetty.client HttpClient BufferingResponseListener BytesRequestContent InputStreamResponseListener Result]
+           [org.eclipse.jetty.client HttpClient BufferingResponseListener BytesRequestContent InputStreamRequestContent InputStreamResponseListener Result]
            [org.eclipse.jetty.http HttpCookieStore$Empty]
            [org.eclipse.jetty.util Promise SocketAddressResolver SocketAddressResolver$Async]))
 
@@ -143,21 +143,34 @@
        (throw (ex-info "Encoded response is unsupported" {:network-error :encoding})))
      response)))
 
-(defn- exchange-options! [method headers body maximum timeout-ms]
+(defn- exchange-options! [method headers body maximum timeout-ms streams?]
   (when-not (and (#{"GET" "HEAD" "POST"} method) (<= 1 maximum 67108864) (<= 1 timeout-ms 60000)
-                 (or (nil? body) (and (= method "POST") (bytes? body) (<= (alength ^bytes body) 67108864)))
+                 (or (nil? body)
+                     (and (= method "POST")
+                          (or (and (bytes? body) (<= (alength ^bytes body) 67108864))
+                              (and streams? (map? body) (instance? InputStream (:input body))
+                                   (integer? (:length body)) (<= 0 (:length body) 67108864)))))
                  (every? (fn [[name value]]
                            (and (string? name) (re-matches #"[a-z0-9!#$%&'*+.^_`|~-]+" name)
                                 (string? value) (<= (count value) 8192) (re-matches #"[\t\x20-\x7e]*" value))) headers)
                  (not-any? #(contains? headers %) ["host" "connection" "transfer-encoding" "content-length" "cookie" "proxy-authorization"]))
     (throw (ex-info "Invalid outbound exchange" {:network-error :request}))))
 
+(defn- request-content
+  "One-shot request content with a declared length; the exchange never retries,
+  so the caller-owned input is read exactly once and is not closed here."
+  [type body]
+  (if (bytes? body)
+    (BytesRequestContent. ^String type (into-array (Class/forName "[B") [body]))
+    (proxy [InputStreamRequestContent] [^String type ^InputStream (:input body)]
+      (getLength [] (long (:length body))))))
+
 (defn exchange!
   "One bounded HTTPS exchange. Callers supply an explicit header allowlist and
   replacement credentials. No redirects, cookies, decompression or retries."
   [client url {:keys [method headers body maximum timeout-ms]
                :or {headers {} maximum 10485760 timeout-ms 10000}}]
-  (exchange-options! method headers body maximum timeout-ms)
+  (exchange-options! method headers body maximum timeout-ms false)
   (let [uri ((:uri-validator client) url)
         response (request! (:http client) uri maximum timeout-ms method body (assoc headers "accept-encoding" "identity"))
         encoding (get-in response [:headers "content-encoding"])]
@@ -169,11 +182,13 @@
   "One HTTPS exchange, copying the bounded response to a caller-owned output.
   Returns status, headers and actual body size only after complete success. The
   caller must stage writes: late transport/size errors may follow a valid prefix.
-  Uses the same guarded client/credentials policy as exchange!, with no redirects,
-  decompression, cookies or retries. Does not close the output."
+  A POST body may be bytes or {:input stream :length n}, sent once with the
+  declared length; the caller owns and closes the input. Uses the same guarded
+  client/credentials policy as exchange!, with no redirects, decompression,
+  cookies or retries. Does not close the output."
   [client url {:keys [method headers body maximum timeout-ms]
                :or {headers {} maximum 10485760 timeout-ms 10000}} ^OutputStream out]
-  (exchange-options! method headers body maximum timeout-ms)
+  (exchange-options! method headers body maximum timeout-ms true)
   (let [uri ((:uri-validator client) url)
         deadline (+ (System/nanoTime) (* 1000000 timeout-ms))
         remaining! (fn []
@@ -185,7 +200,7 @@
                     (.method method) (.timeout (long timeout-ms) TimeUnit/MILLISECONDS))]
     (with-open [listener (InputStreamResponseListener.)]
       (try
-        (when body (.body request (BytesRequestContent. (get headers "content-type" "application/json") (into-array (Class/forName "[B") [body]))))
+        (when body (.body request (request-content (get headers "content-type" "application/json") body)))
         (.headers request (reify java.util.function.Consumer
                             (accept [_ fields]
                               (doseq [[name value] (assoc headers "accept-encoding" "identity")]

@@ -241,9 +241,12 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   contract, as do full/partial repository exports and successful service-proxy
   responses. Proxy responses are completely staged under their configured limit
   before publication; 64 KiB copy buffers, held delivery permits and file cleanup
-  bound payload memory/disk. POST request bodies remain buffered. Local TLS and
+  bound payload memory/disk. POST request bodies stage into their own private
+  file before any remote work and are sent once with a known length; oversize
+  bodies fail with 413 before contacting the upstream. Local TLS and
   socket tests cover limits, truncation, partial-body timeout, no retries,
-  connection release, HEAD/204, sanitized errors and downstream disconnects.
+  connection release, HEAD/204, sanitized errors, downstream disconnects,
+  chunked request uploads and request-file cleanup.
 - `getRepo` walks the current stored commit/MST graph and emits one hash-checked
   block at a time into an owned temporary file. It does not rebuild the MST or
   collect record payloads into a whole-repository map. A transaction-local

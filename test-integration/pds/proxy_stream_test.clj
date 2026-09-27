@@ -151,3 +151,58 @@
             (with-open [client (HttpClient/newHttpClient)]
               (is (= 200 (:status (call-once-released client (:port server) "GET" account))))))
           (finally ((:stop! server))))))))
+
+(deftest proxy-request-bodies-stage-on-disk-and-clean-up
+  (upstream/with-service
+    (fn [{:keys [respond calls] :as remote}]
+      (let [settings (assoc (wire/config remote) :proxy-max-concurrent 2
+                            :proxy-max-request-bytes 1048576 :proxy-max-response-bytes 1024)
+            account (imports/local! settings)
+            handler (app/handler settings fixture/*ds*)
+            channels (atom []) original tempfile/open-channel!
+            data (byte-array 1048576) _ (java.util.Arrays/fill data (byte 11))
+            post (fn [body] {:uri path :request-method :post
+                             :headers {"authorization" (str "Bearer " (:accessJwt account)) "content-type" "application/test"}
+                             :body body})]
+        (reset! respond #(streaming/reply! % 200 (byte-array [1]) false))
+        (with-redefs [tempfile/open-channel! #(let [c (original)] (swap! channels conj c) c)]
+          (let [response (handler (post (java.io.ByteArrayInputStream. data)))
+                received (last @calls)]
+            (is (= 200 (:status response)))
+            (is (= [1] (vec (consume response))))
+            (is (= (vec (codec/sha256 data)) (vec (codec/sha256 (byte-array (:body received))))))
+            (is (= (str (alength data)) (get-in received [:headers "content-length"])))
+            (is (= 2 (count @channels)) "One staged request and one staged response")
+            (is (closed? @channels)))
+          (let [before (count @calls)
+                response (handler (post (java.io.ByteArrayInputStream. (byte-array 1048577))))]
+            (is (= 413 (:status response)))
+            (is (= before (count @calls)) "Oversize bodies fail before any remote work")
+            (is (closed? @channels))))
+        (let [before (count @calls)]
+          (with-redefs [tempfile/open-channel! #(throw (IOException. "private request path"))]
+            (let [response (handler (post (java.io.ByteArrayInputStream. (byte-array 1))))]
+              (is (= 503 (:status response)))
+              (is (not (.contains ^String (:body response) "private request path")))
+              (is (= before (count @calls)))))
+          (with-redefs [tempfile/open-channel! #(let [c (original)] (.close c) c)]
+            (let [response (handler (post (java.io.ByteArrayInputStream. (byte-array 1))))]
+              (is (= 503 (:status response)))
+              (is (= "ProxyUnavailable" (get (json/read-str (:body response)) "error")))
+              (is (= before (count @calls))))))
+        (let [server (http/start! settings (app/handler settings fixture/*ds*))]
+          (try
+            (with-open [client (HttpClient/newHttpClient)]
+              (let [request (-> (java.net.http.HttpRequest/newBuilder (java.net.URI/create (str "http://127.0.0.1:" (:port server) path)))
+                                (.header "Authorization" (str "Bearer " (:accessJwt account)))
+                                (.header "Content-Type" "application/test")
+                                (.POST (java.net.http.HttpRequest$BodyPublishers/ofInputStream
+                                        (reify java.util.function.Supplier (get [_] (java.io.ByteArrayInputStream. data)))))
+                                .build)
+                    response (.send client request (java.net.http.HttpResponse$BodyHandlers/ofByteArray))
+                    received (last @calls)]
+                (is (= 200 (.statusCode response)))
+                (is (= [1] (vec (.body response))))
+                (is (= (vec (codec/sha256 data)) (vec (codec/sha256 (byte-array (:body received)))))
+                    "Chunked HTTP uploads stage through the same bounded path")))
+            (finally ((:stop! server)))))))))

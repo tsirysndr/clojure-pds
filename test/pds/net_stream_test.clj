@@ -80,3 +80,27 @@
             (finally (deliver release true))))
         (reset! respond (fn [exchange] (.set (.getResponseHeaders exchange) "Content-Length" "10000000") (.sendResponseHeaders exchange 200 -1)))
         (is (= 0 (:size (net/exchange-to! client url {:method "HEAD" :maximum 1} sink))))))))
+
+(deftest streamed-request-bodies-send-a-known-length-once
+  (upstream/with-service
+    (fn [{:keys [client origin respond calls]}]
+      (let [data (byte-array 1048576) _ (java.util.Arrays/fill data (byte 7))
+            url (str origin "/xrpc/com.example.write")]
+        (reset! respond #(reply! % 200 (byte-array [1]) false))
+        (let [sink (ByteArrayOutputStream.)
+              result (net/exchange-to! client url {:method "POST" :headers {"content-type" "application/test"}
+                                                   :body {:input (java.io.ByteArrayInputStream. data) :length (alength data)}} sink)
+              received (last @calls)]
+          (is (= 200 (:status result)))
+          (is (= [1] (vec (.toByteArray sink))))
+          (is (= (vec (codec/sha256 data)) (vec (codec/sha256 (byte-array (:body received))))))
+          (is (= (str (alength data)) (get-in received [:headers "content-length"])))
+          (is (nil? (get-in received [:headers "transfer-encoding"])))
+          (is (= "application/test" (get-in received [:headers "content-type"]))))
+        (let [before (count @calls) one #(java.io.ByteArrayInputStream. (byte-array 1))]
+          (doseq [body [{:input (one) :length -1} {:input (one) :length 67108865}
+                        {:length 1} {:input (one)} {:input (byte-array 1) :length 1}]]
+            (is (thrown? Exception (net/exchange-to! client url {:method "POST" :body body} (ByteArrayOutputStream.)))))
+          (is (thrown? Exception (net/exchange! client url {:method "POST" :body {:input (one) :length 1}}))
+              "The buffered exchange keeps rejecting stream bodies")
+          (is (= before (count @calls))))))))

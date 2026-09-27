@@ -16,7 +16,7 @@ selected service retain the ordinary `MethodNotImplemented` response.
 | `PDS_APPVIEW_SERVICE` | Unset | DID with service fragment for unimplemented XRPC methods |
 | `PDS_LABELER_SERVICE` | Unset | DID with service fragment for `com.atproto.moderation.createReport` and `tools.ozone.*` |
 | `PDS_PROXY_MAX_CONCURRENT` | `16` | Preparation and response-delivery slots per handler; maximum 256 |
-| `PDS_PROXY_MAX_REQUEST_BYTES` | `5242880` | Buffered POST body limit; maximum 64 MiB |
+| `PDS_PROXY_MAX_REQUEST_BYTES` | `5242880` | Disk-staged POST body limit; maximum 64 MiB |
 | `PDS_PROXY_MAX_RESPONSE_BYTES` | `10485760` | Disk-staged upstream response limit; maximum 64 MiB |
 | `PDS_PROXY_TIMEOUT_MS` | `10000` | Upstream exchange deadline; maximum 60,000 ms |
 
@@ -31,12 +31,12 @@ service type, and an HTTPS origin as its endpoint. Credentials, URL paths, queri
 and fragments are rejected. XRPC paths are top-level paths in the protocol.
 Resolution is fresh and uses the existing independent identity limits. The
 exchange timeout begins after resolution; the proxy concurrency permit covers
-both phases, reading the bounded request body, response staging, and downstream
+both phases, staging the bounded request body, response staging, and downstream
 HTTP delivery. The normal server creates one proxy handler.
 
 ## Authentication and forwarding
 
-The proxy authenticates before reading the body or resolving the destination,
+The proxy authenticates before staging the body or resolving the destination,
 then authenticates again after DID resolution and before creating the upstream
 token. Database transactions do not span network operations. Account status,
 session revocation, and ordinary versus privileged app-password permissions are
@@ -97,11 +97,18 @@ HEAD preserves the upstream representation length without fetching the body.
 Small error envelopes are parsed separately, with a 64 KiB memory bound, then
 staging resources are closed. Direct handler callers must close owned bodies.
 
-Budget `PDS_PROXY_MAX_CONCURRENT × PDS_PROXY_MAX_RESPONSE_BYTES` for temporary
-response payload: **160 MiB by default**, separately from repository and blob
-staging budgets, plus filesystem overhead. POST request bodies still use bounded
-in-memory buffers. The upstream deadline covers response consumption as well as
-header arrival; the downstream transport has its own write deadline.
+POST request bodies are copied into their own private mode-0600 `DELETE_ON_CLOSE`
+file in 64 KiB chunks before any remote work; oversize bodies (fixed-length or
+chunked) produce 413 without contacting the upstream, and the staged bytes are
+sent exactly once with their known Content-Length. The request file closes as
+soon as the exchange finishes, before response delivery begins.
+
+Budget `PDS_PROXY_MAX_CONCURRENT × (PDS_PROXY_MAX_REQUEST_BYTES +
+PDS_PROXY_MAX_RESPONSE_BYTES)` for temporary proxy payload: **240 MiB by
+default**, separately from repository and blob staging budgets, plus filesystem
+overhead. No request or response payload is held on the JVM heap beyond one
+64 KiB copy buffer per phase. The upstream deadline covers response consumption
+as well as header arrival; the downstream transport has its own write deadline.
 
 ## Verification and remaining work
 
@@ -114,10 +121,13 @@ timeouts, rate limits, redirects, interrupted responses and malformed errors.
 Response tests additionally cover multi-megabyte chunked delivery without the
 buffered exchange helper, permits held by prepared bodies, no retained database
 connection, disk failures, HTTP disconnect cleanup, HEAD/204 behavior, and timeout
-after headers and a partial body. Local OAuth tests cover exact method/audience
-permissions and credential replacement.
+after headers and a partial body. Request tests cover megabyte fixed-length and
+chunked HTTP uploads with a known upstream Content-Length, oversize rejection
+before remote work, sanitized staging failures and request/response file cleanup.
+Local OAuth tests cover exact method/audience permissions and credential
+replacement.
 
-Request-body streaming, service-specific account abuse budgets, and interoperability
+Service-specific account abuse budgets and interoperability
 with deployed AppViews/labelers remain on the full PDS roadmap. DPoP passthrough
 and WebSocket proxying are explicitly rejected. Tests use isolated local services;
 no external account or service has been contacted to establish interoperability.

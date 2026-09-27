@@ -60,7 +60,7 @@ runnable and update this document as features land.
    bounded HTTPS delivery, retries and cross-process leases.
    [Administrative takedowns](MODERATION.md) cover accounts, records and blobs;
    content flags preserve signed repository data and isolate each account.
-10. **Service integration and migration (authenticated proxy with staged streaming responses, service tokens/replay protection, signing-key reservation, destination preparation, public data/private preference transfer and verified activation implemented):** authenticated service proxy, service
+10. **Service integration and migration (authenticated proxy with staged streaming requests/responses, service tokens/replay protection, signing-key reservation, destination preparation, public data/private preference transfer and verified activation implemented):** authenticated service proxy, service
     auth tokens, account migration/import/export and PLC operations.
     Acceptance: an external client reads and writes through this PDS and an
     account migrates between this implementation and a reference PDS.
@@ -84,14 +84,13 @@ rotating sessions, scoped app passwords, email recovery, schema-validated record
 implemented. See [the compatibility matrix](COMPATIBILITY.md) for exact coverage,
 verification evidence, and limits. Full PDS compatibility is not achieved yet.
 
-Next implementation series: OAuth inactive migration sessions, proxy
-request-body streaming, deployed migration/relay conformance and operational
-hardening. The reference PDS route surface is covered except entryway-managed
+Next implementation series: OAuth inactive migration sessions, deployed
+migration/relay conformance and operational hardening. The reference PDS route surface is covered except entryway-managed
 signing-key updates and phone verification, which do not apply to this
 deployment model.
 Implemented endpoints now have pinned input validation and observed output/event
 schema checks with required endpoint/message coverage. Authenticated service
-proxying with disk-staged response streaming is implemented; OAuth and external service interoperability
+proxying with disk-staged request and response streaming is implemented; OAuth and external service interoperability
 remain required before a full client integration can be claimed. Preserve atomic feature commits and test each protocol boundary.
 
 - Plain Clojure namespaces, explicit dependencies, and pure functions for protocol
@@ -111,9 +110,9 @@ remain required before a full client integration can be claimed. Preserve atomic
   retaining proof payloads. Imports stage hash-checked blocks on disk, verify the
   canonical graph with individual block reads, and retain only CID/path metadata.
   Publication rechecks authorization and signs the verified root without rebuilding
-  the tree. Proxy responses stage through the guarded HTTP client and stream with
-  permits held through delivery. Proxy POST bodies and internal migration
-  byte-array paths remain buffered.
+  the tree. Proxy requests and responses stage through the guarded HTTP client with
+  permits held through delivery; internal migration byte-array paths remain
+  buffered.
 - PostgreSQL is the storage backend. Migrations are transactional, serialized by
   an advisory lock, and checked for changes using SHA-256. Integration tests use
   an isolated PostgreSQL cluster and disposable schemas. The server uses a

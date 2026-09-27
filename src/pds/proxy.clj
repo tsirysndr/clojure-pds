@@ -13,8 +13,8 @@
             [pds.tempfile :as tempfile]
             [pds.service-auth :as service-auth]
             [pds.xrpc :as xrpc])
-  (:import [java.io FilterInputStream IOException OutputStream]
-           [java.nio.channels Channels]
+  (:import [java.io FilterInputStream IOException InputStream OutputStream]
+           [java.nio.channels Channels FileChannel]
            [java.util.concurrent Semaphore]))
 
 (defn service! [value]
@@ -79,6 +79,30 @@
                 :headers merge base forwarded (when (= status 401) {"WWW-Authenticate" "Bearer"})))
       :else (errors/raise! 502 "UpstreamFailure" "Upstream redirects and protocol upgrades are not supported"))))
 
+(defn- staged-request!
+  "Copy a POST body into a private temporary file before any remote work, in
+  64 KiB chunks under the configured limit. Returns the owned channel."
+  [r maximum]
+  (when (= :post (:request-method r))
+    (when-let [encoding (get-in r [:headers "content-encoding"])]
+      (when-not (= "identity" (str/lower-case encoding))
+        (errors/invalid! "Encoded proxy request bodies are not supported")))
+    (let [channel (try (tempfile/open-channel!)
+                       (catch IOException _ (errors/raise! 503 "ProxyUnavailable" "Proxy temporary storage is unavailable")))]
+      (try
+        (when-let [^InputStream input (:body r)]
+          (let [output (Channels/newOutputStream channel) buffer (byte-array 65536)]
+            (loop [size 0]
+              (let [n (.read input buffer 0 (int (min (alength buffer) (inc (- maximum size)))))]
+                (when-not (= -1 n)
+                  (when (> (+ size n) maximum)
+                    (errors/raise! 413 "PayloadTooLarge" "Request body exceeds the limit"))
+                  (try (.write output buffer 0 n)
+                       (catch IOException _ (errors/raise! 503 "ProxyUnavailable" "Proxy temporary storage is unavailable")))
+                  (recur (+ size n)))))))
+        channel
+        (catch Throwable error (.close channel) (throw error))))))
+
 (defn- staged-response! [client url options method release!]
   (let [channel (try (tempfile/open-channel!)
                     (catch IOException _ (errors/raise! 503 "ProxyUnavailable" "Proxy temporary storage is unavailable")))
@@ -138,21 +162,23 @@
               ;; Authenticate before any remote lookup or reading a request body.
               (db/transact! ds #(service-auth/authorize! (auth/authenticate! % config r) method target))
               (let [service (service! target)
-                    body (when (= :post (:request-method r)) (request/body-bytes r (:proxy-max-request-bytes config)))
-                    _ (when (and body (get-in r [:headers "content-encoding"])
-                                 (not= "identity" (str/lower-case (get-in r [:headers "content-encoding"]))))
-                        (errors/invalid! "Encoded proxy request bodies are not supported"))
-                    origin (destination! resolver service)
-                    query (:query-string r)
-                    url (str origin uri (when (seq query) (str "?" query)))
-                    ;; Recheck account/session after remote resolution. No DB
-                    ;; transaction spans DID fetches or the upstream request.
-                    token (db/transact! ds (fn [conn]
-                                            (:token (service-auth/issue! conn config (auth/authenticate! conn config r)
-                                                                        {"aud" target "lxm" method}))))
-                    headers (cond-> (assoc (request-headers r) "authorization" (str "Bearer " token))
-                              body (update "content-type" #(or % "application/octet-stream")))
-                    options {:method (str/upper-case (name (:request-method r))) :headers headers :body body
-                             :maximum (:proxy-max-response-bytes config) :timeout-ms (:proxy-timeout-ms config)}]
-                (staged-response! (:http-client config) url options (:request-method r) release!))
+                    ^FileChannel body (staged-request! r (:proxy-max-request-bytes config))]
+                (try
+                  (let [origin (destination! resolver service)
+                        query (:query-string r)
+                        url (str origin uri (when (seq query) (str "?" query)))
+                        ;; Recheck account/session after remote resolution. No DB
+                        ;; transaction spans DID fetches or the upstream request.
+                        token (db/transact! ds (fn [conn]
+                                                (:token (service-auth/issue! conn config (auth/authenticate! conn config r)
+                                                                            {"aud" target "lxm" method}))))
+                        headers (cond-> (assoc (request-headers r) "authorization" (str "Bearer " token))
+                                  body (update "content-type" #(or % "application/octet-stream")))
+                        options {:method (str/upper-case (name (:request-method r))) :headers headers
+                                 :body (when body {:input (tempfile/input body) :length (.size body)})
+                                 :maximum (:proxy-max-response-bytes config) :timeout-ms (:proxy-timeout-ms config)}]
+                    (staged-response! (:http-client config) url options (:request-method r) release!))
+                  ;; The exchange has fully completed either way by now; only the
+                  ;; staged response may outlive this request scope.
+                  (finally (when body (.close body)))))
               (catch Throwable error (release!) (throw error))))))))))
