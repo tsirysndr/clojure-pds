@@ -179,7 +179,10 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   `bash scripts/test-conformance.sh` additionally uses pinned `@atproto/repo`
   0.10.14 to verify a signed export, inclusion/absence proofs, false-claim rejection,
   and rootless CARs obtained over HTTP. This covers repository serialization and
-  proofs, not relay/client federation. CAR decoding verifies each block's content
+  proofs, not relay/client federation. CAR decoding has a bounded InputStream
+  visitor with hash checks before callbacks, strict framing/EOF handling, duplicate
+  byte accounting and caller-owned input lifetime. The byte-array decoder uses
+  this reader while retaining its existing buffered return shape. CAR decoding verifies each block's content
   hash. The complete-repository verifier also accepts upstream-generated exports
   signed on both curves, including empty trees and trees after mixed mutations.
   It validates the expected DID/signature, version-3 commit fields, revision

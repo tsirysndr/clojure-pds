@@ -61,3 +61,27 @@ actual response bytes to the pinned upstream repository/proof verifier.
 Repeated exports also reuse one pooled connection past pgjdbc's statement-cache
 threshold, including after a failed transaction, with no temporary state left
 behind and the connection available before response-body consumption.
+
+## CAR reader foundation
+
+The shared CAR v1 decoder uses a stream visitor that reads one frame at a time,
+checks each CID and hash before invoking the visitor, and never relies on
+`InputStream.available()` to determine EOF. Individual reads are at most 64 KiB;
+block payloads are bounded to 1 MiB and the complete encoded input defaults to
+64 MiB. The total includes headers, length prefixes and repeated blocks. A frame
+that cannot fit in the remaining budget is rejected before allocating its payload.
+The reader accepts the existing CIDv1 SHA-256 raw/DAG-CBOR subset, preserves wire
+order and visits duplicate occurrences. The existing byte-array decoder collects
+these callbacks into its original deduplicated block map.
+
+The input remains owned by the caller. Visitor exceptions and read failures stop
+parsing immediately; thread interruption is checked between reads. Callers must
+provide transport deadlines and stage visitor effects until successful EOF and
+repository/signature verification: a valid prefix does not establish a valid
+archive or repository. This reader is a prerequisite for staged imports; the
+public import endpoint still buffers the archive and decoded repository today.
+
+Unit tests cover fragmented input, empty/rootless archives, the largest supported
+block, exact byte limits, duplicate accounting, malformed lengths, incomplete
+frames, invalid CIDs, hash mismatches, visitor failures and caller ownership.
+The framing follows the [CAR v1 specification](https://ipld.io/specs/transport/car/carv1/).
