@@ -11,27 +11,36 @@
             [pds.net :as net]
             [pds.plc-keys :as keys]
             [pds.plc-reconcile :as reconcile]
+            [pds.plc-recovery-keys :as recovery-keys]
             [pds.signing-keys :as signing-keys]))
 
-(def usage "mise exec -- clojure -M:identity status DID\nmise exec -- clojure -M:identity rotate-plc-key DID EXPECTED_OPERATION_CID\nmise exec -- clojure -M:identity rotate-signing-key DID EXPECTED_SIGNING_DID_KEY\nmise exec -- clojure -M:identity inspect-plc DID\nmise exec -- clojure -M:identity reconcile-plc DID LOCAL_CID QUEUED_CID_OR_- REMOTE_CID")
+(def usage "mise exec -- clojure -M:identity status DID\nmise exec -- clojure -M:identity rotate-plc-key DID EXPECTED_OPERATION_CID\nmise exec -- clojure -M:identity rotate-signing-key DID EXPECTED_SIGNING_DID_KEY\nmise exec -- clojure -M:identity inspect-plc DID\nmise exec -- clojure -M:identity reconcile-plc DID LOCAL_CID QUEUED_CID_OR_- REMOTE_CID\nmise exec -- clojure -M:identity set-recovery-keys DID EXPECTED_OPERATION_CID [RECOVERY_DID_KEY ...]")
 (defn command! [args]
   (let [[command did expected queued remote] args]
     (when-not (or (and (#{"status" "inspect-plc"} command) (= 2 (count args)))
+                  (and (= "set-recovery-keys" command) (<= 3 (count args) 7))
                   (and (= "reconcile-plc" command) (= 5 (count args)))
                   (and (#{"rotate-plc-key" "rotate-signing-key"} command) (= 3 (count args))))
       (throw (ex-info usage {:usage true})))
     (case command
+      "set-recovery-keys" (recovery-keys/identifiers! did expected (vec (drop 3 args)))
       "reconcile-plc" (reconcile/identifiers! did expected queued remote)
       ("rotate-plc-key" "inspect-plc") (keys/identifiers! did expected)
       (signing-keys/identifiers! did expected))
     (cond-> {:command command :did did :expected expected}
+      (= "set-recovery-keys" command) (assoc :recovery-keys (vec (drop 3 args)))
       (= "reconcile-plc" command) (assoc :queued queued :remote remote))))
 
-(defn execute! [ds settings {:keys [command did expected queued remote]}]
+(defn execute! [ds settings {:keys [command did expected queued remote recovery-keys]}]
   (case command
     "status" (signing-keys/status! ds did)
     "inspect-plc" (reconcile/inspect! ds settings did)
     "reconcile-plc" (reconcile/reconcile! ds settings did expected queued remote)
+    "set-recovery-keys"
+    (let [queued (recovery-keys/enqueue! ds settings did expected recovery-keys)]
+      (if (#{"completed" "unchanged"} (:state queued)) queued
+        (do (handles/process-one! ds settings did)
+            (recovery-keys/result! ds did expected recovery-keys))))
     "rotate-signing-key"
     (let [queued (signing-keys/enqueue! ds settings did expected)]
       (when-not (= "completed" (:state queued)) (handles/process-one! ds settings did))

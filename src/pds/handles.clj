@@ -10,6 +10,7 @@
             [pds.plc :as plc]
             [pds.plc-directory :as directory]
             [pds.plc-keys :as keys]
+            [pds.plc-recovery-keys :as recovery-keys]
             [pds.signing-keys :as signing-keys]
             [pds.protocol.codec :as codec]
             [pds.protocol.syntax :as syntax])
@@ -100,11 +101,12 @@
                 (db/execute! conn "UPDATE plc_identities SET operation = ?, operation_cid = ?, confirmed_at = now(), status = 'ready' WHERE did = ?"
                              (:operation job) (:operation_cid job) (:did job))
                 (keys/install! conn job)
+                (recovery-keys/install! conn job)
                 (signing-keys/install! conn settings account job)
                 (db/execute! conn "DELETE FROM handle_updates WHERE did = ?" (:did job))
                 (case (:operation_kind job)
                   "signing" nil ;; Installation already emits identity and sync atomically.
-                  ("submit" "rotate") (events/append! conn (:did job) "identity" {"did" (:did job) "handle" (:handle account)})
+                  ("submit" "rotate" "recovery") (events/append! conn (:did job) "identity" {"did" (:did job) "handle" (:handle account)})
                   (apply-handle! conn account (:target_handle job)))
                 :updated))))
         (do (db/transact! ds

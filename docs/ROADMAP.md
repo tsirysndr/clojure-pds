@@ -124,7 +124,9 @@ remain required before a full client integration can be claimed. Preserve atomic
   startup. [PLC conflict reconciliation](PLC-RECONCILIATION.md) explicitly adopts
   compatible verified history, preserves required queued keys, proves safe queue
   supersession and fences stale workers with retry-safe public receipts.
-  Recovery-key lifecycle, recovery-fork submission and migration conformance
+  [Account-held recovery-key management](PLC-RECOVERY-KEYS.md) supports ordered
+  replacement and removal, retains the PDS key, and records confirmed changes
+  through the durable queue. Recovery-fork submission and migration conformance
   remain pending. General PLC resolution verifies audit history and derives the current document, including
   for hosted accounts. It does not fall back to a stale local snapshot. Directory
   timestamps and history completeness/freshness remain trusted assertions.

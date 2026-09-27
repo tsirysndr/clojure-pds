@@ -325,13 +325,19 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
 
 1. Expanded behavioral conformance/catalog coverage as endpoints and protocol
    features are added, including deployed Lexicon publisher interoperability.
-2. Recovery-key lifecycle, recovery-fork submission and deployed
+2. Recovery-fork submission, browser recovery-key management and deployed
    migration/key-rotation conformance. [Managed control/signing-key rotation](KEY-ROTATION.md)
    has an operator CLI, durable retries and public completion receipts. Signing-key
    rotation preserves the MST root and records, pauses signed work during pending
    PLC publication and emits identity/sync checkpoints after confirmation. Local
    TLS/PostgreSQL/HTTP/WebSocket tests and upstream CAR verification cover these paths;
    public-directory and relay interoperability remain unverified.
+   [Account-held recovery-key management](PLC-RECOVERY-KEYS.md) has an operator CLI
+   for ordered replacement/removal and existing email-authorized owner XRPC flows.
+   Tests cover bounded key lists, no-op behavior, immutable retries, receipts,
+   account/repository preservation, concurrency, rollback, stale workers and
+   conflict reconciliation. The pinned PLC library verifies key ordering and the
+   removed higher-priority key's remaining recovery authority.
    [Offline master-key rewrapping](MASTER-KEY.md) covers repository/PLC keys, pending
    replacements and TOTP secrets with atomic rollback and startup key checks.
    Legacy sessions/app passwords are invalidated; OAuth access/refresh and queued

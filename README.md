@@ -165,6 +165,8 @@ same operation after restart. Permanent failures remain reserved for an explicit
 signup retry; inspect `plc_identities.status` and `last_error` for sanitized status.
 Operators can [rotate managed control and repository signing keys](docs/KEY-ROTATION.md)
 with `clojure -M:identity`. Control-key rotation preserves recovery priority.
+The [recovery-key command](docs/PLC-RECOVERY-KEYS.md) replaces, reorders or removes
+account-held public recovery keys while retaining PDS control and durable retries.
 Signing-key rotation creates a new signed commit over the same records and emits
 identity/sync checkpoints. PLC changes resume through the durable identity worker;
 hosted web signing-key changes commit atomically.

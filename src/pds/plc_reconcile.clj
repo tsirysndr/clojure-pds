@@ -11,6 +11,7 @@
             [pds.plc :as plc]
             [pds.plc-directory :as directory]
             [pds.plc-keys :as keys]
+            [pds.plc-recovery-keys :as recovery-keys]
             [pds.protocol.codec :as codec]
             [pds.signing-keys :as signing]))
 
@@ -144,6 +145,9 @@
                     ;; Rotation receipts report the head that actually confirmed
                     ;; the installed key, including a descendant or recovery fork.
                     (when control? (keys/install! conn (assoc pending :operation_cid remote)))
+                    (when (and (= "recovery" (:operation_kind pending))
+                               (= (get operation "rotationKeys") (get (codec/decode (:operation pending)) "rotationKeys")))
+                      (recovery-keys/install! conn (assoc pending :operation_cid remote)))
                     (when signing? (signing/install! conn settings (assoc (:account current) :handle handle)
                                                     (assoc pending :operation_cid remote)))
                     (db/execute! conn "DELETE FROM handle_updates WHERE did = ?" did)

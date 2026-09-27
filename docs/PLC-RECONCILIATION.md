@@ -52,6 +52,10 @@ emitting more events. A rotation installed during reconciliation also gets its
 normal rotation receipt; its `operationCid` is the directory head that confirmed
 the adopted key, which can differ from the originally queued operation CID.
 Receipts describe completed actions, not necessarily current identity state.
+For a pending [recovery-key list change](PLC-RECOVERY-KEYS.md), a key-change receipt
+is written only when the adopted head contains the exact requested ordered list.
+Superseded jobs with different resulting keys do not produce completion receipts
+for a key list that is no longer published.
 
 ## Why a queue row cannot simply be deleted
 
