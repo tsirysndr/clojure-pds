@@ -83,7 +83,28 @@ OAuth PAR accepts `include:` and freezes the resolved schemas for consent and
 initial issuance. Access tokens store immutable effective permissions; refresh
 can update the session's schema snapshots. Consent and connected-app management
 show localized set summaries and expandable details. See [OAuth integration](OAUTH.md#included-permission-sets).
-Dynamic record validation is not yet connected to this resolver.
+## Record-schema admission
+
+`pds.lexicon-schema/record-catalog!` prepares a closed graph of record definitions
+before remote schemas can be used as validator instructions. Its lookup dependency
+must return authenticated documents. Each NSID is looked up once per graph, including
+recursive references. Only reachable definitions enter the resulting catalog;
+unrelated endpoint or future-type definitions do not prevent record validation.
+
+The compiler checks constraint types and bounds, record keys, required/nullable
+properties, supported formats, local and cross-document references, and union
+target types. Unknown instructions in reachable definitions are rejected rather
+than silently ignored. References to records must retain the referenced record's
+`$type` during value validation. Recursive containers are allowed; validation of
+actual data retains its depth limit.
+
+Compilation is bounded to 32 documents, 1,000,000 encoded bytes per document,
+4 MiB total, 10,000 schema nodes and depth 64. It returns no partial catalog on
+resolution or admission failure. Tests cover all 17 bundled record schemas,
+the upstream record fixture, cross-document recursion, invalid instructions,
+missing references, union target confusion, nested record tags and graph bounds.
+
+Dynamic record writes are not yet connected to this compiler and resolver.
 
 Sources: [Lexicon publication and resolution](https://atproto.com/specs/lexicon#lexicon-publication-and-resolution),
 [permission sets](https://atproto.com/specs/permission#permission-sets).

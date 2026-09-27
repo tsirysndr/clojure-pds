@@ -92,6 +92,8 @@
        "unknown" (require! (plain-object? value) path "must be an object")
        "ref" (let [[id target] (definition catalog context (get schema "ref"))]
                (when-not target (throw (ex-info "Unresolved Lexicon reference" {:ref (get schema "ref")})))
+               (when (= "record" (get target "type"))
+                 (require! (= id (get value "$type")) (str path ".$type") "must match the referenced record"))
                (validate! catalog id target value path (inc depth)))
        "union" (let [tag (get value "$type")
                      refs (set (map #(canonical-ref context %) (get schema "refs")))]
