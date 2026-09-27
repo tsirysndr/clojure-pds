@@ -52,8 +52,9 @@ PostgreSQL and Redis services, a local S3 emulator, the pinned upstream reposito
 verifier, and the email Worker contract tests. It needs no deployment credentials.
 
 `PG_BIN=/path/to/postgresql/bin bash scripts/test-postgres.sh` selects another
-PostgreSQL installation. The script stops its temporary cluster after testing;
-files remain in the OS temporary directory for diagnosis. It never changes an
+PostgreSQL installation. The script stops its temporary cluster after testing and
+removes it on success; failed runs retain their files in the OS temporary directory
+for diagnosis. It never changes an
 existing database. Alternatively set `PDS_TEST_DATABASE_URL` and database
 credentials, then run `mise exec -- clojure -M:integration`. Each integration test
 creates and drops its own randomly named schema; the role needs schema privileges.
