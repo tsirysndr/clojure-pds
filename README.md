@@ -460,7 +460,8 @@ a duplicate. Receipts are retained indefinitely; plan retention for larger syste
   and large-repository performance work remain unfinished.
   `com.atproto.sync.listReposByCollection` enumerates active repositories holding
   records in one collection through an indexed keyset scan (limit 1–2000, default
-  500).
+  500). `com.atproto.temp.checkSignupQueue` reports `activated=true` for
+  authenticated accounts; this PDS has no signup queue.
 - Commit events persist signed CAR proofs and previous-value operations for
   inductive verification. Records are limited to 1,000,000 encoded bytes and
   commit proofs to 2,000,000 bytes; oversized batches roll back. The upstream

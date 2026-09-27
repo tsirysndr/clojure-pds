@@ -87,7 +87,8 @@
     "com.atproto.sync.listBlobs",
     "com.atproto.sync.listRepos",
     "com.atproto.sync.listReposByCollection",
-    "com.atproto.sync.subscribeRepos"
+    "com.atproto.sync.subscribeRepos",
+    "com.atproto.temp.checkSignupQueue"
   ],
   "endpointRoots": [
     "app.bsky.actor.getPreferences",
@@ -159,7 +160,8 @@
     "com.atproto.sync.listBlobs",
     "com.atproto.sync.listRepos",
     "com.atproto.sync.listReposByCollection",
-    "com.atproto.sync.subscribeRepos"
+    "com.atproto.sync.subscribeRepos",
+    "com.atproto.temp.checkSignupQueue"
   ],
   "schemas": {
     "app.bsky.actor.defs": "46ad2031e7358d9ce28f7c9782ccb02f50182e3268129762055037585448fc6e",
@@ -268,6 +270,7 @@
     "com.atproto.sync.listBlobs": "26671c6ff5946f09ec633019d20dc3fe8c86af7675f3f9666397f25f8d69d7f1",
     "com.atproto.sync.listRepos": "afb3599e6075c8b413cf3431e3d0ce0e66aa7eff681bcdfd0bf88aefdf0b52d1",
     "com.atproto.sync.listReposByCollection": "bf5b12386212596edbcd9b074c7e7db55b373846cf5dfb0d4b5a008cdc935f37",
-    "com.atproto.sync.subscribeRepos": "bfc3e22bfeae701736fbbbd68a56f0b4b8b66ef4e0e10f1c281b2de61c3328ae"
+    "com.atproto.sync.subscribeRepos": "bfc3e22bfeae701736fbbbd68a56f0b4b8b66ef4e0e10f1c281b2de61c3328ae",
+    "com.atproto.temp.checkSignupQueue": "ccb97807dabddf2f5703b1b8034362af47600fcf8d034395d0c603e156fca7d9"
   }
 }

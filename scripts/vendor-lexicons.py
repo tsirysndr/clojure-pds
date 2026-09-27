@@ -90,6 +90,7 @@ ENDPOINT_ROOTS = [
     "com.atproto.sync.listRepos",
     "com.atproto.sync.listReposByCollection",
     "com.atproto.sync.subscribeRepos",
+    "com.atproto.temp.checkSignupQueue",
 ]
 ROOTS = RECORD_ROOTS + ENDPOINT_ROOTS
 

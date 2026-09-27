@@ -56,6 +56,10 @@
    (empty-route (authenticated ds settings {:allow-deactivated? true} (fn [conn account r] (accounts/deactivate! conn account (request/json-body r)))))
    "/xrpc/com.atproto.server.activateAccount"
    (empty-route #(identity/bounded-call! resolver (fn [] (migration/activate! ds settings resolver %))))
+   "/xrpc/com.atproto.temp.checkSignupQueue"
+   ;; This deployment has no signup queue; authenticated accounts are active
+   ;; immediately, including deactivated migration destinations.
+   (json-route :get (authenticated ds settings {:allow-deactivated? true} (fn [_ _ _] {:activated true})))
    "/xrpc/com.atproto.server.requestAccountDelete"
    (empty-route (authenticated ds settings {:allow-deactivated? true} (fn [conn account _] (accounts/request-deletion! conn settings account))))
    "/xrpc/com.atproto.server.deleteAccount"

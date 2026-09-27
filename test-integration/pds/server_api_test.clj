@@ -52,6 +52,8 @@
           (is (= 200 (:status (xrpc client port "GET" "com.atproto.server.getSession" nil access))))
           (is (= 401 (:status (xrpc client port "GET" "com.atproto.server.getSession" nil refresh))))
           (is (= 401 (:status (xrpc client port "GET" "com.atproto.server.getSession" nil nil))))
+          (is (= 401 (:status (xrpc client port "GET" "com.atproto.temp.checkSignupQueue" nil nil))))
+          (is (= {"activated" true} (:body (xrpc client port "GET" "com.atproto.temp.checkSignupQueue" nil access))))
           (is (= 200 (:status (handler {:request-method :get :uri "/.well-known/did.json" :headers {"host" "alice.example.com"}}))))
           (is (= "did:web:alice.example.com" (:body (handler {:request-method :get :uri "/.well-known/atproto-did" :headers {"host" "alice.example.com"}}))))
           (let [token (email-token "Confirm your PDS email")
