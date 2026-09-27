@@ -68,7 +68,7 @@
                (= kind "params") (assoc :query-string (query-string value))))))
 
 (deftest catalog-input-contracts
-  (is (= 68 (count (get index "endpointRoots")))))
+  (is (= 69 (count (get index "endpointRoots")))))
 
 (deftest required-optional-nullable-fields-agree-with-pinned-schemas
   (doseq [{:keys [id kind value valid]} fixtures]

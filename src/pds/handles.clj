@@ -42,8 +42,8 @@
     (registry/release! conn (:did account) (:handle account))
     (events/append! conn (:did account) "identity" {"did" (:did account) "handle" handle})))
 
-(defn- snapshot! [conn settings request]
-  (let [account (auth/authenticate! conn settings request)]
+(defn- snapshot! [conn account-fn]
+  (let [account (account-fn conn)]
     {:account account
      :plc (first (db/query conn "SELECT * FROM plc_identities WHERE did = ? AND status = 'ready'" (:did account)))
      :public-key (:public_key (first (db/query conn "SELECT public_key FROM repositories WHERE did = ?" (:did account))))
@@ -116,9 +116,9 @@
                             (long (min 3600 (* 5 (Math/pow 2 (min 10 (dec (:attempts job))))))) (:did job) (:lease job)))
             :pending)))))
 
-(defn update! [ds settings request body]
+(defn- update-with! [ds settings account-fn body]
   (let [handle (normalize! settings (get body "handle"))
-        snapshot (db/transact! ds #(snapshot! % settings request))
+        snapshot (db/transact! ds #(snapshot! % account-fn))
         {:keys [account pending]} snapshot did (:did account)]
     (when (and pending (or (not= "handle" (:operation_kind pending)) (not= handle (:target_handle pending))))
       (errors/raise! 409 "IdentityUpdatePending" "Finish the pending handle update first"))
@@ -128,7 +128,7 @@
             operation (when (and plc? (nil? pending)) (prepare-operation settings snapshot handle))]
         (db/transact! ds
           (fn [conn]
-            (let [{fresh :account job :pending current :plc} (snapshot! conn settings request)]
+            (let [{fresh :account job :pending current :plc} (snapshot! conn account-fn)]
               (when-not (= did (:did fresh)) (errors/raise! 409 "IdentityMismatch" "Account changed"))
               (if plc?
                 (if job
@@ -149,6 +149,21 @@
             (when-not (= handle (:handle (first (db/query conn "SELECT handle FROM accounts WHERE did = ?" did))))
               (errors/raise! 503 "IdentityUpdatePending" "Handle update is pending; retry the same handle after directory confirmation"))))))
     nil))
+
+(defn update! [ds settings request body]
+  (update-with! ds settings #(auth/authenticate! % settings request) body))
+
+(defn admin-update!
+  "Operator handle change through the same reservation, verification and
+  durable directory flow as the owner endpoint."
+  [ds settings body]
+  (let [did (get body "did")]
+    (when-not (syntax/did? did) (errors/invalid! "Invalid DID"))
+    (update-with! ds settings
+                  (fn [conn]
+                    (or (first (db/query conn "SELECT * FROM accounts WHERE did = ? AND status IN ('active', 'deactivated', 'taken_down')" did))
+                        (errors/raise! 400 "AccountNotFound" "Account was not found")))
+                  body)))
 
 (defn recommended [conn settings account]
   (let [repo (first (db/query conn "SELECT public_key FROM repositories WHERE did = ?" (:did account)))

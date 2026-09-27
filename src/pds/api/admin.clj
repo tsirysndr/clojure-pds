@@ -3,6 +3,7 @@
             [pds.admin-accounts :as admin-accounts]
             [pds.api.server :as server]
             [pds.db :as db]
+            [pds.handles :as handles]
             [pds.invites :as invites]
             [pds.moderation :as moderation]
             [pds.request :as request]))
@@ -13,7 +14,12 @@
     (db/transact! ds #(f % r))))
 
 (defn routes [ds settings]
-  {"/xrpc/com.atproto.admin.updateAccountPassword"
+  {"/xrpc/com.atproto.admin.updateAccountHandle"
+   ;; Owns its transactions: directory I/O must stay outside database locks.
+   (server/empty-route (fn [r]
+                         (admin/authenticate! settings r)
+                         (handles/admin-update! ds settings (request/json-body r))))
+   "/xrpc/com.atproto.admin.updateAccountPassword"
    (server/empty-route (authenticated ds settings #(admin-accounts/update-password! %1 (request/json-body %2))))
    "/xrpc/com.atproto.admin.updateAccountEmail"
    (server/empty-route (authenticated ds settings #(admin-accounts/update-email! %1 (request/json-body %2))))

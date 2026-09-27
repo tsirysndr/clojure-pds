@@ -33,6 +33,7 @@ ENDPOINT_ROOTS = [
     "com.atproto.admin.searchAccounts",
     "com.atproto.admin.sendEmail",
     "com.atproto.admin.updateAccountEmail",
+    "com.atproto.admin.updateAccountHandle",
     "com.atproto.admin.updateAccountPassword",
     "com.atproto.admin.updateSubjectStatus",
     "com.atproto.identity.getRecommendedDidCredentials",

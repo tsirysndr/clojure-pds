@@ -9,6 +9,7 @@
             [pds.events :as events]
             [pds.handles :as handles]
             [pds.http :as http]
+            [pds.invites-test :as invites-test]
             [pds.plc :as plc]
             [pds.plc-directory :as directory]
             [pds.plc-directory-test :as directory-test]
@@ -54,6 +55,26 @@
           (is (= "handle.invalid" (get-in (call "GET" (str "com.atproto.identity.resolveIdentity?identifier=" did) nil nil) [:body "handle"])))
           (is (= 400 (:status (update "wrong.example.net"))))
           (is (= "alice.custom.example.net" (current-handle did)))))
+      (finally ((:stop! server))))))
+
+(deftest administrative-handle-update-uses-the-owner-flow
+  (let [settings (assoc (api/settings) :admin-password invites-test/admin-password)
+        alice (accounts/create! fixture/*ds* settings (provision-test/signup))
+        did (:did alice)
+        server (http/start! settings (app/handler settings fixture/*ds*))]
+    (try
+      (with-open [client (HttpClient/newHttpClient)]
+        (let [admin #(invites-test/admin-call client (:port server) "POST" "com.atproto.admin.updateAccountHandle" %)]
+          (is (= 401 (:status (api/xrpc client (:port server) "POST" "com.atproto.admin.updateAccountHandle"
+                                        {"did" did "handle" "alicia.example.com"} (:accessJwt alice)))))
+          (is (= 400 (:status (admin {"did" "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa" "handle" "ghost.example.com"}))))
+          (is (= 400 (:status (admin {"did" did "handle" "bad handle"}))))
+          (is (= 200 (:status (admin {"did" did "handle" "ALICIA.example.com"}))))
+          (is (= "alicia.example.com" (current-handle did)))
+          (is (= 2 (count (changes did))) "Signup and the admin change each emit one identity event")
+          (is (= 200 (:status (api/xrpc client (:port server) "POST" "com.atproto.server.deactivateAccount" {} (:accessJwt alice)))))
+          (is (= 200 (:status (admin {"did" did "handle" "renamed.example.com"}))))
+          (is (= "renamed.example.com" (current-handle did)))))
       (finally ((:stop! server))))))
 
 (deftest revoked-session-during-custom-domain-check-cannot-change-handle
