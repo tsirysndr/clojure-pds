@@ -9,6 +9,7 @@
             [pds.identity :as identity]
             [pds.plc :as plc]
             [pds.plc-directory :as directory]
+            [pds.plc-keys :as keys]
             [pds.protocol.codec :as codec]
             [pds.protocol.syntax :as syntax])
   (:import [java.util UUID]))
@@ -79,6 +80,7 @@
     (let [outcome (try
                     (let [op (codec/decode (:operation job))]
                       (when-not (= (:operation_cid job) (plc/operation-cid op)) (throw (ex-info "Stored operation mismatch" {:retryable false})))
+                      (keys/validate-job! settings job op)
                       (directory/ensure-operation! (:http-client settings) (:directory_url job) (:did job) op
                                                    #(when (:external_handle job) (verify-external! settings (:did job) (:target_handle job))))
                       {:success true})
@@ -95,8 +97,9 @@
                 ;; do not undo a previously authorized directory change.
                 (db/execute! conn "UPDATE plc_identities SET operation = ?, operation_cid = ?, confirmed_at = now(), status = 'ready' WHERE did = ?"
                              (:operation job) (:operation_cid job) (:did job))
+                (keys/install! conn job)
                 (db/execute! conn "DELETE FROM handle_updates WHERE did = ?" (:did job))
-                (if (= "submit" (:operation_kind job))
+                (if (#{"submit" "rotate"} (:operation_kind job))
                   (events/append! conn (:did job) "identity" {"did" (:did job) "handle" (:handle account)})
                   (apply-handle! conn account (:target_handle job)))
                 :updated))))

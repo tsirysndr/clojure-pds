@@ -32,6 +32,7 @@
          :main-opts ["-m" "rebel-readline.main"]}
   :integration {:extra-paths ["test" "test-integration"]
                 :main-opts ["-m" "pds.test-runner" "test" "test-integration"]}
+  :identity {:main-opts ["-m" "pds.identity-admin"]}
   :migrate {:main-opts ["-m" "pds.db"]}
   :test {:extra-paths ["test"]
          :main-opts ["-m" "pds.test-runner"]}}}

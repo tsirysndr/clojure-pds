@@ -316,7 +316,9 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
 
 1. Expanded behavioral conformance/catalog coverage as endpoints and protocol
    features are added, including deployed Lexicon publisher interoperability.
-2. Signing/rotation key lifecycle, conflicted-operation administration, and migration.
+2. Repository signing-key rotation, recovery/master-key lifecycle, conflicted-operation
+   administration, and migration. [Managed PLC control-key rotation](KEY-ROTATION.md)
+   now has an operator CLI, durable retries and public completion receipts.
 3. Remaining administrative APIs and broader account recovery controls.
 4. OAuth authorization server: inactive migration sessions and deployed
    reference-client interoperability. Account-status permission semantics are not

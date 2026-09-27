@@ -161,6 +161,10 @@ recovery key, or sign in after the background worker finishes. Retryable failure
 use exponential backoff from 5 seconds to 1 hour; expired worker leases resume the
 same operation after restart. Permanent failures remain reserved for an explicit
 signup retry; inspect `plc_identities.status` and `last_error` for sanitized status.
+Operators can [rotate the managed PLC control key](docs/KEY-ROTATION.md) with
+`clojure -M:identity`, using an expected operation CID. Rotation preserves recovery
+key priority and resumes through the durable identity worker after interruptions.
+
 Already active accounts use `createSession`, not repeated signup. Account deletion
 erases local private keys and content but does not tombstone the public PLC DID.
 
