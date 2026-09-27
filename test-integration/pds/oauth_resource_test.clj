@@ -17,6 +17,7 @@
             [pds.oauth.resource :as resource]
             [pds.proxy-api-test :as wire]
             [pds.proxy-test :as upstream]
+            [pds.response-body :as body]
             [pds.service-auth-test :as jwt]
             [pds.xrpc :as xrpc])
   (:import [java.io ByteArrayInputStream]
@@ -42,8 +43,14 @@
                                                      {"htm" (str/upper-case (name method)) "htu" (str (get-in env [:settings :public-url]) uri)
                                                       "ath" (crypto/digest-token (:access_token issued))} claim-overrides))}})))
 (defn call [handler request & [body]]
-  (let [response (handler (cond-> request body (assoc :body (ByteArrayInputStream. (.getBytes (json/write-str body) "UTF-8")))))]
-    (assoc response :json (try (json/read-str (:body response)) (catch Exception _ nil)))))
+  (let [response (handler (cond-> request body (assoc :body (ByteArrayInputStream. (.getBytes (json/write-str body) "UTF-8")))))
+        response (if (body/stream? (:body response))
+                   (with-open [stream (:body response)]
+                     (assoc response :body (.readAllBytes ^java.io.InputStream (:input stream))))
+                   response)]
+    (assoc response :json (try (json/read-str (if (bytes? (:body response))
+                                               (String. ^bytes (:body response) "UTF-8") (:body response)))
+                              (catch Exception _ nil)))))
 
 (deftest bound-resource-proofs-nonces-and-no-bearer-fallback
   (let [env (token/env) issued (mint env "atproto transition:generic") handler (app/handler (settings env) fixture/*ds*)

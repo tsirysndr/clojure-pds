@@ -1,8 +1,9 @@
 (ns pds.net
   (:require [clojure.string :as str])
-  (:import [java.net URI InetAddress InetSocketAddress]
+  (:import [java.io InputStream OutputStream]
+           [java.net URI InetAddress InetSocketAddress]
            [java.util.concurrent CompletableFuture TimeUnit]
-           [org.eclipse.jetty.client HttpClient BufferingResponseListener BytesRequestContent Result]
+           [org.eclipse.jetty.client HttpClient BufferingResponseListener BytesRequestContent InputStreamResponseListener Result]
            [org.eclipse.jetty.http HttpCookieStore$Empty]
            [org.eclipse.jetty.util Promise SocketAddressResolver SocketAddressResolver$Async]))
 
@@ -142,21 +143,81 @@
        (throw (ex-info "Encoded response is unsupported" {:network-error :encoding})))
      response)))
 
-(defn exchange!
-  "One bounded HTTPS exchange. Callers supply an explicit header allowlist and
-  replacement credentials. No redirects, cookies, decompression or retries."
-  [client url {:keys [method headers body maximum timeout-ms]
-               :or {headers {} maximum 10485760 timeout-ms 10000}}]
+(defn- exchange-options! [method headers body maximum timeout-ms]
   (when-not (and (#{"GET" "HEAD" "POST"} method) (<= 1 maximum 67108864) (<= 1 timeout-ms 60000)
                  (or (nil? body) (and (= method "POST") (bytes? body) (<= (alength ^bytes body) 67108864)))
                  (every? (fn [[name value]]
                            (and (string? name) (re-matches #"[a-z0-9!#$%&'*+.^_`|~-]+" name)
                                 (string? value) (<= (count value) 8192) (re-matches #"[\t\x20-\x7e]*" value))) headers)
                  (not-any? #(contains? headers %) ["host" "connection" "transfer-encoding" "content-length" "cookie" "proxy-authorization"]))
-    (throw (ex-info "Invalid outbound exchange" {:network-error :request})))
+    (throw (ex-info "Invalid outbound exchange" {:network-error :request}))))
+
+(defn exchange!
+  "One bounded HTTPS exchange. Callers supply an explicit header allowlist and
+  replacement credentials. No redirects, cookies, decompression or retries."
+  [client url {:keys [method headers body maximum timeout-ms]
+               :or {headers {} maximum 10485760 timeout-ms 10000}}]
+  (exchange-options! method headers body maximum timeout-ms)
   (let [uri ((:uri-validator client) url)
         response (request! (:http client) uri maximum timeout-ms method body (assoc headers "accept-encoding" "identity"))
         encoding (get-in response [:headers "content-encoding"])]
     (when (and encoding (not= "identity" (str/lower-case encoding)))
       (throw (ex-info "Encoded response is unsupported" {:network-error :encoding})))
     response))
+
+(defn exchange-to!
+  "One HTTPS exchange, copying the bounded response to a caller-owned output.
+  Returns status, headers and actual body size only after complete success. The
+  caller must stage writes: late transport/size errors may follow a valid prefix.
+  Uses the same guarded client/credentials policy as exchange!, with no redirects,
+  decompression, cookies or retries. Does not close the output."
+  [client url {:keys [method headers body maximum timeout-ms]
+               :or {headers {} maximum 10485760 timeout-ms 10000}} ^OutputStream out]
+  (exchange-options! method headers body maximum timeout-ms)
+  (let [uri ((:uri-validator client) url)
+        deadline (+ (System/nanoTime) (* 1000000 timeout-ms))
+        remaining! (fn []
+                     (when (.isInterrupted (Thread/currentThread)) (throw (InterruptedException.)))
+                     (let [left (- deadline (System/nanoTime))]
+                       (when-not (pos? left) (throw (java.util.concurrent.TimeoutException. "Outbound request deadline")))
+                       left))
+        request (-> (.newRequest ^HttpClient (:http client) ^URI uri)
+                    (.method method) (.timeout (long timeout-ms) TimeUnit/MILLISECONDS))]
+    (with-open [listener (InputStreamResponseListener.)]
+      (try
+        (when body (.body request (BytesRequestContent. (get headers "content-type" "application/json") (into-array (Class/forName "[B") [body]))))
+        (.headers request (reify java.util.function.Consumer
+                            (accept [_ fields]
+                              (doseq [[name value] (assoc headers "accept-encoding" "identity")]
+                                (.put ^org.eclipse.jetty.http.HttpFields$Mutable fields ^String name ^String value)))))
+        (.send request listener)
+        (let [response (.get listener (long (remaining!)) TimeUnit/NANOSECONDS)
+              status (.getStatus response)
+              headers (into {} (map (fn [field] [(str/lower-case (.getName ^org.eclipse.jetty.http.HttpField field))
+                                                 (.getValue ^org.eclipse.jetty.http.HttpField field)])) (.getHeaders response))
+              encoding (get headers "content-encoding")
+              bodyless? (or (= method "HEAD") (#{204 304} status))
+              declared (when-let [value (and (not bodyless?) (get headers "content-length"))]
+                         (when-not (re-matches #"[0-9]{1,18}" value)
+                           (throw (ex-info "Invalid response length" {:network-error :length})))
+                         (Long/parseLong value))]
+          (when (and encoding (not= "identity" (str/lower-case encoding)))
+            (throw (ex-info "Encoded response is unsupported" {:network-error :encoding})))
+          (when (and declared (> declared maximum))
+            (throw (ex-info "Response exceeds the byte limit" {:network-error :size})))
+          (with-open [^InputStream input (.getInputStream listener)]
+            (let [buffer (byte-array 65536)
+                  size (loop [size 0]
+                         (remaining!)
+                         (let [n (.read input buffer 0 (int (min (alength buffer) (inc (- maximum size)))))]
+                           (cond
+                             (= n -1) size
+                             (or (zero? n) (> (+ size n) maximum))
+                             (throw (ex-info "Response exceeds the byte limit or stopped making progress" {:network-error :size}))
+                             :else (do (.write out buffer 0 n) (recur (+ size n))))))
+                  result (.await listener (long (remaining!)) TimeUnit/NANOSECONDS)]
+              (when (.isFailed result) (throw (.getFailure result)))
+              (when (and declared (not= declared size))
+                (throw (ex-info "Incomplete response body" {:network-error :length})))
+              {:status status :headers headers :size size})))
+        (catch Throwable error (.abort request error) (throw error))))))

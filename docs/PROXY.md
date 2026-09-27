@@ -15,9 +15,9 @@ selected service retain the ordinary `MethodNotImplemented` response.
 | --- | --- | --- |
 | `PDS_APPVIEW_SERVICE` | Unset | DID with service fragment for unimplemented XRPC methods |
 | `PDS_LABELER_SERVICE` | Unset | DID with service fragment for `com.atproto.moderation.createReport` and `tools.ozone.*` |
-| `PDS_PROXY_MAX_CONCURRENT` | `16` | Simultaneous requests per process; maximum 256 |
+| `PDS_PROXY_MAX_CONCURRENT` | `16` | Preparation and response-delivery slots per handler; maximum 256 |
 | `PDS_PROXY_MAX_REQUEST_BYTES` | `5242880` | Buffered POST body limit; maximum 64 MiB |
-| `PDS_PROXY_MAX_RESPONSE_BYTES` | `10485760` | Buffered upstream response limit; maximum 64 MiB |
+| `PDS_PROXY_MAX_RESPONSE_BYTES` | `10485760` | Disk-staged upstream response limit; maximum 64 MiB |
 | `PDS_PROXY_TIMEOUT_MS` | `10000` | Upstream exchange deadline; maximum 60,000 ms |
 
 All numeric settings must be positive integers. Explicit `atproto-proxy` overrides
@@ -31,7 +31,8 @@ service type, and an HTTPS origin as its endpoint. Credentials, URL paths, queri
 and fragments are rejected. XRPC paths are top-level paths in the protocol.
 Resolution is fresh and uses the existing independent identity limits. The
 exchange timeout begins after resolution; the proxy concurrency permit covers
-both phases and reading the bounded request body.
+both phases, reading the bounded request body, response staging, and downstream
+HTTP delivery. The normal server creates one proxy handler.
 
 ## Authentication and forwarding
 
@@ -41,7 +42,9 @@ token. Database transactions do not span network operations. Account status,
 session revocation, and ordinary versus privileged app-password permissions are
 checked by the same policy used by `getServiceAuth`. Protected account methods
 cannot use service authentication; privileged chat methods require a primary or
-privileged app-password session.
+privileged app-password session. OAuth callers must prove their DPoP-bound token
+and hold the required RPC method/audience permission (or an applicable transitional
+scope). DPoP is verified locally; only the replacement service JWT goes upstream.
 
 Each exchange gets a fresh repository-key JWT with the account DID as `iss`,
 the complete DID-and-service reference as `aud`, the exact NSID as `lxm`, a random
@@ -67,10 +70,38 @@ Successful responses retain their status, bounded raw bytes, MIME type and selec
 content/AT Protocol headers. HEAD preserves the upstream Content-Length. Responses
 are marked no-store and carry restrictive browser content headers. Set-Cookie,
 Location and hop-by-hop headers are not relayed. Valid XRPC errors retain their
-4xx/5xx status and bounded error/message; malformed or HTML errors become a generic
-`UpstreamFailure`. Network, TLS, oversize response and timeout failures produce
+4xx/5xx status and bounded error/message when the complete error envelope is at
+most 64 KiB. Larger, malformed or HTML errors become a generic `UpstreamFailure`. Network, TLS, oversize response and timeout failures produce
 502, full proxy capacity produces 503, and the configured memory/Redis request
-limiter also applies. Oversize request bodies produce 413.
+limiter also applies. Oversize request bodies produce 413. Temporary-file failures
+produce a sanitized `503 ProxyUnavailable`.
+
+## Response staging and resource ownership
+
+Upstream response bytes are copied in chunks of at most 64 KiB into a private
+mode-0600 file opened with `DELETE_ON_CLOSE`. The client uses Jetty's
+[InputStream response listener](https://javadoc.jetty.org/jetty-12.1/org/eclipse/jetty/client/InputStreamResponseListener.html),
+which applies backpressure while the consumer writes the file. The total limit
+applies to declared lengths and actual bytes, including chunked responses. The
+exchange must finish successfully before any response is published: truncated
+bodies, size violations, unsupported encoding, and timeouts produce a complete
+XRPC error instead of a partial upstream success response. Failed exchanges are
+aborted and their listener is closed. The output file is never used as a cache.
+
+Successful bodies use the owned HTTP stream transport with known actual length,
+64 KiB writes and downstream backpressure. Network and database resources have
+already been released before delivery. The proxy permit remains held until that
+body closes, including normal completion, client disconnect, write failure or
+server shutdown. HEAD and 204 responses close staging resources immediately;
+HEAD preserves the upstream representation length without fetching the body.
+Small error envelopes are parsed separately, with a 64 KiB memory bound, then
+staging resources are closed. Direct handler callers must close owned bodies.
+
+Budget `PDS_PROXY_MAX_CONCURRENT × PDS_PROXY_MAX_RESPONSE_BYTES` for temporary
+response payload: **160 MiB by default**, separately from repository and blob
+staging budgets, plus filesystem overhead. POST request bodies still use bounded
+in-memory buffers. The upstream deadline covers response consumption as well as
+header arrival; the downstream transport has its own write deadline.
 
 ## Verification and remaining work
 
@@ -80,8 +111,13 @@ local route precedence, app-password privileges, inactive accounts, concurrent
 limits, revocation during resolution, private destinations, hostname mismatches,
 timeouts, rate limits, redirects, interrupted responses and malformed errors.
 
-The implementation currently buffers transfers. Streaming, OAuth authorization
-and permission scopes, service-specific account abuse budgets, and interoperability
+Response tests additionally cover multi-megabyte chunked delivery without the
+buffered exchange helper, permits held by prepared bodies, no retained database
+connection, disk failures, HTTP disconnect cleanup, HEAD/204 behavior, and timeout
+after headers and a partial body. Local OAuth tests cover exact method/audience
+permissions and credential replacement.
+
+Request-body streaming, service-specific account abuse budgets, and interoperability
 with deployed AppViews/labelers remain on the full PDS roadmap. DPoP passthrough
 and WebSocket proxying are explicitly rejected. Tests use isolated local services;
 no external account or service has been contacted to establish interoperability.

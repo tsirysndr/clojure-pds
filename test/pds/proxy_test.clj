@@ -25,7 +25,7 @@
         ssl (doto (SSLContext/getInstance "TLS") (.init (.getKeyManagers manager) nil nil))
         server (HttpsServer/create (InetSocketAddress. "127.0.0.1" 0) 0)
         executor (Executors/newVirtualThreadPerTaskExecutor)
-        mode (atom :ok) calls (atom []) doc (atom nil) on-resolve (atom nil) on-request (atom nil)]
+        mode (atom :ok) calls (atom []) doc (atom nil) on-resolve (atom nil) on-request (atom nil) respond (atom nil)]
     (.setExecutor server executor)
     (.setHttpsConfigurator server (HttpsConfigurator. ssl))
     (.createContext server "/"
@@ -41,8 +41,9 @@
                                          :headers (into {} (map (fn [[k v]] [(str/lower-case k) (str/join "," v)])) (.getRequestHeaders exchange))
                                          :body (vec (.readNBytes (.getRequestBody exchange) 1048577))}))
                   _ (when-not did? (when-let [hook @on-request] (hook)))
-                  [status type text] (if did? [200 "application/json" (json/write-str @doc)]
-                                      (case @mode
+                  [status type text] (cond did? [200 "application/json" (json/write-str @doc)]
+                                           @respond (do (@respond exchange) [nil nil nil])
+                                           :else (case @mode
                                         :redirect [307 "text/plain" "redirect"]
                                         :error [429 "application/json" "{\"error\":\"RateLimitExceeded\",\"message\":\"Slow down\"}"]
                                         :html-error [500 "text/html" "<b>private upstream failure</b>"]
@@ -69,7 +70,7 @@
       (try
         (with-open [client (net/open-client {:resolver (net-test/resolver "127.0.0.1") :address-policy (constantly true)
                                             :ssl-context (doto (SslContextFactory$Client.) (.setTrustStore store))})]
-          (f {:client client :origin origin :doc doc :mode mode :calls calls :on-resolve on-resolve :on-request on-request
+          (f {:client client :origin origin :doc doc :mode mode :calls calls :on-resolve on-resolve :on-request on-request :respond respond :store store
               :fetch (fn [_ options] (net/fetch! client (str origin "/did") options))}))
         (finally (.stop server 0) (.shutdownNow executor))))))
 

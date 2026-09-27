@@ -9,9 +9,13 @@
             [pds.oauth.resource :as oauth-resource]
             [pds.protocol.syntax :as syntax]
             [pds.request :as request]
+            [pds.response-body :as body]
+            [pds.tempfile :as tempfile]
             [pds.service-auth :as service-auth]
             [pds.xrpc :as xrpc])
-  (:import [java.util.concurrent Semaphore]))
+  (:import [java.io FilterInputStream IOException OutputStream]
+           [java.nio.channels Channels]
+           [java.util.concurrent Semaphore]))
 
 (defn service! [value]
   (let [[did fragment :as parts] (when (string? value) (str/split value #"#" -1))]
@@ -75,6 +79,39 @@
                 :headers merge base forwarded (when (= status 401) {"WWW-Authenticate" "Bearer"})))
       :else (errors/raise! 502 "UpstreamFailure" "Upstream redirects and protocol upgrades are not supported"))))
 
+(defn- staged-response! [client url options method release!]
+  (let [channel (try (tempfile/open-channel!)
+                    (catch IOException _ (errors/raise! 503 "ProxyUnavailable" "Proxy temporary storage is unavailable")))
+        transferred? (atom false)
+        close! #(try (.close channel) (finally (release!)))]
+    (try
+      (let [output (Channels/newOutputStream channel)
+            guarded-output (proxy [OutputStream] []
+                             (write [bytes offset length]
+                               (try (.write output ^bytes bytes (int offset) (int length))
+                                    (catch IOException error (throw (ex-info "Proxy staging failed" {:proxy-storage true} error))))))
+            upstream (try
+                       (when-not client (throw (ex-info "Proxy client unavailable" {})))
+                       (net/exchange-to! client url options guarded-output)
+                       (catch Exception error
+                         (if (:proxy-storage (ex-data error))
+                           (errors/raise! 503 "ProxyUnavailable" "Proxy temporary storage is unavailable")
+                           (errors/raise! 502 "UpstreamFailure" "Upstream service request failed"))))
+            status (:status upstream) length (.size channel)]
+        (if (and (<= 200 status 299) (not= method :head) (not= status 204))
+          (let [input (proxy [FilterInputStream] [(tempfile/input channel)] (close [] (close!)))
+                response (response! method (assoc upstream :body (body/stream input length)))]
+            (reset! transferred? true)
+            response)
+          ;; Only small error envelopes need JSON parsing. Huge/error HTML bodies
+          ;; never reach the caller and never become whole-response heap buffers.
+          (let [bytes (if (<= length 65536)
+                        (with-open [input (tempfile/input channel)] (.readNBytes input (int length)))
+                        (byte-array 0))]
+            (response! method (assoc upstream :body bytes)))))
+      (catch IOException _ (errors/raise! 503 "ProxyUnavailable" "Proxy temporary storage is unavailable"))
+      (finally (when-not @transferred? (close!))))))
+
 (defn handler [ds supplied-settings]
   (let [config (merge (settings {}) supplied-settings)
         resolver (identity/resolver config) permits (Semaphore. (int (:proxy-max-concurrent config)))]
@@ -95,7 +132,9 @@
                       (and (get-in r [:headers "dpop"]) (not (oauth-resource/dpop? r))))
               (errors/invalid! "WebSocket upgrades and DPoP passthrough are not supported"))
             (when-not (.tryAcquire permits) (errors/raise! 503 "ProxyBusy" "Proxy concurrency limit reached"))
-            (try
+            (let [released? (atom false)
+                  release! #(when (compare-and-set! released? false true) (.release permits))]
+             (try
               ;; Authenticate before any remote lookup or reading a request body.
               (db/transact! ds #(service-auth/authorize! (auth/authenticate! % config r) method target))
               (let [service (service! target)
@@ -113,11 +152,7 @@
                                                                         {"aud" target "lxm" method}))))
                     headers (cond-> (assoc (request-headers r) "authorization" (str "Bearer " token))
                               body (update "content-type" #(or % "application/octet-stream")))
-                    upstream (try
-                               (when-not (:http-client config) (throw (ex-info "Proxy client unavailable" {})))
-                               (net/exchange! (:http-client config) url
-                                              {:method (str/upper-case (name (:request-method r))) :headers headers :body body
-                                               :maximum (:proxy-max-response-bytes config) :timeout-ms (:proxy-timeout-ms config)})
-                               (catch Exception _ (errors/raise! 502 "UpstreamFailure" "Upstream service request failed")))]
-                (response! (:request-method r) upstream))
-              (finally (.release permits)))))))))
+                    options {:method (str/upper-case (name (:request-method r))) :headers headers :body body
+                             :maximum (:proxy-max-response-bytes config) :timeout-ms (:proxy-timeout-ms config)}]
+                (staged-response! (:http-client config) url options (:request-method r) release!))
+              (catch Throwable error (release!) (throw error))))))))))

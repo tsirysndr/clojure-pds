@@ -235,7 +235,12 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   (30-second deadline). Real socket tests cover multiple chunks, empty bodies,
   HEAD/204/304 suppression, declared-length mismatches, read failures, slow-client
   backpressure, disconnect and shutdown cleanup. Blob downloads adopt this
-  contract, as do full and partial repository exports; proxy responses remain buffered.
+  contract, as do full/partial repository exports and successful service-proxy
+  responses. Proxy responses are completely staged under their configured limit
+  before publication; 64 KiB copy buffers, held delivery permits and file cleanup
+  bound payload memory/disk. POST request bodies remain buffered. Local TLS and
+  socket tests cover limits, truncation, partial-body timeout, no retries,
+  connection release, HEAD/204, sanitized errors and downstream disconnects.
 - `getRepo` walks the current stored commit/MST graph and emits one hash-checked
   block at a time into an owned temporary file. It does not rebuild the MST or
   collect record payloads into a whole-repository map. A transaction-local
