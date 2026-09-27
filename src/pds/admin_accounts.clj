@@ -52,6 +52,18 @@
           (if (= "23505" (.getSQLState e)) (errors/invalid! "Email is unavailable") (throw e))))
       (invalidate! conn account))))
 
+(defn send-email! [conn settings body]
+  (when-not (:email-enabled settings) (errors/raise! 503 "EmailUnavailable" "Email delivery is not configured"))
+  (let [content (get body "content") subject (get body "subject" "Message via your PDS")]
+    (when-not (and (string? content) (<= 1 (count content) 16000))
+      (errors/invalid! "Content must contain 1 to 16000 characters"))
+    (when-not (and (string? subject) (<= 1 (count subject) 200) (not (re-find #"[\r\n]" subject)))
+      (errors/invalid! "Invalid email subject"))
+    (let [account (lock! conn (get body "recipientDid") false)]
+      (when-not (:email account) (errors/invalid! "Account has no email address"))
+      (email/enqueue! conn {:to (:email account) :subject subject :text content})
+      {:sent true})))
+
 (defn delete! [conn body]
   (when-not (syntax/did? (get body "did")) (errors/invalid! "Invalid DID"))
   (let [account (lock! conn (get body "did") true)]

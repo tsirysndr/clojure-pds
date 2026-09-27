@@ -17,6 +17,8 @@
    (server/empty-route (authenticated ds settings #(admin-accounts/update-password! %1 (request/json-body %2))))
    "/xrpc/com.atproto.admin.updateAccountEmail"
    (server/empty-route (authenticated ds settings #(admin-accounts/update-email! %1 (request/json-body %2))))
+   "/xrpc/com.atproto.admin.sendEmail"
+   (server/json-route :post (authenticated ds settings #(admin-accounts/send-email! %1 settings (request/json-body %2))))
    "/xrpc/com.atproto.admin.deleteAccount"
    (server/empty-route (authenticated ds settings #(admin-accounts/delete! %1 (request/json-body %2))))
    "/xrpc/com.atproto.admin.getAccountInfo"

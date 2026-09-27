@@ -230,3 +230,32 @@
         (is (= "InvalidToken" (deref write 10000 :timeout)))
         (is (empty? (rows "SELECT * FROM records WHERE did = ?" did))))
       (finally (deliver release true) (deref recovery 10000 nil)))))
+
+(deftest administrative-email-reaches-the-recipient-outbox
+  (let [settings (assoc (settings) :email-enabled true)
+        alice (accounts/create! fixture/*ds* settings (invites/signup "alice" nil))
+        body {"recipientDid" (:did alice) "senderDid" (:service-did settings)
+              "content" "Hello from your PDS operator"}
+        server (http/start! settings (app/handler settings fixture/*ds*))]
+    (try
+      (with-open [client (HttpClient/newHttpClient)]
+        (let [admin #(invites/admin-call client (:port server) (endpoint "sendEmail") %)]
+          (is (= 401 (:status (api/xrpc client (:port server) "POST" "com.atproto.admin.sendEmail" body (:accessJwt alice)))))
+          (is (= 400 (:status (admin (dissoc body "content")))))
+          (is (= 400 (:status (admin (assoc body "content" "")))))
+          (is (= 400 (:status (admin (assoc body "subject" "bad\r\nheader")))))
+          (is (= 400 (:status (admin (assoc body "recipientDid" "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa")))))
+          (let [baseline (count (rows "SELECT 1 FROM email_outbox"))]
+            (is (= {"sent" true} (:body (admin (assoc body "subject" "Operator notice")))))
+            (is (= {"sent" true} (:body (admin body))))
+            (let [payloads (filterv #(.contains ^String % "Hello from your PDS operator")
+                                    (mapv :payload (rows "SELECT payload::text AS payload FROM email_outbox")))]
+              (is (= (+ baseline 2) (count (rows "SELECT 1 FROM email_outbox"))))
+              (is (= 2 (count payloads)))
+              (is (every? #(.contains ^String % "alice@example.com") payloads))
+              (is (some #(.contains ^String % "Operator notice") payloads))
+              (is (some #(.contains ^String % "Message via your PDS") payloads))))
+          (is (= "EmailUnavailable"
+                 (try (tx #(admin/send-email! % (assoc settings :email-enabled false) body)) nil
+                      (catch clojure.lang.ExceptionInfo e (:error (ex-data e))))))))
+      (finally ((:stop! server))))))

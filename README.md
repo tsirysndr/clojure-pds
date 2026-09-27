@@ -337,7 +337,9 @@ factor with a new password, security-version checks and an audit receipt.
 Admins can inspect accounts with `com.atproto.admin.getAccountInfo`, fetch
 deduplicated batches with `getAccountInfos` (unknown DIDs are skipped), search
 by exact case-insensitive email with `searchAccounts` (DID-keyset pagination,
-limit 1–100, default 50) and manage
+limit 1–100, default 50), send bounded operator email to an account's registered
+address with `sendEmail` (queued on the durable outbox; requires configured
+email delivery) and manage
 account takedowns through `getSubjectStatus`/`updateSubjectStatus` using a
 `com.atproto.admin.defs#repoRef` subject. Takedown blocks content, login, refresh,
 and invitations issued by the account. Removing it preserves a preexisting
