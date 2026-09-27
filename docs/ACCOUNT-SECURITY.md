@@ -45,10 +45,13 @@ created after a successful factor-authenticated primary login remain explicitly
 delegated credentials, as with the existing email factor.
 
 Password reset preserves the authenticator requirement. Account deletion erases
-its secret and recovery codes. [Administrative recovery](ADMIN-ACCOUNTS.md) also
+its secret and recovery codes. [Administrative password/email recovery](ADMIN-ACCOUNTS.md) also
 preserves enrolled factors; operator deletion removes them. The owner deletion protocol requires its
 primary password and one-use email deletion proof. Password recovery does not
-silently disable TOTP; users who lose their authenticator need a saved recovery code.
+silently disable TOTP; users who lose their authenticator can use a saved recovery
+code. When every factor and code is lost, the explicit [operator recovery
+procedure](ADMIN-ACCOUNTS.md#recovery-after-losing-every-authenticator) replaces the
+password, removes enrolled factors and revokes existing access in one transaction.
 
 Tests cover encrypted storage, inactive enrollment, credential-change/expiry
 invalidation, replay races, throttling, rollback, one-use recovery, legacy HTTP
@@ -158,10 +161,9 @@ No CDN or React runtime is required. Visual references:
 
 ## Remaining work
 
-- Mounting the implemented OAuth authorization/consent/revocation adapters with
-  discovery; full browser ceremony tests.
-- Username-less discoverable login, QR provisioning, and recovery when all
-  authenticators and recovery codes are lost.
+- Deployed OAuth client interoperability and full hardware/browser ceremony tests.
+- Username-less discoverable login and QR provisioning.
+- Deployment-specific verification of rightful owners during operator recovery.
 
 References: [RFC 6238](https://www.rfc-editor.org/rfc/rfc6238.html),
 [RFC 4226](https://www.rfc-editor.org/rfc/rfc4226.html),

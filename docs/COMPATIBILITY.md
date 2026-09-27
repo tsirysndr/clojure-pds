@@ -327,7 +327,10 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
    replacements and TOTP secrets with atomic rollback and startup key checks.
    Legacy sessions/app passwords are invalidated; OAuth access/refresh and queued
    PLC operations survive. Deployment secret-store cutover remains operator-managed.
-3. Remaining administrative APIs and broader account recovery controls.
+3. Remaining administrative APIs and deployment-specific owner-verification
+   policies. [Local all-authenticator-loss recovery](ADMIN-ACCOUNTS.md#recovery-after-losing-every-authenticator)
+   is implemented with password replacement, factor removal, session revocation,
+   security-version checks and retry-safe audit receipts.
 4. OAuth authorization server: inactive migration sessions and deployed
    reference-client interoperability. Account-status permission semantics are not
    yet defined in the published permission specification.
@@ -345,7 +348,7 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
    cleanup preserves replay evidence until absolute session expiry.
    Optional [TOTP and passkeys](ACCOUNT-SECURITY.md) include browser enrollment,
    removal and OAuth login integration; hardware/browser ceremony verification
-   and broader recovery controls remain pending.
+   and deployment-specific recovery verification remain pending.
 5. External relay interoperability and event retention/compaction.
    [Record/blob takedowns](MODERATION.md) now implement local indexed-read/blob
    access controls; they do not erase signed sync data or remote copies.

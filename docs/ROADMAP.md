@@ -33,7 +33,9 @@ runnable and update this document as features land.
    account activation/deactivation/deletion and administrative authorization.
    [Administrative recovery](ADMIN-ACCOUNTS.md) supports password/email updates and
    account deletion, with session invalidation, factor preservation and durable
-   object cleanup.
+   object cleanup. The local all-authenticator-loss procedure atomically replaces
+   the password, removes factors and invalidates access, with security-version
+   checks and retry-safe operator receipts.
    Optional [authenticator security](ACCOUNT-SECURITY.md): TOTP storage, confirmation,
    recovery codes and legacy/OAuth verification are implemented, as are WebAuthn
    passkey registration/assertion primitives. Secure browser enrollment/removal and

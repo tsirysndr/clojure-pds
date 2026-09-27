@@ -311,7 +311,9 @@ disabled, so `createAvailable` currently creates no additional codes.
 
 [Administrative account recovery](docs/ADMIN-ACCOUNTS.md) supports password and
 email updates and account deletion. Credential recovery revokes existing sessions
-and email proofs while preserving enrolled TOTP and passkeys.
+and email proofs while preserving enrolled TOTP and passkeys. A separate local
+`clojure -M:account-admin recover-authenticators` command handles loss of every
+factor with a new password, security-version checks and an audit receipt.
 
 Admins can inspect accounts with `com.atproto.admin.getAccountInfo` and manage
 account takedowns through `getSubjectStatus`/`updateSubjectStatus` using a

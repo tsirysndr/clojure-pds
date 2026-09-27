@@ -40,8 +40,74 @@ Active, deactivated and taken-down accounts can be recovered. Recovery preserves
 activation and moderation state: it cannot remove a takedown or activate an
 account. Unknown/deleted accounts return `AccountNotFound`. Provisioning accounts
 return HTTP 409 `RegistrationPending` until identity registration finishes.
-Recovery when every authenticator and recovery code has been lost remains a
-separate, unimplemented operator procedure.
+Recovery when every authenticator and recovery code has been lost uses the
+explicit local operator procedure below.
+
+## Recovery after losing every authenticator
+
+The local CLI supports an owner who cannot use their enrolled authenticators or
+recovery codes. It requires direct database access; a user session, OAuth grant,
+email token or `PDS_ADMIN_PASSWORD` alone cannot invoke it. It does not need the
+master key or an email Worker. No additional public XRPC endpoint is mounted.
+Operator verification of the rightful owner takes place through the deployment's
+support process before this command is used.
+
+Inspect the current account status, security version and factor counts:
+
+```sh
+mise exec -- clojure -M:account-admin status "$DID"
+```
+
+Supply a different primary password through the `PDS_RECOVERY_PASSWORD`
+environment variable using your secret-management process. It must contain
+8–1,024 characters. The password is never a command argument, part of a receipt,
+or printed by the CLI. Pass the exact `securityVersion` from `status` and an
+opaque support reference (1–128 ASCII letters, digits, `.`, `_`, `:`, `/`, or `-`,
+starting with a letter or digit):
+
+```sh
+mise exec -- clojure -M:account-admin recover-authenticators "$DID" "$SECURITY_VERSION" "support-123"
+```
+
+One transaction replaces the primary password, disables email 2FA, deletes
+pending/confirmed TOTP enrollment and recovery codes, and removes all registered
+passkeys and their WebAuthn user handle. It revokes legacy sessions and app
+passwords, deletes outstanding email proofs/queued messages and WebAuthn
+ceremonies, and advances the account's security version. Existing OAuth grants,
+refresh tokens, authorization codes, consent and account-browser sessions are
+invalidated by that version. OAuth/browser rows retain their normal replay and
+cleanup history; they cannot authorize new work. Already-dispatched email cannot
+be recalled, but its old proof is invalidated.
+
+The account's DID, handle, email/confirmation state, repository, blobs, preferences,
+public/private identity keys and pending PLC work remain intact. Deactivation and
+takedown remain in force. An active owner can sign in with the replacement password
+and enroll new authenticators in `/account/security`; the reset does not enroll a
+replacement automatically. Provisioning accounts must finish registration first.
+Unknown/deleted accounts cannot be recovered.
+
+A successful result includes the DID, previous/resulting security versions,
+support reference, PostgreSQL role, removed-factor counts and completion time.
+This credential-free receipt commits with the recovery. The database role
+identifies the database credential, not necessarily an individual human; keep
+operator attribution in the referenced support record. Do not put passwords,
+recovery codes or personal details in the reference.
+
+A changed security version returns `SecurityVersionMismatch` without altering
+anything. Inspect the newer state before deciding whether another recovery is
+appropriate. Concurrent retries with the same DID, original version and reference
+converge on one receipt. Repeating a completed command returns that receipt and
+ignores the replacement password: it does not reset credentials again or remove
+newly enrolled factors. A different reference for that completed version returns
+`RecoveryAlreadyCompleted`. Use `status` for current state and the last receipt;
+a historical receipt does not describe later password/factor changes.
+
+The command applies migrations, uses a bounded database pool and returns JSON.
+Exit codes are 0 for success, 1 for operational failures, and 64 for invalid syntax.
+`--help` opens no dependencies. Any transactional failure rolls back the password,
+factor deletion, revocation and receipt together. This online account operation
+serializes with owner authentication through the account lock; it must still be
+stopped with all other writers during offline master-key or database maintenance.
 
 ## Deletion
 
@@ -66,6 +132,8 @@ returns HTTP 409 `IdentityUpdatePending`; an unfinished registration returns
 `RegistrationPending`. Resolve those operations before deletion to avoid removing
 credentials while an external directory operation is still in flight. Deletion
 does not submit a PLC tombstone or otherwise alter the external DID directory.
+Credential-free authenticator-recovery receipts remain alongside the account
+tombstone for operator audit; they contain no password, email, key or recovery code.
 
 ## Verification
 
@@ -76,3 +144,10 @@ idempotent deletion, durable S3 cleanup locators and account isolation. A concur
 write test verifies that a request with old credentials cannot commit after
 recovery. The full suite retains the owner deletion and S3 worker recovery tests,
 and observes all three endpoint responses with the pinned upstream validator.
+
+Local recovery tests also exercise actual TOTP/passkey enrollment, revoked browser
+and OAuth access, owner reenrollment, stale-version rejection, retained inactive
+status and PLC jobs, atomic rollback, concurrent retries and a waiting browser
+without a lock-order deadlock. A separate JVM runs the shipped CLI without a
+master key, admin password or email configuration. Operator identity-verification
+policies and hardware-authenticator interoperability remain deployment concerns.

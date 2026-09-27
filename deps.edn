@@ -34,6 +34,7 @@
                 :main-opts ["-m" "pds.test-runner" "test" "test-integration"]}
   :identity {:main-opts ["-m" "pds.identity-admin"]}
   :master-key {:main-opts ["-m" "pds.master-key-admin"]}
+  :account-admin {:main-opts ["-m" "pds.account-admin"]}
   :migrate {:main-opts ["-m" "pds.db"]}
   :test {:extra-paths ["test"]
          :main-opts ["-m" "pds.test-runner"]}}}
