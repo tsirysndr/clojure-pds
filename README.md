@@ -60,7 +60,7 @@ creates and drops its own randomly named schema; the role needs schema privilege
 
 Integration tests require Node (CI pins Node 24) for independent passkey signatures.
 See [account authentication progress](docs/ACCOUNT-SECURITY.md) for TOTP/passkey
-coverage and remaining OAuth integration. Visit `/account` to create an account
+coverage and [OAuth discovery and client verification](docs/OAUTH.md#discovery-and-route-integration). Visit `/account` to create an account
 (when signup is enabled), sign in and manage
 optional passkeys and Google Authenticator-compatible two-factor authentication.
 The Tailwind interface uses the selfhosted/Witchcraft PDS card style with purple

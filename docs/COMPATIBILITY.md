@@ -47,7 +47,8 @@ Unknown XRPC routes also support [authenticated service proxying](PROXY.md) to
 explicit DID service references or configured AppView/labeler defaults. Local
 routes retain precedence. Real HTTP/TLS fixtures verify authentication, scoped
 upstream JWT signatures, raw forwarding, network boundaries and failure handling.
-External service interoperability and OAuth remain pending.
+OAuth discovery, browser authorization and DPoP resources are mounted; see
+[the OAuth coverage and limits](OAUTH.md). External service interoperability remains pending.
 
 ## Protocol and storage evidence
 
@@ -294,12 +295,13 @@ External service interoperability and OAuth remain pending.
 2. Bounded identity caching,
    signing/rotation key lifecycle, conflicted-operation administration, and migration.
 3. Remaining administrative APIs, record/blob takedowns, and broader account recovery controls.
-4. OAuth authorization server: discovery metadata, route integration, expired-grant
-   cleanup, granular permissions/sets and reference-client interoperability.
+4. OAuth authorization server: expired-grant cleanup, granular permissions/sets
+   and deployed reference-client interoperability.
    [DPoP replay protection, metadata/JWKS, confidential clients, PAR/PKCE, browser
    signup/consent, token rotation/revocation, owner session management and transitional
-   resource authorization](OAUTH.md) are implemented; browser authorization, token
-   and revocation routes remain unmounted.
+   resource authorization](OAUTH.md) are implemented and mounted with discovery.
+   Pinned upstream Node client tests verify public signup and confidential login,
+   writes, refresh and revocation against a local HTTP fixture.
    Optional [TOTP and passkeys](ACCOUNT-SECURITY.md) include browser enrollment,
    removal and OAuth login integration; hardware/browser ceremony verification
    and broader recovery controls remain pending.

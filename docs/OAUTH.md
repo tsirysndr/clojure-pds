@@ -1,9 +1,9 @@
 # OAuth implementation series
 
-OAuth browser login and token endpoints are not published yet. DPoP resource
-authentication is connected to XRPC for grants issued by the tested authorization
-components. Legacy session endpoints retain their existing behavior. These
-components do not by themselves establish complete OAuth compatibility.
+The PDS publishes OAuth discovery, PAR, browser authorization, token and revocation
+endpoints. DPoP resource authentication is connected to XRPC, with the four
+transitional scopes described below. Legacy session endpoints retain their existing
+behavior. Granular permissions and deployed interoperability remain incomplete.
 
 ## Proof verification and durable replay protection
 
@@ -34,8 +34,8 @@ restarts and work across instances with the same master key/public origin and
 synchronized clocks. No Redis or per-session nonce memory is required. Proof
 `iat` values must be within the previous five minutes or at most 30 seconds ahead.
 Missing, invalid or stale nonces yield `use_dpop_nonce`; other verification failures
-yield `invalid_dpop_proof` internally. HTTP error/nonce headers will be added with
-the OAuth endpoint adapters.
+yield `invalid_dpop_proof` internally. HTTP adapters return OAuth errors and nonce
+headers, including on rate-limit rejections.
 
 `pds.oauth.proof-store/accept!` verifies and commits the proof's key thumbprint and
 hashed jti to PostgreSQL before business logic proceeds. The unique key spans
@@ -93,8 +93,8 @@ percent escapes, invalid UTF-8 and duplicate scalar parameters, with a 16 KiB an
 Unit and real TLS tests cover web/native/development clients, invalid client IDs,
 redirect substitution, metadata/JWKS changes, body limits, status/MIME failures,
 private socket addresses, certificate hostname failures, cookie suppression,
-redirect rejection and permit release. These primitives feed the client assertion checks below; OAuth endpoints remain
-disabled until the authorization/token flow is complete.
+redirect rejection and permit release. These primitives feed the client assertion
+checks below and the mounted authorization/token flow.
 
 ## Confidential-client authentication
 
@@ -181,8 +181,7 @@ bindings, CORS, malformed forms, oversize bodies and method errors. PostgreSQL
 tests cover expiry, concurrent submission/consumption, rollback, reopened
 connections, global challenge reuse and bounded cleanup.
 
-The adapter is not yet mounted by `pds.app`, and discovery metadata does not claim
-an authorization/token flow that is still incomplete. References:
+The adapter is mounted by `pds.app` at `/oauth/par`. References:
 [RFC 9126 PAR](https://www.rfc-editor.org/rfc/rfc9126.html) and
 [RFC 7636 PKCE](https://www.rfc-editor.org/rfc/rfc7636.html).
 
@@ -222,8 +221,8 @@ Expired interactions are cleaned in bounded batches when new ones start.
 PostgreSQL tests cover cookie/interaction substitution, CSRF rotation, primary-only
 login, hints, email-factor delivery and transactional consumption, lifecycle changes,
 expiration, concurrent decisions, metadata changes and failed PAR/code inserts.
-The browser adapter and pages below implement this flow. OAuth routes remain
-unmounted while discovery and full route integration are completed.
+The browser adapter and pages below implement this flow, mounted at
+`/oauth/authorize` and `/oauth/flow/:id`.
 
 ## Opaque access and refresh tokens
 
@@ -263,8 +262,8 @@ beyond the original authorization; omitting scope retains the original grant.
 a caller-owned transaction. It is a storage primitive, **not resource request
 authentication**: DPoP `ath`, client metadata revalidation and permission checks
 are enforced by the resource middleware below. The standalone token HTTP
-adapter provides bounded form parsing, CORS, no-store responses and nonce headers;
-it remains unmounted until the full authorization/resource flow is ready.
+adapter provides bounded form parsing, CORS, no-store responses and nonce headers
+and is mounted at `/oauth/token`.
 
 Tests exercise complete PAR/consent/code/token chains, private/public clients,
 wrong bindings, scope narrowing, absolute expiration, key removal/restoration,
@@ -310,9 +309,9 @@ Tests cover signup through consent and token exchange, signup/invite policy,
 PLC signup without legacy tokens, password/TOTP and passkey binding, both CSRF
 proofs, login hints, fresh-login prompts, cookie isolation, denial, epoch changes,
 and unsafe authorization starts. Signup/sign-in rendering was also checked in
-Chrome. Full browser automation, hardware passkeys and reference-client discovery
-remain separate verification work. This adapter is not mounted by `pds.app` yet;
-the existing `/account` signup/settings UI is available now.
+Chrome. The upstream Node client flow described below covers discovery and the
+browser HTTP protocol. Full browser automation and hardware passkeys remain
+separate verification work. `/account` provides signup and security settings.
 
 The account-creation prompt follows the UX semantics in
 [Initiating User Registration](https://openid.net/specs/openid-connect-prompt-create-1_0.html).
@@ -367,14 +366,14 @@ sets are still pending; they are not accepted by PAR yet.
 
 ## Revocation and owner session management
 
-`tokens/revocation-handler` implements a standalone `/oauth/revoke` adapter using
+`tokens/revocation-handler` implements the mounted `/oauth/revoke` adapter using
 bounded POST form bodies, public-client CORS, no-store responses and DPoP nonce
 headers. It accepts both access and refresh tokens and ignores `token_type_hint`.
 Revoking either kind revokes the entire token family, including rotated tokens.
 Previously used refresh tokens can still identify their family for logout.
 Unknown tokens and repeated valid revocations return HTTP 200 with an empty body;
 missing/empty token parameters are invalid requests. GET and query-string
-credentials are rejected. This route is not mounted yet.
+credentials are rejected.
 
 Revocation requires fresh client metadata, the original client authentication
 method/key and the session's DPoP key. DPoP covers POST to the configured revocation
@@ -402,13 +401,51 @@ visually checked in Chrome with fixture data. Protocol behavior follows
 [RFC 7009](https://www.rfc-editor.org/rfc/rfc7009.html), with mandatory AT Protocol
 client and DPoP binding.
 
+## Discovery and route integration
+
+A database-backed `pds.app/handler` publishes:
+
+| Route | Methods | Purpose |
+| --- | --- | --- |
+| `/.well-known/oauth-authorization-server` | GET, HEAD | Issuer, endpoints, PKCE, client authentication and DPoP capabilities |
+| `/.well-known/oauth-protected-resource` | GET, HEAD | PDS resource and authorization-server discovery |
+| `/oauth/par` | POST | Push the authorization request |
+| `/oauth/authorize` | GET | Consume PAR and enter the browser flow |
+| `/oauth/flow/:id` | GET | Sign in, create an account and give explicit consent |
+| `/oauth/token` | POST | Exchange a code or rotate a refresh token |
+| `/oauth/revoke` | POST | Revoke the bound session family |
+
+Metadata and protocol endpoints support OPTIONS and public-client CORS. The outer
+header middleware also covers rate-limit 429 and backend-unavailable 503 responses.
+DPoP requests receive a current nonce, and XRPC 401 challenges advertise protected
+resource metadata. Cookie-based browser routes retain their same-origin policy.
+Discovery uses only `PDS_PUBLIC_URL`, never incoming Host or forwarding headers.
+The configured origin must have a lowercase hostname, no path or explicit default
+port, and HTTPS; loopback HTTP is supported for development. Settings parsing
+removes an optional trailing slash before the origin check. The database-free
+health/banner handler does not publish OAuth routes.
+
+`@atproto/oauth-client-node` 0.5.7 is pinned in `scripts/conformance`. With
+`PDS_TEST_UPSTREAM=true`, PostgreSQL integration tests exercise public-client
+`prompt=create` signup and confidential-client password login through the mounted
+HTTP server. The SDK performs discovery, PAR with PKCE and nonce retry, client
+assertions, code exchange, DID/PDS verification, DPoP resource requests, refresh
+and revocation. Tests assert a persisted record, revocation in PostgreSQL, email
+scope filtering and absence of legacy tokens on signup. The browser HTTP controller
+uses the actual cookie, Origin and CSRF requirements and explicit consent.
+
+The fixture maps allowlisted HTTPS origins to a local HTTP listener and serves
+client metadata through the test resolver. It preserves the advertised issuer and
+signed proof targets; it does not bypass SDK or PDS cryptographic verification.
+This establishes local reference-client interoperability, not deployed DNS/TLS,
+a real browser ceremony or external AppView/relay compatibility.
+
 ## Remaining steps
 
 1. Bounded expired-grant cleanup that retains replay evidence while sessions are live.
 2. Granular permission scopes and dynamically resolved permission sets, including
    permission-aware consent and enforcement in each resource operation.
-3. Mount authorization and revocation endpoints and publish authorization/resource discovery
-   metadata, then verify full browser and reference-client flows.
+3. Full browser/hardware ceremonies and deployed reference-client verification.
 
 Sources: [AT Protocol OAuth profile](https://atproto.com/specs/oauth),
 [RFC 9449 DPoP](https://www.rfc-editor.org/rfc/rfc9449.html),

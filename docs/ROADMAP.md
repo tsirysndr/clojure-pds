@@ -33,12 +33,14 @@ runnable and update this document as features land.
    account activation/deactivation/deletion and administrative authorization.
    Optional [authenticator security](ACCOUNT-SECURITY.md): TOTP storage, confirmation,
    recovery codes and legacy/OAuth verification are implemented, as are WebAuthn
-   passkey registration/assertion primitives. Secure browser enrollment/removal,
-   passkey login integration and complete browser ceremonies remain pending.
+   passkey registration/assertion primitives. Secure browser enrollment/removal and
+   passkey login integration are implemented; hardware and complete browser ceremonies remain pending.
    Acceptance: expiry, replay, cross-account authorization and restart tests.
-7. **OAuth (DPoP/client-auth, PAR/PKCE and durable consent state implemented):** authorization-server metadata, PAR, PKCE, DPoP, client metadata,
+7. **OAuth (discovery, browser authorization, tokens/revocation and transitional resource permissions implemented):** authorization-server metadata, PAR, PKCE, DPoP, client metadata,
    consent, token binding and scoped permissions. Acceptance: reference clients
-   complete login and invalid/replayed proofs fail.
+   complete login and invalid/replayed proofs fail. Local upstream Node client flows
+   cover signup, login, writes, refresh and revocation; granular permissions and
+   deployed interoperability remain pending.
 8. **Blob APIs (buffered transfer, references, missing/since listing and temporary/reference cleanup implemented):** streaming upload/download, limits, ownership, record references,
    list/missing blobs and garbage collection. Acceptance: binary round trips,
    interrupted upload cleanup and no cross-account access leaks.
@@ -63,7 +65,7 @@ rotating sessions, scoped app passwords, email recovery, schema-validated record
 implemented. See [the compatibility matrix](COMPATIBILITY.md) for exact coverage,
 verification evidence, and limits. Full PDS compatibility is not achieved yet.
 
-Next implementation series: [OAuth authorization and resource-server integration](OAUTH.md),
+Next implementation series: [OAuth granular permissions and operational cleanup](OAUTH.md),
 then remaining identity/key lifecycle, migration, dynamic Lexicon resolution,
 administration, and relay conformance.
 Implemented endpoints now have pinned input validation and observed output/event

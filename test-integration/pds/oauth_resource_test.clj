@@ -51,7 +51,7 @@
         valid (request env issued :get session-path {"nonce" (get-in missing [:headers "DPoP-Nonce"])})
         success (call handler valid)]
     (is (= 401 (:status missing)))
-    (is (= "DPoP error=\"use_dpop_nonce\"" (get-in missing [:headers "WWW-Authenticate"])))
+    (is (= "DPoP error=\"use_dpop_nonce\", resource_metadata=\"https://pds.example.com/.well-known/oauth-protected-resource\"" (get-in missing [:headers "WWW-Authenticate"])))
     (is (= 200 (:status success)))
     (is (= owner/did (get-in success [:json "did"])))
     (is (not-any? #(contains? (:json success) %) ["email" "emailConfirmed" "emailAuthFactor"]))
@@ -159,7 +159,7 @@
           (is (= "*" (get-in preflight [:headers "access-control-allow-origin"])))
           (is (str/includes? (get-in preflight [:headers "access-control-allow-headers"]) "DPoP"))
           (is (= 401 (:status missing)))
-          (is (= "DPoP error=\"use_dpop_nonce\"" (get-in missing [:headers "www-authenticate"])))
+          (is (= "DPoP error=\"use_dpop_nonce\", resource_metadata=\"https://pds.example.com/.well-known/oauth-protected-resource\"" (get-in missing [:headers "www-authenticate"])))
           (is (= 200 (:status response)))
           (is (= owner/did (get-in response [:body "did"])))))
       (finally ((:stop! server))))))
