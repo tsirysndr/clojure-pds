@@ -41,8 +41,9 @@ runnable and update this document as features land.
    complete login and invalid/replayed proofs fail. Local upstream Node client flows
    cover signup, login, writes, refresh and revocation. Email/repository/identity
    management scopes and [authenticated Lexicon resolution](LEXICON-RESOLUTION.md)
-   are implemented; permission-set cache/expansion/token/consent integration, OAuth
-   inactive migration and deployed interoperability remain pending.
+   are implemented, including permission-set expansion and shared verified schema
+   caching. Permission-set token/refresh/consent integration, OAuth inactive
+   migration and deployed interoperability remain pending.
 8. **Blob APIs (buffered transfer, references, missing/since listing and temporary/reference cleanup implemented):** streaming upload/download, limits, ownership, record references,
    list/missing blobs and garbage collection. Acceptance: binary round trips,
    interrupted upload cleanup and no cross-account access leaks.

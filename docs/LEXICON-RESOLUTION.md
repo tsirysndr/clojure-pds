@@ -35,10 +35,54 @@ invalid schemas, concurrency exhaustion, and real TLS fetch/redirect/encoding/si
 failures. Existing complete repository import verification shares the same commit
 validation and retains its complete-tree canonicality checks.
 
-This is the resolution foundation. OAuth `include:` support still requires cache
-policy, namespace-constrained permission expansion, immutable access-token
-snapshots, refresh integration and consent presentation. Dynamic record validation
-is not yet connected to this resolver.
+## Permission-set expansion and cache
+
+`pds.oauth.permission-sets/expand` interprets an authenticated schema at an
+`include:` invocation. Only repository and RPC declarations can grant authority.
+Every collection/method in a declaration must belong to the set's NSID group or
+one of its child groups. Wildcards, parent/sibling namespaces, unknown resources,
+unknown fields and invalid parameter values cause the entire declaration to be
+ignored. Other valid declarations in the set continue to work. Sets cannot grant
+blob, account or identity permissions or recursively include other sets.
+
+RPC declarations may name the wildcard audience or inherit a DID service audience
+from their invoking `include:`. Explicit DID audiences inside a set, conflicting
+audience/inheritance fields and missing inherited audiences grant nothing.
+Expansion returns ordinary direct scope strings; these will be persisted as
+immutable access-token permissions. Titles, details and language maps are retained
+for consent presentation and never participate in authorization decisions.
+
+The shared PostgreSQL cache (`pds.oauth.permission-cache`, migration 033) stores
+verified schema bytes and DID/CID/commit/revision provenance. Schemas become stale
+after 24 hours and expire for new sessions after 90 days. Stale entries trigger a
+refresh. Failed resolution can reuse an unexpired schema, with a 60-second retry
+cooldown; it does not extend the original successful fetch time. Existing sessions
+may supply their own previously authenticated schema snapshot as fallback beyond
+cache expiry or eviction. A fallback never seeds the cache for new sessions.
+
+Thirty-second leases coordinate refresh across processes. DNS/HTTPS verification
+runs outside database transactions. A superseded worker cannot publish or return
+its obsolete result. A cold in-progress lookup returns temporary unavailability;
+stale lookups can continue using their eligible cached entry. Same-publisher
+revision regressions and conflicting heads at the same revision are rejected.
+DNS-authorized publisher DID changes may start a different revision sequence.
+
+The cache holds at most 1,024 entries, each capped at 1,000,000 encoded bytes.
+Admission evicts at most one eligible stale entry, never an active lease or a
+successful entry less than 30 minutes old. If no slot is available, new lookups
+fail temporarily; an existing session can still use its authenticated fallback.
+Set envelopes allow up to 1,000 permission declarations, 100 translations per
+text field, and 10,000 expanded scopes totaling at most 1,000,000 characters.
+
+Tests compare expansion with the pinned upstream scope library and exercise
+namespace escapes, malformed declarations, audience inheritance, shared cache
+reopening, simultaneous refreshes, expired leases, revision rollback, cache
+capacity, signed-schema persistence and expiry during a failed network request.
+
+OAuth PAR still rejects `include:` until immutable token snapshots, refresh
+integration and consent presentation are connected. The parser exposes include
+syntax separately from currently admitted scopes. Dynamic record validation is
+also not yet connected to this resolver.
 
 Sources: [Lexicon publication and resolution](https://atproto.com/specs/lexicon#lexicon-publication-and-resolution),
 [permission sets](https://atproto.com/specs/permission#permission-sets).

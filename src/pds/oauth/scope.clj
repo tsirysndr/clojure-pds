@@ -23,10 +23,10 @@
 (defn- mime? [value]
   (or (= value "*/*")
       (re-matches #"[A-Za-z0-9!#$&^_.+-]+/(?:[A-Za-z0-9!#$&^_.+-]+|\*)" value)))
-(defn parse
+(defn- parse-value
   "Return a validated permission or nil. Percent escapes decode once; positional
   '+' is literal, query '+' is form-encoded space. Scalar duplicates are invalid."
-  [value]
+  [value include?]
   (try
     (when-not (and (string? value) (<= 1 (count value) 8192)
                    (re-matches #"[\x21\x23-\x5b\x5d-\x7e]+" value)) (invalid!))
@@ -39,6 +39,7 @@
                                         "rpc" ["lxm" #{"lxm"} #{"lxm" "aud"}]
                                         "account" ["attr" #{} #{"attr" "action"}]
                                         "identity" ["attr" #{} #{"attr"}]
+                                        "include" (if include? ["nsid" #{} #{"nsid" "aud"}] (invalid!))
                                         (invalid!))
             params (parameters/parse! (or query "") arrays)
             _ (when-not (set/subset? (set (keys params)) allowed) (invalid!))
@@ -62,6 +63,10 @@
                                  (or (= "*" audience) (service? audience))
                                  (not (and (= "*" audience) (some #{"*"} methods)))) (invalid!))
                   {:resource :rpc :methods (set methods) :audience audience})
+          "include" (let [nsid (get params "nsid") audience (get params "aud")]
+                      (when-not (and (syntax/nsid? nsid)
+                                     (or (not (contains? params "aud")) (and (string? audience) (service? audience)))) (invalid!))
+                      (cond-> {:resource :include :nsid nsid} audience (assoc :audience audience)))
           "account" (let [attribute (get params "attr") action (get params "action" "read")]
                       (when-not (and (#{"email" "repo"} attribute) (#{"read" "manage"} action)) (invalid!))
                       {:resource :account :attribute attribute :action action})
@@ -69,6 +74,13 @@
                        (when-not (#{"handle" "*"} attribute) (invalid!))
                        {:resource :identity :attribute attribute}))))
     (catch Exception _ nil)))
+
+(defn parse [value] (parse-value value false))
+(defn parse-include
+  "Parse include syntax separately until cache/token/consent integration enables
+  it at PAR. An include scope itself never grants direct resource authority."
+  [value]
+  (let [parsed (parse-value value true)] (when (= :include (:resource parsed)) parsed)))
 
 (defn supported? [value] (some? (parse value)))
 (defn permissions [value] (keep parse (str/split (or value "") #" ")))

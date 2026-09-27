@@ -414,8 +414,8 @@ completes signup, a scoped record write, refresh and revocation using granular
 permissions. Management grants are described below. Dynamically resolved
 `include:` permission sets remain the next implementation step. The
 [authenticated Lexicon resolver](LEXICON-RESOLUTION.md) verifies the DNS/DID and
-signed repository-record chain; cache policy, expansion and token/consent
-integration are still pending.
+signed repository-record chain. Namespace-constrained expansion and a shared
+PostgreSQL cache are implemented; token/refresh/consent integration is pending.
 
 ## Account and identity management permissions
 
@@ -569,8 +569,8 @@ The process lifecycle test covers starting and stopping the registered worker.
 
 ## Remaining steps
 
-1. Dynamically resolved permission sets, including fixed access-token permission
-   snapshots and permission-set consent.
+1. Connect permission-set expansion and the verified schema cache to PAR, fixed
+   access-token permission snapshots, refresh and permission-set consent.
 2. Account-status scopes and OAuth authorization for inactive migration accounts.
 3. Full browser/hardware ceremonies and deployed reference-client verification.
 
