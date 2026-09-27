@@ -121,10 +121,13 @@ moderation state, binary blobs, signed writes and WebSocket replay. The pinned
 upstream verifier checks the restored stream's repository signatures. New events
 must advance past the saved sequence numbers. Failure cases cover refusing an
 existing database/backup, checksum corruption and transactional rollback after a
-deliberately invalid post-data index definition with a matching checksum. The
-fixture preserves readable archive framing and verifies that index creation
-follows data loading; it does not depend on an arbitrary archive-tail truncation
-causing a restore error. Temporary databases and archive files
+deliberate post-data index rebuild failure. The fixture creates an expression
+index, then changes its function to raise an error when PostgreSQL rebuilds it.
+The dump and its checksum remain intact. No binary archive editing or matching of
+generated SQL text is involved. A control restore without `--single-transaction`
+must fail with the fixture's error and leave the probe row and account data behind;
+the production restore must leave the target empty. This verifies the failure is
+late enough to test actual rollback. Temporary databases and archive files
 are removed afterward.
 
 With the S3 emulator, the same drill verifies restored metadata can retrieve
