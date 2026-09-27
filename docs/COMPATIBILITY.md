@@ -223,7 +223,7 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   (30-second deadline). Real socket tests cover multiple chunks, empty bodies,
   HEAD/204/304 suppression, declared-length mismatches, read failures, slow-client
   backpressure, disconnect and shutdown cleanup. Blob downloads adopt this
-  contract, as do full repository exports; partial CAR and proxy responses remain buffered.
+  contract, as do full and partial repository exports; proxy responses remain buffered.
 - `getRepo` walks the current stored commit/MST graph and emits one hash-checked
   block at a time into an owned temporary file. It does not rebuild the MST or
   collect record payloads into a whole-repository map. A transaction-local
@@ -235,6 +235,13 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   Existing socket and pinned upstream sync tests verify the resulting CARs.
   `PDS_REPO_EXPORT_MAX_BYTES` defaults to 256 MiB (1 MiB–16 GiB); two process-wide
   staging/delivery slots bound temporary CAR payload. See [export limits](REPO-EXPORT.md).
+- `getBlocks` and `getRecord` also stage streamed CAR bodies, sharing the two
+  export slots. Selected blocks load individually; record proofs visit the MST
+  path without collecting its payloads. Hash/ownership checks precede response
+  publication, duplicate CIDs count once, and the 63 MiB block-payload limit
+  remains separate from the configurable full-export limit. Socket/upstream tests
+  cover inclusion/absence, history ownership, HEAD cleanup and output validity;
+  focused tests reject use of the buffered CAR/proof builders on these paths.
 - Blob downloads verify size and CID incrementally before responding. PostgreSQL
   returns bytea slices of at most 64 KiB, and S3 reads at most the recorded size
   plus one byte. A private temporary file avoids holding the whole blob in the

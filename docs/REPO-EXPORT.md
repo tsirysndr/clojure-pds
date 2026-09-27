@@ -1,4 +1,4 @@
-# Full repository exports
+# Repository CAR exports
 
 `com.atproto.sync.getRepo` returns a complete CAR containing the current signed
 commit, its MST and record blocks. A `since` query still receives a full export;
@@ -28,14 +28,27 @@ before any partial CAR is served.
 default is 268435456 (256 MiB); allowed values are 1048576–17179869184
 (1 MiB–16 GiB). Exceeding it returns `413 PayloadTooLarge`; increase it if a
 repository outgrows the configured limit. Two process-wide slots cover both
-preparation and HTTP delivery; exhaustion returns `503 RepoExportBusy`.
-Allocate up to twice the configured limit for temporary CAR payload, separately
+preparation and HTTP delivery and are shared with partial CAR endpoints;
+exhaustion returns `503 RepoExportBusy`.
+Allocate up to twice the larger of the configured limit and 64 MiB for temporary CAR payload, separately
 from the blob staging budget, plus filesystem and PostgreSQL temporary-table
 overhead. Disk I/O failures return a sanitized `503 RepoExportUnavailable`.
 
+`getBlocks` streams each requested owned block into a rootless CAR, deduplicating
+repeated CIDs. `getRecord` writes the commit and visits only the requested MST
+proof path, including the selected record when present or proving absence. The
+visitor checks hashes before emitting blocks and does not retain all proof bytes.
+Both endpoints stage completely before publishing any response bytes, release
+database resources before HTTP delivery, and use the same cleanup contract.
+Their existing 63 MiB total block-payload limit remains, with a 64 MiB encoded
+CAR cap; `PDS_REPO_EXPORT_MAX_BYTES` affects only full `getRepo` responses.
+Individual database block reads are capped at 1 MiB, matching the repository
+codec's supported block envelope. Missing or unowned explicitly requested blocks
+return `400 BlockNotFound`; corrupt proof/commit data fails without a partial CAR.
+
 The current import verifier still has its independent 64 MiB buffered limit.
 Raising the export limit does not raise import capacity. Internal byte-array CAR
-helpers and partial `getBlocks`/`getRecord` responses remain buffered. Large-repo
+helpers remain buffered. Large-repo
 load tests, bulk read optimization and deployed relay/migration verification
 remain pending; this change establishes bounded payload handling, not a measured
 production throughput claim.

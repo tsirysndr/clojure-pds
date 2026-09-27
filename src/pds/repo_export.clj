@@ -82,8 +82,11 @@
       (emit! head)
       (walk! (link! (get commit "data") false) 0))))
 
-(defn response! [ds config did]
-  (when-not (syntax/did? did) (errors/invalid! "Invalid DID"))
+(defn staged-response!
+  "Build a verified CAR with a caller-supplied OutputStream writer. The writer
+  must finish its transaction before returning. Full and partial CAR responses
+  share the process-wide allowance until their owned HTTP bodies are closed."
+  [maximum write!]
   (when-not (.tryAcquire permits)
     (errors/raise! 503 "RepoExportBusy" "Repository export capacity is busy; retry later"))
   (let [channel (atom nil) released? (atom false)
@@ -92,7 +95,7 @@
                          (finally (.release permits))))]
     (try
       (reset! channel (tempfile/open-channel!))
-      (db/transact! ds #(write-repo! % did (bounded-output @channel (get config :repo-export-max-bytes default-max-bytes))))
+      (write! (bounded-output @channel maximum))
       (let [length (.size ^FileChannel @channel)
             input (proxy [FilterInputStream] [(tempfile/input @channel)] (close [] (release!)))]
         {:status 200 :headers {"Content-Type" "application/vnd.ipld.car" "Content-Length" (str length)}
@@ -102,3 +105,8 @@
         (if (instance? IOException error)
           (errors/raise! 503 "RepoExportUnavailable" "Repository export storage is unavailable")
           (throw error))))))
+
+(defn response! [ds config did]
+  (when-not (syntax/did? did) (errors/invalid! "Invalid DID"))
+  (staged-response! (get config :repo-export-max-bytes default-max-bytes)
+    (fn [out] (db/transact! ds #(write-repo! % did out)))))

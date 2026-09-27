@@ -8,16 +8,26 @@
             [pds.protocol.mst :as mst]
             [pds.protocol.syntax :as syntax]
             [pds.repo :as repo]
+            [pds.repo-export :as export]
             [pds.request :as request]
             [pds.signing-state :as signing-state]))
 
-(defn car-response [root blocks]
-  (when (> (reduce + 0 (map #(alength ^bytes %) (vals blocks))) (* 63 1024 1024))
-    (errors/raise! 413 "PayloadTooLarge" "Requested blocks exceed the response limit"))
-  {:status 200 :headers {"Content-Type" "application/vnd.ipld.car"} :body (car/encode root blocks)})
+(def max-block-bytes (* 63 1024 1024))
+(def max-car-bytes (* 64 1024 1024))
 
-(defn read-block [conn cid]
-  (:content (first (db/query conn "SELECT content FROM repo_blocks WHERE cid = ?" cid))))
+(defn- emitter [out]
+  (let [seen (atom #{}) total (atom 0)]
+    (fn [cid data]
+      (when-not (contains? @seen cid)
+        (when (> (+ @total (alength ^bytes data)) max-block-bytes)
+          (errors/raise! 413 "PayloadTooLarge" "Requested blocks exceed the response limit"))
+        (car/write-block! out cid data)
+        (swap! total + (alength ^bytes data))
+        (swap! seen conj cid)))))
+
+(defn read-block [conn did cid]
+  (:content (first (db/query conn "SELECT b.content FROM repo_block_owners o JOIN repo_blocks b ON b.cid = o.cid
+                                  WHERE o.did = ? AND o.cid = ? AND octet_length(b.content) <= 1048576" did cid))))
 
 (defn active! [conn did]
   (when-not (syntax/did? did) (errors/invalid! "Invalid DID"))
@@ -32,26 +42,31 @@
       (let [params (request/query-params r #{"cids"}) cids (get params "cids")]
         (when-not (and (vector? cids) (<= 1 (count cids) 100)) (errors/invalid! "Expected 1 to 100 CIDs"))
         (doseq [cid cids] (repo-api/cid! cid))
-        (db/transact! ds
-          (fn [conn]
-            (let [account (active! conn (get params "did"))
-                  blocks (into {} (map (fn [cid]
-                                        [cid (or (:content (first (db/query conn
-                                          "SELECT b.content FROM repo_block_owners o JOIN repo_blocks b ON b.cid = o.cid WHERE o.did = ? AND o.cid = ?"
-                                          (:did account) cid)))
-                                                 (errors/raise! 400 "BlockNotFound" "Block was not found in this repository"))]) (distinct cids)))]
-              (car-response nil blocks))))))}
+        (export/staged-response! max-car-bytes
+          (fn [out]
+            (db/transact! ds
+              (fn [conn]
+                (let [account (active! conn (get params "did")) emit! (emitter out)]
+                  (car/write-header! out nil)
+                  (doseq [cid (sort (distinct cids))]
+                    (emit! cid (or (read-block conn (:did account) cid)
+                                   (errors/raise! 400 "BlockNotFound" "Block was not found in this repository")))))))))))}
    "/xrpc/com.atproto.sync.getRecord"
    {:method :get
     :handler
     (fn [r]
       (let [params (request/query-params r) collection (get params "collection") rkey (get params "rkey")]
         (repo/path! collection rkey)
-        (db/transact! ds
-          (fn [conn]
-            (let [account (active! conn (get params "did"))
-                  state (repo/state conn (:did account))
-                  head (read-block conn (:head state))
-                  root (:cid (get (codec/decode head) "data"))
-                  proof (mst/proof root (str collection "/" rkey) #(read-block conn %))]
-              (car-response (:head state) (assoc (:blocks proof) (:head state) head)))))))}})
+        (export/staged-response! max-car-bytes
+          (fn [out]
+            (db/transact! ds
+              (fn [conn]
+                (let [account (active! conn (get params "did"))
+                      state (repo/state conn (:did account))
+                      head (read-block conn (:did account) (:head state))
+                      root (:cid (get (codec/decode head) "data"))
+                      emit! (emitter out)]
+                  (car/write-header! out (:head state))
+                  (emit! (:head state) head)
+                  (mst/visit-proof! root (str collection "/" rkey)
+                                    #(read-block conn (:did account) %) emit! true))))))))}})

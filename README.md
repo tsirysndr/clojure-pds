@@ -431,7 +431,9 @@ a duplicate. Receipts are retained indefinitely; plan retention for larger syste
   current graph. Public full CAR exports stream through private temporary files,
   visiting stored blocks without rebuilding the tree or buffering the whole CAR.
   `PDS_REPO_EXPORT_MAX_BYTES` defaults to 256 MiB, with two concurrent export slots;
-  see [repository export limits](docs/REPO-EXPORT.md). CAR imports are buffered and replace the full current record set;
+  `getBlocks` and `getRecord` share those slots and stream partial CARs under their
+  separate 63 MiB payload limit. See [repository export limits](docs/REPO-EXPORT.md).
+  CAR imports are buffered and replace the full current record set;
   streaming import and historical repository-block garbage collection are unfinished.
 - Commit events persist signed CAR proofs and previous-value operations for
   inductive verification. Records are limited to 1,000,000 encoded bytes and

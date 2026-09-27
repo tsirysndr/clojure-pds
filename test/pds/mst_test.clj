@@ -44,3 +44,22 @@
         ;; Every block needed to re-traverse the proof is included.
         (is (= (:cid proof) (:cid (mst/proof (:root tree) key (:blocks proof)))))))
     (is (thrown? Exception (mst/proof (:root tree) (first keys) {})))))
+
+(deftest proof-visitor-validates-before-visiting-and-can-stop-traversal
+  (let [record (codec/encode {"$type" "com.example.record" "n" 1}) cid (codec/cid record)
+        tree (mst/build {"com.example.record/a" cid}) blocks (assoc (:blocks tree) cid record)
+        visited (atom [])]
+    (is (= cid (mst/visit-proof! (:root tree) "com.example.record/a" blocks
+                                (fn [cid _] (swap! visited conj cid)) false)))
+    (is (= [(:root tree)] @visited))
+    (reset! visited [])
+    (is (thrown? Exception
+          (mst/visit-proof! (:root tree) "com.example.record/a" (assoc blocks cid (byte-array [0]))
+                            (fn [cid _] (swap! visited conj cid)) true)))
+    (is (= [(:root tree)] @visited) "A corrupt leaf is never passed to the visitor")
+    (let [loaded (atom [])]
+      (is (thrown-with-msg? Exception #"Stop writing"
+            (mst/visit-proof! (:root tree) "com.example.record/a"
+                              #(do (swap! loaded conj %) (get blocks %))
+                              (fn [_ _] (throw (ex-info "Stop writing" {}))) true)))
+      (is (= [(:root tree)] @loaded)))))

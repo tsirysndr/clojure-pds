@@ -43,15 +43,15 @@
                      (node! entries (apply max (map :height entries))))]
         {:root (:cid root) :blocks @blocks}))))
 
-(defn proof
-  "Read only the search path for key. Includes the record block when present;
-  the same path proves absence when no matching key exists. load-block returns
-  bytes by CID. Traversal never follows arbitrary links inside record values."
-  ([root key load-block] (proof root key load-block true))
-  ([root key load-block include-record?]
+(defn visit-proof!
+  "Visit hash-checked blocks on a search path without collecting their payloads.
+  Returns the selected record CID, or nil for absence. The visitor owns any
+  retained data. Arbitrary links inside record values are never traversed."
+  [root key load-block visit-block! include-record?]
   (letfn [(load! [cid]
             (let [data (load-block cid)]
               (when-not (and data (= cid (codec/cid data))) (codec/fail! "Missing or corrupt MST proof block"))
+              (visit-block! cid data)
               data))
           (locate [node]
             (loop [entries (get node "e") previous "" child (get node "l")]
@@ -65,13 +65,21 @@
                         (neg? order) [:child (:cid child)]
                         :else (recur (next entries) entry-key (get entry "t"))))
                 [:child (:cid child)])))]
-    (loop [cid root blocks {}]
-      (when (or (contains? blocks cid) (>= (count blocks) 128)) (codec/fail! "Invalid MST traversal"))
-      (let [data (load! cid) blocks (assoc blocks cid data)
+    (loop [cid root seen #{}]
+      (when (or (contains? seen cid) (>= (count seen) 128)) (codec/fail! "Invalid MST traversal"))
+      (let [data (load! cid) seen (conj seen cid)
             [kind next-cid] (locate (codec/decode data))]
-        (cond (= kind :record) {:cid next-cid :blocks (if include-record? (assoc blocks next-cid (load! next-cid)) blocks)}
-              next-cid (recur next-cid blocks)
-              :else {:cid nil :blocks blocks}))))))
+        (cond (= kind :record) (do (when include-record? (load! next-cid)) next-cid)
+              next-cid (recur next-cid seen)
+              :else nil)))))
+
+(defn proof
+  "Collect a search-path proof for callers needing an in-memory block map."
+  ([root key load-block] (proof root key load-block true))
+  ([root key load-block include-record?]
+   (let [blocks (atom {})
+         cid (visit-proof! root key load-block #(swap! blocks assoc %1 %2) include-record?)]
+     {:cid cid :blocks @blocks})))
 
 (defn verify-proof
   "Verify an untrusted partial tree's search path. Validates every visited node
