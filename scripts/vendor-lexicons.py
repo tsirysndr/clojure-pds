@@ -28,6 +28,7 @@ ENDPOINT_ROOTS = [
     "com.atproto.admin.enableAccountInvites",
     "com.atproto.admin.getAccountInfo",
     "com.atproto.admin.getAccountInfos",
+    "com.atproto.admin.getInviteCodes",
     "com.atproto.admin.getSubjectStatus",
     "com.atproto.admin.searchAccounts",
     "com.atproto.admin.sendEmail",

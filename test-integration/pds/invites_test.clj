@@ -68,6 +68,23 @@
             (is (= 200 (:status (admin "com.atproto.admin.disableInviteCodes" {"accounts" [did]}))))
             (is (= 400 (:status (post "com.atproto.server.createAccount" (signup "disabled" (second gift-codes)) nil))))
             (is (= 200 (:status (admin "com.atproto.admin.enableAccountInvites" {"account" did}))))
+            (is (= 401 (:status (api/xrpc client port "GET" "com.atproto.admin.getInviteCodes" nil token))))
+            (is (= 400 (:status (admin-call client port "GET" "com.atproto.admin.getInviteCodes?sort=unknown" nil))))
+            (is (= 400 (:status (admin-call client port "GET" "com.atproto.admin.getInviteCodes?cursor=malformed" nil))))
+            (let [listed (admin-call client port "GET" "com.atproto.admin.getInviteCodes" nil)]
+              (is (= 200 (:status listed)))
+              (is (= #{code (first gift-codes) (second gift-codes)}
+                     (set (map #(get % "code") (get-in listed [:body "codes"])))))
+              (is (nil? (get-in listed [:body "cursor"]))))
+            (let [page (fn [cursor] (:body (admin-call client port "GET"
+                                                       (str "com.atproto.admin.getInviteCodes?sort=usage&limit=1"
+                                                            (when cursor (str "&cursor=" cursor))) nil)))
+                  pages (take 4 (iterate #(page (get % "cursor")) (page nil)))
+                  usage-codes (mapv #(get-in % ["codes" 0 "code"]) (take 3 pages))]
+              (is (= [code (first gift-codes) (second gift-codes)] usage-codes))
+              (is (= [2 1 0] (mapv #(count (get-in % ["codes" 0 "uses"])) (take 3 pages))))
+              (is (= [] (get (last pages) "codes")))
+              (is (nil? (get (last pages) "cursor"))))
             (with-open [conn (db/connection fixture/*ds*)]
               (is (= 3 (:n (first (db/query conn "SELECT count(*) AS n FROM invite_uses")))))
               (is (= 3 (:n (first (db/query conn "SELECT count(*) AS n FROM accounts")))))

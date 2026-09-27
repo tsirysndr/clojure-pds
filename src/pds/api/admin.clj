@@ -35,6 +35,8 @@
    (server/json-route :post (authenticated ds settings #(invites/create-code! %1 (request/json-body %2))))
    "/xrpc/com.atproto.server.createInviteCodes"
    (server/json-route :post (authenticated ds settings #(invites/create-codes! %1 (request/json-body %2))))
+   "/xrpc/com.atproto.admin.getInviteCodes"
+   (server/json-route :get (authenticated ds settings #(invites/list-codes %1 (request/query-params %2))))
    "/xrpc/com.atproto.admin.disableInviteCodes"
    (server/empty-route (authenticated ds settings #(invites/disable! %1 (request/json-body %2))))
    "/xrpc/com.atproto.admin.disableAccountInvites"

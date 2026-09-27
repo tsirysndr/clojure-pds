@@ -323,7 +323,9 @@ Use HTTP Basic authentication with username `admin` over your HTTPS origin.
 `createInviteCodes` creates a bounded batch. Ordinary session tokens cannot call
 these endpoints. Invite redemption is transactional, including concurrent final uses.
 Accounts list their codes with `getAccountInviteCodes`; `includeUsed=false` filters
-unavailable codes. Admins can invalidate codes through `disableInviteCodes` by
+unavailable codes. Admins list every code with `com.atproto.admin.getInviteCodes`
+(`sort=recent|usage`, limit 1–500, opaque keyset cursor) and can invalidate codes
+through `disableInviteCodes` by
 code or owner. `disableAccountInvites`/`enableAccountInvites` retain the future-grant
 policy flag and note; existing codes remain usable. Automatic invite grants are
 disabled, so `createAvailable` currently creates no additional codes.

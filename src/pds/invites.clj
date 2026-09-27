@@ -1,8 +1,10 @@
 (ns pds.invites
-  (:require [pds.crypto :as crypto]
+  (:require [clojure.string :as str]
+            [pds.crypto :as crypto]
             [pds.db :as db]
             [pds.errors :as errors]
-            [pds.protocol.syntax :as syntax]))
+            [pds.protocol.syntax :as syntax]
+            [pds.request :as request]))
 
 (defn settings [env]
   (let [required (get env "PDS_REQUIRE_INVITE_CODE" "false")]
@@ -65,6 +67,28 @@
     "SELECT c.* FROM invite_codes c WHERE for_account = ?
        AND (? OR (NOT disabled AND available > (SELECT count(*) FROM invite_uses u WHERE u.code = c.code)))
        ORDER BY created_at, code" did (not= "false" (get params "includeUsed"))))})
+
+(defn list-codes
+  "Administrative listing of every invite code, newest or most-used first, with
+  an opaque sort-value:code keyset cursor."
+  [conn params]
+  (let [limit (request/limit! params 100 500)
+        order (get params "sort" "recent")
+        [value code] (some-> (get params "cursor") (str/split #":" 2))]
+    (when-not (#{"recent" "usage"} order) (errors/invalid! "Unknown sort order"))
+    (when (contains? params "cursor")
+      (when-not (and value code (re-matches #"[0-9]{1,18}" value) (<= 1 (count code) 256))
+        (errors/invalid! "Invalid cursor")))
+    (let [sort-value (case order
+                       "recent" "(extract(epoch FROM c.created_at) * 1000000)::bigint"
+                       "usage" "(SELECT count(*) FROM invite_uses u WHERE u.code = c.code)::bigint")
+          rows (db/query conn (str "SELECT c.*, " sort-value " AS sort_value FROM invite_codes c"
+                                   " WHERE ?::bigint IS NULL OR (" sort-value ", c.code) < (?, ?)"
+                                   " ORDER BY sort_value DESC, c.code DESC LIMIT ?")
+                         (some-> value Long/parseLong) (some-> value Long/parseLong) (or code "") limit)]
+      (cond-> {:codes (mapv #(view conn %) rows)}
+        (= (count rows) limit)
+        (assoc :cursor (str (:sort_value (last rows)) ":" (:code (last rows))))))))
 
 (defn disable! [conn body]
   ;; Bulk operations can overlap through both owner and code selectors.
