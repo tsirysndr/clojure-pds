@@ -20,7 +20,8 @@
   (crypto/b64 (codec/sha256 (byte-array (concat (codec/utf8 "clojure-pds/master-key/v1/") key)))))
 
 (def columns
-  ;; Every use of crypto/seal is represented here, including unpublished keys.
+  ;; Every use of crypto/seal is rewrapped here or deleted during rotation
+  ;; (sessions, app passwords and unconsumed reserved signing keys).
   [{:table "repositories" :column "signing_key" :purpose identity}
    {:table "plc_identities" :column "rotation_key" :purpose #(str % ":plc-rotation")}
    {:table "handle_updates" :column "next_rotation_key" :purpose #(str % ":plc-rotation")}
@@ -111,13 +112,14 @@
           ;; writers during this transaction. This does not permit online use.
           (db/query conn "SELECT pg_advisory_xact_lock(731946281)")
           (db/execute! conn "SET LOCAL lock_timeout = '5s'")
-          (db/execute! conn "LOCK TABLE accounts, repositories, plc_identities, handle_updates, account_totp, sessions, app_passwords IN ACCESS EXCLUSIVE MODE")
+          (db/execute! conn "LOCK TABLE accounts, repositories, plc_identities, handle_updates, account_totp, sessions, app_passwords, reserved_signing_keys IN ACCESS EXCLUSIVE MODE")
           (register! conn old)
           (when (seq (db/query conn "SELECT 1 FROM master_key_rotations WHERE previous_fingerprint = ? OR fingerprint = ?" (fingerprint new) (fingerprint new)))
             (fail! "RetiredKey" "A previously used master key cannot be reused"))
           (let [counts (sealed-columns! conn old new)
                 counts (assoc counts :sessions (db/execute! conn "DELETE FROM sessions")
-                                     :app_passwords (db/execute! conn "DELETE FROM app_passwords"))
+                                     :app_passwords (db/execute! conn "DELETE FROM app_passwords")
+                                     :reserved_signing_keys (db/execute! conn "DELETE FROM reserved_signing_keys"))
                 generation (inc (:generation (state conn)))]
             (db/execute! conn "UPDATE master_key_state SET fingerprint = ?, generation = ?, updated_at = now() WHERE id" (fingerprint new) generation)
             (db/execute! conn "INSERT INTO master_key_rotations(previous_fingerprint, fingerprint, generation, counts) VALUES (?, ?, ?, ?::jsonb)"

@@ -227,6 +227,12 @@ token issuer must exactly match `did`. Signup and invitation settings apply;
 custom handles must prove their binding through DNS/HTTPS. The transaction consumes
 the token and invite, reserves the account and handle, generates fresh encrypted
 local keys, creates a private empty repository, and queues confirmation email.
+`POST /xrpc/com.atproto.server.reserveSigningKey` may be called first, without
+authentication, to learn the destination P-256 signing `did:key`; a reservation
+for the account DID is consumed by preparation, expires after 24 hours, and at
+most 4096 reservations are pending per database (overflow returns
+`503 ReservationBusy`). Reservation private keys stay sealed with the master key
+and unconsumed reservations are deleted during offline master-key rewrapping.
 The returned primary session works while the account is deactivated. PLC accounts
 can obtain `getRecommendedDidCredentials`, have the source sign those credentials,
 and call `submitPlcOperation` here. Account preparation publishes no repository

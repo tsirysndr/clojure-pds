@@ -71,6 +71,7 @@ ENDPOINT_ROOTS = [
     "com.atproto.server.requestEmailConfirmation",
     "com.atproto.server.requestEmailUpdate",
     "com.atproto.server.requestPasswordReset",
+    "com.atproto.server.reserveSigningKey",
     "com.atproto.server.resetPassword",
     "com.atproto.server.revokeAppPassword",
     "com.atproto.server.updateEmail",

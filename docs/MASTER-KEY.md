@@ -9,7 +9,8 @@ or emit repository events.
 
 Legacy sessions and refresh tokens are deleted. App passwords are also deleted:
 their one-way digests depend on the old master key and cannot be re-encrypted.
-Users must sign in again and recreate app passwords. OAuth grants, browser sessions,
+Users must sign in again and recreate app passwords. Unconsumed short-lived
+`reserveSigningKey` reservations are deleted; clients reserve again. OAuth grants, browser sessions,
 primary-password hashes and passkeys use independent credentials and remain valid.
 DPoP server nonces change: OAuth clients receive `use_dpop_nonce` and retry with
 the returned nonce, without having to authorize a new grant.

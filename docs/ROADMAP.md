@@ -60,7 +60,7 @@ runnable and update this document as features land.
    bounded HTTPS delivery, retries and cross-process leases.
    [Administrative takedowns](MODERATION.md) cover accounts, records and blobs;
    content flags preserve signed repository data and isolate each account.
-10. **Service integration and migration (authenticated proxy with staged streaming responses, service tokens/replay protection, destination preparation, public data/private preference transfer and verified activation implemented):** authenticated service proxy, service
+10. **Service integration and migration (authenticated proxy with staged streaming responses, service tokens/replay protection, signing-key reservation, destination preparation, public data/private preference transfer and verified activation implemented):** authenticated service proxy, service
     auth tokens, account migration/import/export and PLC operations.
     Acceptance: an external client reads and writes through this PDS and an
     account migrates between this implementation and a reference PDS.

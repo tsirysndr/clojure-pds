@@ -17,6 +17,7 @@
             [pds.protocol.codec :as codec]
             [pds.repo :as repo]
             [pds.request :as request]
+            [pds.reserved-keys :as reserved-keys]
             [pds.service-auth :as service-auth]))
 
 (defn create! [ds settings resolver request body]
@@ -57,8 +58,9 @@
               (registry/reserve! conn did handle)
               (when-not rotation (registry/reserve! conn did (str/lower-case (subs did 8))))
               (invites/consume! conn settings (get body "inviteCode") did)
-              (db/execute! conn "INSERT INTO repositories(did, signing_key, public_key) VALUES (?, ?, ?)"
-                           did (crypto/seal (:master-key settings) did (:private signing)) (:public signing))
+              (let [signing (or (reserved-keys/consume! conn settings did) signing)]
+                (db/execute! conn "INSERT INTO repositories(did, signing_key, public_key) VALUES (?, ?, ?)"
+                             did (crypto/seal (:master-key settings) did (:private signing)) (:public signing)))
               (repo/commit! conn settings (assoc (repo/state conn did) :suppress-events? true))
               (db/execute! conn "INSERT INTO account_imports(did, source_document) VALUES (?, ?::jsonb)" did (json/write-str document))
               (when rotation

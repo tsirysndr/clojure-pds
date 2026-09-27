@@ -15,6 +15,7 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | `app.bsky.actor` | `getPreferences`, `putPreferences` | Private ordered preferences, inactive primary-session transfer, protected personal details, derived age flags, and RPC-scoped OAuth access; explicit alternate-AppView proxying |
 | `com.atproto.server` | `describeServer` | Service DID, hosted suffix when signup is open, blob limit |
 | `com.atproto.server` | `createAccount` | Configurable signup and service-authenticated destination preparation for existing web/PLC DIDs; inactive imports with new local keys; phone verification pending |
+| `com.atproto.server` | `reserveSigningKey` | Public, bounded P-256 key reservations with sealed private material and 24-hour expiry; consumed by destination preparation for the same DID |
 | `com.atproto.server` | `createInviteCode`, `createInviteCodes`, `getAccountInviteCodes` | Admin-issued codes, bounded batches, account listing and concurrent redemption limits; no automatic grants |
 | `com.atproto.admin` | `disableInviteCodes`, `disableAccountInvites`, `enableAccountInvites` | Optional Basic admin credentials; code invalidation and future-grant policy |
 | `com.atproto.admin` | `getAccountInfo`, `getSubjectStatus`, `updateSubjectStatus` | Private account inspection; account, record and blob takedowns; independent activation state and signed repository data preserved; [moderation semantics](MODERATION.md) |
@@ -150,7 +151,7 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   cache bounds/expiry, revocation and concurrent put-action changes.
   Invalid batches roll back records, blocks and commits. CID string formats are
   restricted to the blessed AT Protocol CID set; see fixture notes.
-- The catalog now contains 100 schemas covering the record roots and all 63
+- The catalog now contains 101 schemas covering the record roots and all 64
   implemented XRPC endpoints and their references. JSON inputs and typed query
   parameters enforce required/nullable fields, formats, nested references/unions,
   and scalar/array constraints at the existing request-reading boundaries.
@@ -165,7 +166,7 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   WebSocket frames without changing production handlers. Local schema checks and
   the pinned upstream validator check JSON bodies, media types, empty procedure
   responses, frame envelopes, native bytes/CID links, all five message variants
-  and error payloads. Required coverage includes all 63 implemented endpoints and
+  and error payloads. Required coverage includes all 64 implemented endpoints and
   `#commit`, `#sync`, `#identity`, `#account`, `#info`, plus error frames. Negative
   checker tests ensure missing fields, null optional values, wrong content types
   and malformed envelopes fail. HTTP/WebSocket tests additionally connect a
@@ -302,7 +303,12 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   proves token interoperability, not external service access or complete migration.
 - Destination preparation retains the verified source DID document, creates fresh
   encrypted keys and a private empty repository, and returns a deactivated primary
-  session. PLC keys remain `prepared` until a source-authorized operation is accepted.
+  session. `reserveSigningKey` reservations are public, capped at 4096 pending
+  rows, expire after 24 hours, repeat per DID, seal private keys with the master
+  key and are consumed transactionally by preparation for the same DID; master-key
+  rotation deletes unconsumed reservations. HTTP tests cover validation, repeats,
+  capacity errors, consumption into the prepared repository key and fresh-key
+  fallback. PLC keys remain `prepared` until a source-authorized operation is accepted.
   Tests cover actual HTTP signup, invite/nonce/outbox rollback, concurrent creation,
   source key rotation during preparation, custom-handle proof, credential handoff,
   and public repo invisibility. Admin activation cannot bypass destination

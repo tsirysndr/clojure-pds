@@ -23,6 +23,7 @@
             [pds.plc-provision-test :as provision]
             [pds.protocol.repository :as repository]
             [pds.repo :as repo]
+            [pds.reserved-keys :as reserved]
             [pds.security.factors :as factors]
             [pds.security.totp :as totp]
             [pds.server-api-test :as api]
@@ -74,6 +75,7 @@
           (reset! mode :ignore)
           (is (= "RegistrationPending" (control-test/error #(accounts/create! fixture/*ds* settings (assoc (provision/signup) "handle" "waiting.example.com" "email" "waiting@example.com")))))
           (reset! mode :accept)
+          (reserved/reserve! fixture/*ds* settings {})
           (register! old)
           (let [saved (secrets) events (provision/scalar "SELECT count(*) AS n FROM repo_events")
                 result (rewrap old new)]
@@ -84,6 +86,8 @@
             (is (= 1 (get-in result [:counts :handle_updates.next_signing_key])))
             (is (= 1 (get-in result [:counts :account_totp.sealed_secret])))
             (is (= 1 (get-in result [:counts :app_passwords])))
+            (is (= 1 (get-in result [:counts :reserved_signing_keys])))
+            (is (= 0 (provision/scalar "SELECT count(*) AS n FROM reserved_signing_keys")))
             (doseq [{:keys [table column purpose]} keys/columns
                     [prior after] (map vector (get saved [table column]) (get (secrets) [table column]))]
               (is (not= (:sealed prior) (:sealed after)))

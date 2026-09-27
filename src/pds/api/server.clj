@@ -10,6 +10,7 @@
             [pds.identity :as identity]
             [pds.migration :as migration]
             [pds.request :as request]
+            [pds.reserved-keys :as reserved-keys]
             [pds.service-auth :as service-auth]
             [pds.xrpc :as xrpc]))
 
@@ -34,6 +35,8 @@
                          (if (contains? body "did")
                            (migration/create! ds settings resolver r body)
                            (accounts/create! ds settings body)))))
+   "/xrpc/com.atproto.server.reserveSigningKey"
+   (json-route :post #(reserved-keys/reserve! ds settings (request/json-body %)))
    "/xrpc/com.atproto.server.createSession"
    (json-route :post #(accounts/login! ds settings (request/json-body %)))
    "/xrpc/com.atproto.server.refreshSession"
