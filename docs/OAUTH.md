@@ -412,7 +412,10 @@ cover atomic denial, put create/update distinctions, pre-body upload denial,
 audience/method substitution and refresh narrowing. The upstream Node OAuth client
 completes signup, a scoped record write, refresh and revocation using granular
 permissions. Management grants are described below. Dynamically resolved
-`include:` permission sets remain the next implementation step.
+`include:` permission sets remain the next implementation step. The
+[authenticated Lexicon resolver](LEXICON-RESOLUTION.md) verifies the DNS/DID and
+signed repository-record chain; cache policy, expansion and token/consent
+integration are still pending.
 
 ## Account and identity management permissions
 

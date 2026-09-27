@@ -73,6 +73,62 @@
               next-cid (recur next-cid blocks)
               :else {:cid nil :blocks blocks}))))))
 
+(defn verify-proof
+  "Verify an untrusted partial tree's search path. Validates every visited node
+  and key ordering/bounds; missing branches on the path are errors, not absence.
+  Only the selected record is loaded, never links contained inside its value."
+  [root key load-block]
+  (letfn [(link! [value nullable?]
+            (when-not (or (and nullable? (nil? value))
+                          (and (instance? pds.protocol.codec.Link value)
+                               (= 113 (aget (codec/cid-bytes (:cid value)) 1))))
+              (codec/fail! "Invalid MST proof link"))
+            (:cid value))
+          (load! [cid]
+            (let [data (load-block cid)]
+              (when-not (and data (= cid (codec/cid data))) (codec/fail! "Missing or corrupt proof block"))
+              data))
+          (entries! [node lower upper]
+            (when-not (and (map? node) (= #{"l" "e"} (set (keys node))) (vector? (get node "e")))
+              (codec/fail! "Invalid MST proof node"))
+            (loop [pending (seq (get node "e")) previous "" result []]
+              (if-let [entry (first pending)]
+                (let [prefix (get entry "p") suffix (get entry "k")]
+                  (when-not (and (map? entry) (= #{"p" "k" "v" "t"} (set (keys entry)))
+                                 (integer? prefix) (<= 0 prefix (count previous)) (bytes? suffix)
+                                 (<= 1 (+ prefix (alength ^bytes suffix)) 1024))
+                    (codec/fail! "Invalid MST proof entry"))
+                  (let [entry-key (str (subs previous 0 prefix) (codec/text suffix))]
+                    (when-not (and (re-matches #"[\x21-\x7e]+" entry-key)
+                                   (pos? (compare entry-key previous))
+                                   (or (nil? lower) (pos? (compare entry-key lower)))
+                                   (or (nil? upper) (neg? (compare entry-key upper)))
+                                   (= prefix (common-prefix (codec/utf8 previous) (codec/utf8 entry-key))))
+                      (codec/fail! "Invalid MST proof key ordering or compression"))
+                    (recur (next pending) entry-key
+                           (conj result {:key entry-key :cid (link! (get entry "v") false)
+                                         :child (link! (get entry "t") true)}))))
+                result)))]
+    (loop [cid root lower nil upper nil seen #{}]
+      (when (or (seen cid) (>= (count seen) 128)) (codec/fail! "Invalid MST proof traversal"))
+      (let [node (codec/decode (load! cid)) entries (entries! node lower upper)
+            left (link! (get node "l") true)
+            selected (loop [remaining (seq entries) child left lower lower]
+                       (if-let [entry (first remaining)]
+                         (let [order (compare key (:key entry))]
+                           (cond (zero? order) {:cid (:cid entry)}
+                                 (neg? order) {:child child :lower lower :upper (:key entry)}
+                                 :else (recur (next remaining) (:child entry) (:key entry))))
+                         {:child child :lower lower :upper upper}))]
+        (cond
+          (:cid selected)
+          (let [record (codec/decode (load! (:cid selected)) 1000000)]
+            (when-not (and (map? record) (not (instance? pds.protocol.codec.Link record)))
+              (codec/fail! "Proof record must be an object"))
+            {:cid (:cid selected) :record record})
+          (:child selected) (recur (:child selected) (:lower selected) (:upper selected) (conj seen cid))
+          :else {:cid nil :record nil})))))
+
 (defn covering-proof
   "MST nodes for the target plus its immediate neighboring leaves. Including
   both boundaries lets consumers invert insertions/deletions on a partial tree."

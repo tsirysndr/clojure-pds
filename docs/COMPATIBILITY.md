@@ -290,8 +290,9 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
 
 ## Remaining work for a full PDS
 
-1. Dynamic schema resolution and expanded behavioral conformance/catalog coverage
-   as endpoints and protocol features are added.
+1. Integration of [authenticated dynamic schema resolution](LEXICON-RESOLUTION.md)
+   with record validation and OAuth permission sets, and expanded behavioral
+   conformance/catalog coverage as endpoints and protocol features are added.
 2. Bounded identity caching,
    signing/rotation key lifecycle, conflicted-operation administration, and migration.
 3. Remaining administrative APIs, record/blob takedowns, and broader account recovery controls.
