@@ -84,8 +84,11 @@ rotating sessions, scoped app passwords, email recovery, schema-validated record
 implemented. See [the compatibility matrix](COMPATIBILITY.md) for exact coverage,
 verification evidence, and limits. Full PDS compatibility is not achieved yet.
 
-Next implementation series: remaining identity/key lifecycle, migration,
-administration, and relay conformance.
+Next implementation series: OAuth inactive migration sessions, proxy
+request-body streaming, deployed migration/relay conformance and operational
+hardening. The reference PDS route surface is covered except entryway-managed
+signing-key updates and phone verification, which do not apply to this
+deployment model.
 Implemented endpoints now have pinned input validation and observed output/event
 schema checks with required endpoint/message coverage. Authenticated service
 proxying with disk-staged response streaming is implemented; OAuth and external service interoperability

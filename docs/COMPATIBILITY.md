@@ -421,8 +421,11 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
    replacements and TOTP secrets with atomic rollback and startup key checks.
    Legacy sessions/app passwords are invalidated; OAuth access/refresh and queued
    PLC operations survive. Deployment secret-store cutover remains operator-managed.
-3. Remaining administrative APIs and deployment-specific owner-verification
-   policies. [Local all-authenticator-loss recovery](ADMIN-ACCOUNTS.md#recovery-after-losing-every-authenticator)
+3. Deployment-specific owner-verification policies. Administrative account
+   inspection/search, operator email, invite listing and handle updates are
+   implemented; entryway-managed signing-key updates and phone verification do
+   not apply to this deployment model.
+   [Local all-authenticator-loss recovery](ADMIN-ACCOUNTS.md#recovery-after-losing-every-authenticator)
    is implemented with password replacement, factor removal, session revocation,
    security-version checks and retry-safe audit receipts.
 4. OAuth authorization server: inactive migration sessions and deployed
