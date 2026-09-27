@@ -90,7 +90,11 @@
   ([conn settings request] (authenticate! conn settings request {}))
   ([conn settings request {:keys [allow-deactivated? allow-taken-down?]}]
   (if (oauth-resource/dpop? request)
-    (oauth-resource/authenticate! conn request)
+    (let [account (oauth-resource/authenticate! conn request)]
+      (when-not (or (= "active" (:status account))
+                    (and allow-deactivated? (= "deactivated" (:status account))))
+        (invalid-token!))
+      account)
     (let [claims (verify-jwt settings "at+jwt" (bearer request))
         ;; A join that waits on FOR UPDATE OF a can retain the old snapshot of
         ;; s.revoked. Acquire the account lock in its own statement, then read

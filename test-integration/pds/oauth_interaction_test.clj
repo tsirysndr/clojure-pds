@@ -74,9 +74,12 @@
     (doseq [body [(assoc credentials "password" (:password app)) (assoc credentials "password" "wrong")
                   (assoc credentials "identifier" "missing.example.com") (assoc credentials "password" nil)]]
       (is (= "AuthenticationRequired" (error #(login settings state body)))))
-    (doseq [status ["deactivated" "taken_down"]]
-      (mutate "UPDATE accounts SET status = ? WHERE did = ?" status did)
-      (is (= "AuthenticationRequired" (error #(login settings state credentials)))))
+    (mutate "UPDATE accounts SET status = 'taken_down' WHERE did = ?" did)
+    (is (= "AuthenticationRequired" (error #(login settings state credentials))))
+    (mutate "UPDATE accounts SET status = 'deactivated' WHERE did = ?" did)
+    (let [migration (start)]
+      (is (= did (:did (merge migration (login settings migration credentials))))
+          "Deactivated migration accounts can authenticate a new OAuth flow"))
     (mutate "UPDATE accounts SET status = 'active' WHERE did = ?" did)
     (let [wrong (start (assoc (params/params) "login_hint" "other.example.com"))]
       (is (= "AuthenticationRequired" (error #(login settings wrong credentials)))))

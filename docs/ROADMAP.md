@@ -48,7 +48,8 @@ runnable and update this document as features land.
    management scopes and [authenticated Lexicon resolution](LEXICON-RESOLUTION.md)
    are implemented, including permission-set expansion, shared verified schema
    caching, fixed access-token permissions, refresh updates and localized consent.
-   OAuth inactive migration and deployed interoperability remain pending. Account
+   OAuth sessions for deactivated migration accounts are epoch-scoped and
+   implemented; deployed interoperability remains pending. Account
    status permissions await defined semantics in the published permission spec.
 8. **Blob APIs (disk-staged streaming uploads/downloads, references, missing/since listing and temporary/reference cleanup implemented):** streaming upload/download, limits, ownership, record references,
    list/missing blobs and garbage collection. Acceptance: binary round trips,
@@ -84,8 +85,8 @@ rotating sessions, scoped app passwords, email recovery, schema-validated record
 implemented. See [the compatibility matrix](COMPATIBILITY.md) for exact coverage,
 verification evidence, and limits. Full PDS compatibility is not achieved yet.
 
-Next implementation series: OAuth inactive migration sessions, deployed
-migration/relay conformance and operational hardening. The reference PDS route surface is covered except entryway-managed
+Next implementation series: deployed migration/relay conformance and
+operational hardening. The reference PDS route surface is covered except entryway-managed
 signing-key updates and phone verification, which do not apply to this
 deployment model.
 Implemented endpoints now have pinned input validation and observed output/event

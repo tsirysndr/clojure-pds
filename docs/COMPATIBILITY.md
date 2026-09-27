@@ -432,9 +432,11 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
    [Local all-authenticator-loss recovery](ADMIN-ACCOUNTS.md#recovery-after-losing-every-authenticator)
    is implemented with password replacement, factor removal, session revocation,
    security-version checks and retry-safe audit receipts.
-4. OAuth authorization server: inactive migration sessions and deployed
-   reference-client interoperability. Account-status permission semantics are not
-   yet defined in the published permission specification.
+4. OAuth authorization server: deployed reference-client interoperability.
+   Deactivated migration accounts authorize and use epoch-scoped OAuth sessions
+   on inactive-capable endpoints; status changes end sessions from the previous
+   period. Account-status permission semantics are not yet defined in the
+   published permission specification.
    [DPoP replay protection, metadata/JWKS, confidential clients, PAR/PKCE, browser
    signup/consent, token rotation/revocation, owner session management and transitional
    resource authorization](OAUTH.md) are implemented and mounted with discovery.

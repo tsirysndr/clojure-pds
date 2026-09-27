@@ -4,7 +4,7 @@ The PDS publishes OAuth discovery, PAR, browser authorization, token and revocat
 endpoints. DPoP resource authentication is connected to XRPC with transitional
 scopes, direct record/blob/RPC/account/identity permissions, and dynamically
 resolved permission sets. Legacy session endpoints retain their existing behavior.
-Inactive-account migration and deployed interoperability remain incomplete.
+Deployed interoperability remains incomplete.
 
 ## Proof verification and durable replay protection
 
@@ -508,9 +508,19 @@ credential constraints. Operations that release locks for external work reload
 authentication and permissions before persisting the result.
 
 Active OAuth accounts may read recommended public DID credentials and missing-blob
-metadata with `atproto` alone, matching the reference endpoints. Existing OAuth
-account-epoch/status checks still reject inactive or invalidated sessions; these
-grants do not yet add authorization for an inactive migration destination.
+metadata with `atproto` alone, matching the reference endpoints.
+
+Deactivated migration accounts can authorize and use their own OAuth sessions.
+Because every status change advances the account's OAuth epoch, sessions issued
+while active end at deactivation, and sessions authorized while deactivated end
+at reactivation with the ordinary `account_changed` revocation. A deactivated
+account can complete a fresh authorization flow (sign-in, consent, code exchange
+and refresh all bind the deactivated epoch); the resulting grant works only on
+endpoints that accept inactive sessions, such as `getSession`, `uploadBlob`,
+`importRepo` and `listMissingBlobs`, subject to the grant's permissions. Other
+routes reject the session with `401 InvalidToken`, and `checkAccountStatus`
+remains a 403 permission denial until status permissions gain published
+semantics. Taken-down accounts can neither authorize nor use OAuth sessions.
 
 Tests cover read/manage isolation, email proof and epoch invalidation, legacy
 session revocation, forbidden factor/account actions, signed imports and mid-import
@@ -623,10 +633,10 @@ The process lifecycle test covers starting and stopping the registered worker.
 
 ## Remaining steps
 
-1. OAuth authorization for inactive migration accounts. The published permission
-   specification currently defines `email` and `repo` account attributes; status
-   permissions remain unsupported until their semantics are defined.
-2. Full browser/hardware ceremonies and deployed reference-client verification.
+1. Full browser/hardware ceremonies and deployed reference-client verification.
+   The published permission specification currently defines `email` and `repo`
+   account attributes; status permissions remain unsupported until their
+   semantics are defined.
 
 Sources: [AT Protocol OAuth profile](https://atproto.com/specs/oauth),
 [RFC 9449 DPoP](https://www.rfc-editor.org/rfc/rfc9449.html),

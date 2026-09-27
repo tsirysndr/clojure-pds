@@ -96,7 +96,7 @@
             account (first (db/query conn "SELECT * FROM accounts WHERE did = ? OR handle = ? OR email = ? FOR UPDATE"
                                     identifier identifier identifier))
             matches? (crypto/password-matches? password (or (:password_hash account) @accounts/dummy-password))]
-        (when-not (and matches? (= "active" (:status account)) (hint-matches? (snapshot row) account))
+        (when-not (and matches? (#{"active" "deactivated"} (:status account)) (hint-matches? (snapshot row) account))
           (errors/raise! 401 "AuthenticationRequired" "Invalid identifier or password"))
         (live! row)
         (let [totp? (factors/enabled? conn (:did account))
@@ -163,7 +163,7 @@
               (if approve?
                 (let [account (first (db/query conn "SELECT * FROM accounts WHERE did = ? FOR UPDATE" (:did row)))
                       code (crypto/token)]
-                  (when-not (and account (= "active" (:status account))
+                  (when-not (and account (#{"active" "deactivated"} (:status account))
                                  (= (:oauth_epoch account) (:account_epoch row)) (hint-matches? request account))
                     (http/fail! "access_denied" "Account authentication is no longer valid"))
                   (live! row)

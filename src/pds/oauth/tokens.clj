@@ -30,7 +30,11 @@
 (defn- code? [value] (and (string? value) (boolean (re-matches #"[A-Za-z0-9_-]{43}" value))))
 (defn- refresh? [value] (and (string? value) (boolean (re-matches #"rt_[A-Za-z0-9_-]{43}" value))))
 (defn- lock-account! [conn did] (first (db/query conn "SELECT * FROM accounts WHERE did = ? FOR UPDATE" did)))
-(defn- account-valid? [account row] (and (= "active" (:status account)) (= (:oauth_epoch account) (:account_epoch row))))
+(defn- account-valid?
+  ;; Deactivated accounts keep usable OAuth sessions for migration; endpoint
+  ;; authentication still restricts them to allow-deactivated? routes.
+  [account row]
+  (and (#{"active" "deactivated"} (:status account)) (= (:oauth_epoch account) (:account_epoch row))))
 (defn- revoke! [conn session-id reason]
   (db/execute! conn "UPDATE oauth_sessions SET revoked_at = ?, revoke_reason = ? WHERE session_id = ? AND revoked_at IS NULL"
                (now) reason session-id)
