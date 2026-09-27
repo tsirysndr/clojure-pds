@@ -117,3 +117,10 @@
       (:email account) (assoc :email (:email account))
       (:invite_note account) (assoc :inviteNote (:invite_note account))
       invited-by (assoc :invitedBy (invites/view conn invited-by)))))
+
+(defn account-infos [conn params]
+  {:infos (into [] (keep (fn [did]
+                           (try (account-info conn did)
+                                (catch clojure.lang.ExceptionInfo e
+                                  (when-not (= "AccountNotFound" (:error (ex-data e))) (throw e))))))
+                (distinct (get params "dids")))})

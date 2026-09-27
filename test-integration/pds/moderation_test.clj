@@ -31,6 +31,13 @@
             (is (= 200 (:status info)))
             (is (= "alice@example.com" (get-in info [:body "email"])))
             (is (= code (get-in info [:body "invites" 0 "code"]))))
+          (is (= 401 (:status (call "GET" (str "com.atproto.admin.getAccountInfos?dids=" did) nil token))))
+          (is (= 400 (:status (admin "GET" "com.atproto.admin.getAccountInfos?dids=not-a-did" nil))))
+          (let [infos (admin "GET" (str "com.atproto.admin.getAccountInfos?dids=" did "&dids=" did
+                                        "&dids=did:plc:aaaaaaaaaaaaaaaaaaaaaaaa") nil)]
+            (is (= 200 (:status infos)))
+            (is (= [did] (mapv #(get % "did") (get-in infos [:body "infos"]))))
+            (is (= "alice@example.com" (get-in infos [:body "infos" 0 "email"]))))
           (is (= 200 (:status (call "POST" "com.atproto.repo.createRecord"
                                    {"repo" did "collection" "com.example.record" "rkey" "one"
                                     "record" {"$type" "com.example.record"}} token))))

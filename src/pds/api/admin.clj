@@ -21,6 +21,8 @@
    (server/empty-route (authenticated ds settings #(admin-accounts/delete! %1 (request/json-body %2))))
    "/xrpc/com.atproto.admin.getAccountInfo"
    (server/json-route :get (authenticated ds settings #(moderation/account-info %1 (get (request/query-params %2) "did"))))
+   "/xrpc/com.atproto.admin.getAccountInfos"
+   (server/json-route :get (authenticated ds settings #(moderation/account-infos %1 (request/query-params %2))))
    "/xrpc/com.atproto.admin.getSubjectStatus"
    (server/json-route :get (authenticated ds settings #(moderation/get-status %1 (request/query-params %2))))
    "/xrpc/com.atproto.admin.updateSubjectStatus"

@@ -27,6 +27,7 @@ ENDPOINT_ROOTS = [
     "com.atproto.admin.disableInviteCodes",
     "com.atproto.admin.enableAccountInvites",
     "com.atproto.admin.getAccountInfo",
+    "com.atproto.admin.getAccountInfos",
     "com.atproto.admin.getSubjectStatus",
     "com.atproto.admin.updateAccountEmail",
     "com.atproto.admin.updateAccountPassword",

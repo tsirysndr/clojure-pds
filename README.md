@@ -334,7 +334,8 @@ and email proofs while preserving enrolled TOTP and passkeys. A separate local
 `clojure -M:account-admin recover-authenticators` command handles loss of every
 factor with a new password, security-version checks and an audit receipt.
 
-Admins can inspect accounts with `com.atproto.admin.getAccountInfo` and manage
+Admins can inspect accounts with `com.atproto.admin.getAccountInfo`, fetch
+deduplicated batches with `getAccountInfos` (unknown DIDs are skipped) and manage
 account takedowns through `getSubjectStatus`/`updateSubjectStatus` using a
 `com.atproto.admin.defs#repoRef` subject. Takedown blocks content, login, refresh,
 and invitations issued by the account. Removing it preserves a preexisting
