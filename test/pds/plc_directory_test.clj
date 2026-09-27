@@ -41,8 +41,14 @@
                       (is (= "application/json" (.getFirst (.getRequestHeaders exchange) "Content-Type")))
                       (let [op (request/json-value (.readNBytes (.getRequestBody exchange) 65537))]
                         (when (#{:accept :accept-drop :accept-error} @mode)
-                          (plc/verify-log! did (conj (mapv #(get % "operation") (get @logs did [])) op))
-                          (swap! logs update did (fnil conj []) (plc-test/row did op (str (Instant/now)) false))))
+                          (swap! logs update did
+                                 (fn [entries]
+                                   (let [entries (or entries []) time (Instant/now)
+                                         fork? (and (seq entries) (not= (get (peek entries) "cid") (get op "prev")))
+                                         next (if fork? (:entries (plc/recovery-plan! did entries op time))
+                                                (conj entries (plc-test/row did op (str time) false)))]
+                                     (plc/verify-audit! did next)
+                                     next)))))
                       (case @mode :accept [200 "{}"] :accept-error [503 "private upstream details"]
                         :accept-drop [nil nil] :ignore [200 "{}"] :reject [400 "private upstream details"]
                         :redirect (do (.set (.getResponseHeaders exchange) "Location" "https://other.example.com/never") [307 ""])) ))]

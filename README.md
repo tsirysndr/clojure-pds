@@ -169,6 +169,9 @@ The [recovery-key command](docs/PLC-RECOVERY-KEYS.md) replaces, reorders or remo
 account-held public recovery keys while retaining PDS control and durable retries.
 Owners can also manage these public keys at `/account`, with email verification
 and saved-change retries.
+The [signed recovery CLI](docs/PLC-RECOVERY.md) verifies and submits external
+recovery forks without requiring the PDS database or private keys. Local adoption
+uses the separate reconciliation procedure.
 Signing-key rotation creates a new signed commit over the same records and emits
 identity/sync checkpoints. PLC changes resume through the durable identity worker;
 hosted web signing-key changes commit atomically.
@@ -214,7 +217,8 @@ metadata and publishing an identity event. Identical retries reconcile without
 duplicate events. A `503 IdentityUpdatePending` uses the same durable retry and
 lease behavior as handle changes. Deactivated primary sessions can submit without
 activating the account. This endpoint supports normal successors and already
-accepted operations; recovery forks remain pending.
+accepted operations. Externally signed recovery forks use the separate
+[recovery CLI](docs/PLC-RECOVERY.md) and explicit local reconciliation.
 
 Destination account preparation supports `createAccount` with an existing
 `did:plc` or resolvable `did:web`. Authenticate with a service token from the source

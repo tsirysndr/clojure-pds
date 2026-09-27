@@ -31,7 +31,7 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | `com.atproto.identity` | `resolveHandle`, `resolveDid`, `resolveIdentity`, `refreshIdentity` | Hosted identities and remote DNS/HTTPS handles, did:web/PLC documents, bidirectional checks; bounded public cache, explicit refresh, fresh internal security checks |
 | `com.atproto.identity` | `updateHandle`, `getRecommendedDidCredentials` | Hosted/custom handles, durable audited PLC changes, stable web DID hostnames, public migration credentials; external migration conformance pending |
 | `com.atproto.identity` | `requestPlcOperationSignature`, `signPlcOperation` | Primary session plus one-use emailed proof; verified latest audit, partial credential overrides; returns an operation without submitting it |
-| `com.atproto.identity` | `submitPlcOperation` | Credential constraints, authorized successor signatures, durable directory reconciliation and atomic identity events; prepared destination identities supported; recovery forks pending |
+| `com.atproto.identity` | `submitPlcOperation` | Credential constraints, authorized successor signatures, durable directory reconciliation and atomic identity events; prepared destination identities supported; recovery forks use the separate operator CLI |
 | `com.atproto.repo` | `createRecord`, `putRecord`, `deleteRecord`, `applyWrites` | Atomic signed commits; record/repo swap checks; batch maximum 200 |
 | `com.atproto.repo` | `getRecord`, `listRecords`, `describeRepo` | Current records; keyset pagination and reverse order |
 | `com.atproto.repo` | `importRepo` | Primary session, complete signed v3 CAR, atomic record replacement and destination re-signing; active sync checkpoint or private inactive import; buffered 64 MiB limit |
@@ -136,7 +136,8 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   inactive owners, unconfirmed responses, local rollback after remote acceptance,
   and duplicate retries. Recommended rotation credentials follow the last confirmed
   operation, including removal of an old recovery key. Only canonical successors
-  and already-confirmed operations are accepted; recovery forks need an explicit flow.
+  and already-confirmed operations are accepted by XRPC; recovery forks use the
+  separate [explicit operator flow](PLC-RECOVERY.md).
 - Record schema validation uses 17 record roots in the pinned, checksummed catalog
   and [authenticated dynamic schemas](LEXICON-RESOLUTION.md#dynamic-record-writes)
   for explicitly validated writes outside that catalog.
@@ -325,8 +326,8 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
 
 1. Expanded behavioral conformance/catalog coverage as endpoints and protocol
    features are added, including deployed Lexicon publisher interoperability.
-2. Recovery-fork submission and deployed
-   migration/key-rotation conformance. [Managed control/signing-key rotation](KEY-ROTATION.md)
+2. Deployed recovery, migration and key-rotation conformance.
+   [Managed control/signing-key rotation](KEY-ROTATION.md)
    has an operator CLI, durable retries and public completion receipts. Signing-key
    rotation preserves the MST root and records, pauses signed work during pending
    PLC publication and emits identity/sync checkpoints after confirmation. Local
@@ -343,6 +344,12 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
    account/repository preservation, concurrency, rollback, stale workers and
    conflict reconciliation. The pinned PLC library verifies key ordering and the
    removed higher-priority key's remaining recovery authority.
+   [Externally signed recovery submission](PLC-RECOVERY.md) checks reviewed head
+   and operation CIDs, recovery priority/window and full audit confirmation. It
+   supports tombstones and both curves, and never reposts accepted/nullified CIDs.
+   TLS, PostgreSQL and pinned-reference tests cover ambiguous responses, branch
+   races and subsequent fenced local adoption. The directory POST has no atomic
+   head comparison; this limitation is explicit in the procedure.
    [Offline master-key rewrapping](MASTER-KEY.md) covers repository/PLC keys, pending
    replacements and TOTP secrets with atomic rollback and startup key checks.
    Legacy sessions/app passwords are invalidated; OAuth access/refresh and queued

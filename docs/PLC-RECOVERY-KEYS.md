@@ -123,8 +123,8 @@ The [PLC specification](https://web.plc.directory/spec/v0.1/did-plc) gives highe
 priority keys a recovery window over changes signed by lower-priority keys. A
 server-signed removal does not instantly revoke a removed higher-priority key's
 ability to recover that branch. Do not treat this command as immediate compromise
-containment. It publishes ordinary successor operations; signing and submitting
-an external recovery fork remains separate work. A new key list does not restore
+containment. It publishes ordinary successor operations; an externally signed
+fork uses the separate [recovery submission procedure](PLC-RECOVERY.md). A new key list does not restore
 lost private keys or undo already observed external identity operations.
 
 Real PostgreSQL/TLS tests cover both supported curves, maximum key count,

@@ -77,7 +77,8 @@ and nullification flags before classifying the queued operation:
 Elapsed local time, a rejected HTTP response, and an absent parent are never
 treated as cancellation proofs. A still-valid operation requires directory-side
 resolution first, such as accepting the intended operation or an authorized
-competing operation. This CLI does not submit recovery forks. Queue deletion
+competing operation. Use the separate [signed recovery command](PLC-RECOVERY.md)
+when an external higher-priority key must replace a branch. Queue deletion
 fences both successful and failed outcomes from stale local workers; the audit
 proof addresses already in-flight remote submissions.
 

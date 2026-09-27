@@ -166,6 +166,28 @@
     (let [head (peek (:chain result))]
       {:head (:cid head) :data (operation-data did (:operation head)) :nullified (:nullified result)})))
 
+(defn recovery-plan!
+  "Verify an unseen signed recovery fork at the proposed acceptance time. Returns
+  the affected canonical branch and a verified hypothetical audit. This is a
+  preflight, not proof that the directory accepted the operation."
+  [did entries operation ^Instant time]
+  (let [audit (verify-audit! did entries)
+        cid (operation-cid operation)
+        canonical (filterv #(not (get % "nullified")) entries)
+        index (first (keep-indexed #(when (= (get operation "prev") (get %2 "cid")) %1) canonical))]
+    (when (or (some #(= cid (get % "cid")) entries) (nil? index) (= index (dec (count canonical))))
+      (fail! "Expected an unseen recovery fork from a canonical ancestor"))
+    (let [discarded (subvec canonical (inc index))
+          cids (mapv #(get % "cid") discarded) removed (set cids)
+          proposed (conj (mapv #(if (removed (get % "cid")) (assoc % "nullified" true) %) entries)
+                         {"did" did "cid" cid "operation" operation "createdAt" (str time) "nullified" false})
+          verified (verify-audit! did proposed)
+          parent (get (nth canonical index) "operation")]
+      {:operationCid cid :previousCid (get operation "prev") :remoteCid (:head audit)
+       :nullifiedCids cids :signer (signer! (get (normalize parent) "rotationKeys") operation)
+       :expiresAt (str (.plus (Instant/parse (get (first discarded) "createdAt")) recovery-window))
+       :directoryData (:data verified) :entries proposed})))
+
 (defn pending-disposition!
   "Classify a queued signed operation against a fully verified audit. Superseded
   means a delayed submission cannot replace the observed history. Never infer

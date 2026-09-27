@@ -128,7 +128,9 @@ remain required before a full client integration can be claimed. Preserve atomic
   replacement and removal, retains the PDS key, and records confirmed changes
   through the durable queue. The account page supports email-authorized changes,
   recent-owner verification across directory I/O, and retries after reload.
-  Recovery-fork submission and migration conformance
+  [Externally signed recovery-fork submission](PLC-RECOVERY.md) supports reviewed
+  operation/head CIDs, priority/window preflight, audit-confirmed retries and
+  explicit local adoption. Deployed signer/directory and migration conformance
   remain pending. General PLC resolution verifies audit history and derives the current document, including
   for hosted accounts. It does not fall back to a stale local snapshot. Directory
   timestamps and history completeness/freshness remain trusted assertions.
