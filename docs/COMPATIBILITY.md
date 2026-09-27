@@ -325,7 +325,7 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
 
 1. Expanded behavioral conformance/catalog coverage as endpoints and protocol
    features are added, including deployed Lexicon publisher interoperability.
-2. Recovery-fork submission, browser recovery-key management and deployed
+2. Recovery-fork submission and deployed
    migration/key-rotation conformance. [Managed control/signing-key rotation](KEY-ROTATION.md)
    has an operator CLI, durable retries and public completion receipts. Signing-key
    rotation preserves the MST root and records, pauses signed work during pending
@@ -333,7 +333,12 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
    TLS/PostgreSQL/HTTP/WebSocket tests and upstream CAR verification cover these paths;
    public-directory and relay interoperability remain unverified.
    [Account-held recovery-key management](PLC-RECOVERY-KEYS.md) has an operator CLI
-   for ordered replacement/removal and existing email-authorized owner XRPC flows.
+   and email-authorized browser controls for ordered replacement/removal, plus
+   existing owner XRPC flows. Browser changes bind the DID to the recent owner
+   session, recheck authorization after directory I/O, and consume email proof
+   atomically with queue insertion. Reloads can retry the saved intent without
+   another code. HTTP and race tests cover these boundaries; Chrome desktop/mobile
+   preview checks cover display and retry interactions.
    Tests cover bounded key lists, no-op behavior, immutable retries, receipts,
    account/repository preservation, concurrency, rollback, stale workers and
    conflict reconciliation. The pinned PLC library verifies key ordering and the

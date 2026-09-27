@@ -63,12 +63,34 @@
         true)
       (do (when-not (= expected (:operation_cid identity)) (mismatch!)) nil))))
 
-(defn enqueue! [ds settings did expected recovery-keys]
+(defn browser-state
+  "Last locally confirmed public keys and durable intent; never performs I/O."
+  [conn did]
+  (when-let [identity (first (db/query conn "SELECT * FROM plc_identities WHERE did = ? AND status = 'ready'" did))]
+    (let [server (server-key identity)
+          keys (get (codec/decode (:operation identity)) "rotationKeys")
+          pending (first (db/query conn "SELECT * FROM handle_updates WHERE did = ?" did))]
+      {:operationCid (:operation_cid identity) :rotationKey server
+       :recoveryKeys (vec (remove #{server} keys))
+       :pending (when pending (if (= "recovery" (:operation_kind pending))
+                                (assoc (job-result pending) :kind "recovery")
+                                {:kind (:operation_kind pending) :state (:status pending)}))})))
+
+(defn enqueue!
+  "Optional owner guards run before account locking in both short transactions.
+  New changes validate proof before remote I/O and consume it with queue insertion.
+  Retries of an authorized intent still require the owner but no second proof."
+  ([ds settings did expected recovery-keys] (enqueue! ds settings did expected recovery-keys {}))
+  ([ds settings did expected recovery-keys {:keys [authorize! verify-change!]
+                                          :or {authorize! (fn [_]) verify-change! (fn [_ _])}}]
   (identifiers! did expected recovery-keys)
   (let [snapshot (db/transact! ds
                    (fn [conn]
+                     (authorize! conn)
                      (let [snapshot (snapshot! conn did)]
-                       (when-not (existing! conn did expected recovery-keys snapshot) snapshot))))]
+                       (when-not (existing! conn did expected recovery-keys snapshot)
+                         (verify-change! conn false)
+                         snapshot))))]
     (if-not snapshot (result! ds did expected recovery-keys)
       (let [identity (:identity snapshot) server (server-key identity)
             _ (when (some #{server} recovery-keys) (errors/invalid! "The PDS control key is retained automatically; do not include it as a recovery key"))
@@ -86,17 +108,19 @@
                             (finally (java.util.Arrays/fill ^bytes private (byte 0))))))
             noop (db/transact! ds
                    (fn [conn]
+                     (authorize! conn)
                      (let [{:keys [account identity] :as current} (snapshot! conn did)]
                        (when-not (existing! conn did expected recovery-keys current)
                          (when-not (= (version snapshot) (version current)) (mismatch!))
                          (if unchanged?
                            {:previousCid expected :operationCid expected :state "unchanged" :recoveryKeys recovery-keys :rotationKey server}
                            (do
+                             (verify-change! conn true)
                              (db/execute! conn "INSERT INTO handle_updates(did, target_handle, external_handle, operation, operation_cid, directory_url, operation_kind)
                                                  VALUES (?, ?, false, ?, ?, ?, 'recovery')"
                                           did (:handle account) (codec/encode operation) (plc/operation-cid operation) (:directory_url identity))
                              nil))))))]
-        (or noop (result! ds did expected recovery-keys))))))
+        (or noop (result! ds did expected recovery-keys)))))))
 
 (defn install!
   "Record the confirmed key list in the fenced identity transaction. Reconciliation

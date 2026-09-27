@@ -108,6 +108,22 @@
           <button id="oauth-session-next" class="secondary" type="button" hidden>Next page</button>
         </div>
       </section>
+      <section id="identity-recovery" class="panel min-w-0 space-y-4 md:col-span-2" hidden>
+        <h2 class="text-xl font-semibold">Identity recovery keys</h2>
+        <p class="text-sm leading-6 text-muted">Keep control of your identity with keys you hold independently. Add only public did:key values here. Keep their private keys somewhere safe.</p>
+        <div><h3 class="text-sm font-medium">Last confirmed recovery keys</h3><ol id="identity-key-list" class="mt-2 list-decimal space-y-2 pl-5 text-sm"></ol></div>
+        <p class="text-xs leading-5 text-muted">Keys are ordered from highest to lowest priority. The server keeps its own control key after these keys. A removed key may retain PLC recovery authority for up to 72 hours.</p>
+        <p id="identity-key-status" class="notice" role="status"></p>
+        <ol id="identity-key-pending" class="list-decimal space-y-2 pl-5 text-sm" hidden></ol>
+        <div class="flex flex-wrap gap-2"><button id="identity-key-refresh" class="secondary" type="button">Refresh status</button><button id="identity-key-retry" class="primary" type="button" hidden>Retry saved change</button></div>
+        <form id="identity-key-form" class="space-y-4" hidden>
+          <label class="field">Recovery public keys<textarea id="identity-key-input" name="keys" rows="4" maxlength="2048" spellcheck="false" autocapitalize="none" aria-describedby="identity-key-help"></textarea></label>
+          <p id="identity-key-help" class="text-xs leading-5 text-muted">One public did:key per line, up to four. Put the highest-priority key first. Leave this empty to remove all independent recovery keys.</p>
+          <button id="identity-key-email" class="secondary" type="button">Send verification email</button>
+          <label class="field">Email verification code<input name="code" autocomplete="one-time-code" maxlength="256" required spellcheck="false"></label>
+          <button class="primary" type="submit">Save recovery keys</button>
+        </form>
+      </section>
       <section id="recovery" class="panel md:col-span-2" hidden>
         <h2 class="text-xl font-semibold">Save your recovery codes</h2>
         <p class="mt-2 text-sm leading-6 text-muted">Each code works once if you lose your authenticator. Save these somewhere safe. They will not be shown again.</p>

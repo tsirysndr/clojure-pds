@@ -5,6 +5,7 @@
             [pds.errors :as errors]
             [pds.request :as request]
             [pds.security.browser :as browser]
+            [pds.security.identity :as identity]
             [pds.security.passkeys :as passkeys]))
 
 (def headers
@@ -56,11 +57,15 @@
                 (let [result (browser/open! ds (token settings request))]
                   (response settings (update result :view assoc :passkeys-available passkeys? :origin (:public-url settings)
                                                 :signup-enabled (boolean (:signup-enabled settings))
+                                                :email-enabled (boolean (:email-enabled settings))
                                                 :invite-required (boolean (:invite-required settings)) :user-domain (:user-domain settings))))
                 (and (= :post (:request-method request)) (str/starts-with? (:uri request) "/account/action/"))
                 (let [body (body! settings request)
                       action (subs (:uri request) (count "/account/action/"))
-                      result (if (= action "signup")
+                      result (case action
+                               "identity/recovery/change"
+                               (identity/change! ds settings (token settings request) (get-in request [:headers "x-csrf-token"]) body)
+                               "signup"
                                (browser/register! ds settings (token settings request) (get-in request [:headers "x-csrf-token"]) body)
                                (browser/action! ds settings (token settings request) (get-in request [:headers "x-csrf-token"]) action body))]
                   (response settings result))

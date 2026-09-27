@@ -138,6 +138,13 @@ is rendered as text, never HTML or clickable application branding.
 Registration requests user verification and discoverable credentials. Password
 visibility is optional; password/code fields are cleared after submission.
 
+Managed PLC accounts also have [identity recovery-key controls](PLC-RECOVERY-KEYS.md#account-owner-browser-flow).
+Owners can replace an ordered public-key list after email verification, inspect
+the last confirmed list and retry durable changes after reloading. These keys
+control the public DID and are separate from authenticator recovery codes.
+Changing them requires the same complete owner login and CSRF/origin protections;
+directory I/O releases database locks and authorization is rechecked afterward.
+
 PostgreSQL tests cover browser session rotation, expiry, security-version
 revocation, CSRF/origin and cookie enforcement, enrollment, recovery-code login,
 passkey login with an additional factor, and durable failed-attempt limits.

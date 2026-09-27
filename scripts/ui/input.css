@@ -45,8 +45,8 @@
   .primary { @apply min-h-8 rounded-lg bg-brand px-2.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand/80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-wait disabled:opacity-50; }
   .secondary { @apply min-h-8 rounded-lg bg-muted-surface px-2.5 py-1.5 text-sm font-medium transition-colors hover:bg-line focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-wait disabled:opacity-50; }
   .field { @apply block text-sm font-medium; }
-  .field input, .input-wrap input { @apply block min-h-8 w-full min-w-0 rounded-lg border border-line bg-transparent px-2.5 py-1 text-base font-normal text-foreground outline-none placeholder:text-muted focus:border-brand focus:ring-3 focus:ring-brand/40 md:text-sm; }
-  .field input { @apply mt-2; }
+  .field input, .field textarea, .input-wrap input { @apply block min-h-8 w-full min-w-0 rounded-lg border border-line bg-transparent px-2.5 py-1 text-base font-normal text-foreground outline-none placeholder:text-muted focus:border-brand focus:ring-3 focus:ring-brand/40 md:text-sm; }
+  .field input, .field textarea { @apply mt-2; }
   .input-wrap { @apply relative block; }
   .input-wrap:has(.input-icon) input { @apply pl-9; }
   .input-icon { @apply pointer-events-none absolute inset-y-0 left-3 flex items-center text-xl font-normal text-muted; }

@@ -2,6 +2,7 @@ const $ = id => document.getElementById(id);
 let state = {}, busy = false, passkeysAvailable = false, signupMode = false, signupEnabled = false, userDomain = '';
 const flowId = location.pathname.match(/^\/oauth\/flow\/([A-Za-z0-9_-]{43})$/)?.[1];
 let flow = null, sessionCursor = null;
+let emailEnabled = false, identityEditorVersion = null;
 const scopeLabels = {
   atproto: 'Confirm your account identity.',
   'transition:generic': 'Create, change, and delete public records; upload media; access preferences and app services.',
@@ -48,11 +49,13 @@ const messages = {
   InvalidToken: 'That code is incorrect, expired, or already used. Try a new code.',
   RateLimitExceeded: 'Too many attempts. Wait a few minutes before trying again.',
   BrowserSessionRequired: 'Your session expired. Sign in again to continue.',
+  IdentityMismatch: 'Your identity changed since this page was loaded. Refresh its status. If this persists, ask your server operator to reconcile the identity.',
 };
 function notice(message) { $('notice').textContent = message; $('notice').hidden = !message; }
 function render(next) {
   state = next;
   if ('signup-enabled' in next) signupEnabled = next['signup-enabled'];
+  if ('email-enabled' in next) emailEnabled = next['email-enabled'];
   if (next['user-domain']) userDomain = next['user-domain'];
   if ('invite-required' in next) $('signup-invite').required = next['invite-required'];
   $('signup-invite-title').textContent = $('signup-invite').required ? 'Invite code' : 'Invite code (optional)';
@@ -83,6 +86,7 @@ function render(next) {
   $('factor-help').textContent = next.factor === 'totp' ? 'Enter a code from your authenticator app, or one of your saved recovery codes.' : 'Enter the sign-in token sent to your email.';
   $('passkey-login').disabled = !passkeysAvailable || !window.PublicKeyCredential;
   $('passkey-form').hidden = !passkeysAvailable || !window.PublicKeyCredential;
+  renderIdentity(next.stage === 'authenticated' ? next['recovery-keys'] : null);
   if (next.stage !== 'authenticated') {
     $('oauth-session-list').replaceChildren(); sessionCursor = null; $('oauth-session-next').hidden = true;
     $('totp-secret').textContent = ''; $('recovery-codes').textContent = '';
@@ -103,6 +107,33 @@ function render(next) {
     const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'shrink-0 rounded px-2 py-2 text-sm font-medium text-danger hover:bg-muted-surface'; remove.textContent = 'Remove'; remove.setAttribute('aria-label', `Remove ${key.name}`);
     remove.addEventListener('click', () => run(async () => { if (confirm(`Remove “${key.name}”?`)) { await action('passkeys/remove', {id: key.id}); notice('Passkey removed.'); } }));
     item.append(name, remove); $('passkey-list').append(item);
+  }
+}
+function keyItems(keys) {
+  return (keys.length ? keys : ['No independent recovery keys.']).map(key => {
+    const item = document.createElement('li'); item.className = 'break-all font-mono text-xs leading-5'; item.textContent = key; return item;
+  });
+}
+function renderIdentity(identity) {
+  $('identity-recovery').hidden = !identity;
+  if (!identity) {
+    identityEditorVersion = null; $('identity-key-form').reset();
+    $('identity-key-list').replaceChildren(); $('identity-key-pending').replaceChildren(); return;
+  }
+  const pending = identity.pending;
+  $('identity-key-list').replaceChildren(...keyItems(identity.recoveryKeys));
+  $('identity-key-form').hidden = !!pending || !emailEnabled;
+  $('identity-key-retry').hidden = pending?.kind !== 'recovery';
+  $('identity-key-pending').hidden = pending?.kind !== 'recovery';
+  $('identity-key-pending').replaceChildren(...(pending?.kind === 'recovery' ? keyItems(pending.recoveryKeys) : []));
+  $('identity-key-status').textContent = pending?.kind === 'recovery'
+    ? `Saved change: ${pending.state}. The requested keys below will replace your recovery keys once confirmed. You can refresh or retry this same change without another email code.`
+    : pending ? 'Another identity change is in progress. Finish it before editing recovery keys.'
+    : !emailEnabled ? 'Email delivery must be enabled by your server operator before you can change these keys.'
+    : 'Verify your email to replace this list. Changes are confirmed with the PLC directory.';
+  if (identityEditorVersion !== identity.operationCid) {
+    identityEditorVersion = identity.operationCid;
+    $('identity-key-form').reset(); $('identity-key-input').value = identity.recoveryKeys.join('\n');
   }
 }
 function renderSessions(page) {
@@ -202,6 +233,23 @@ $('recovery-saved').addEventListener('click', () => { $('recovery-codes').textCo
 $('logout').addEventListener('click', () => run(async () => { await action('logout'); location.replace('/account'); }));
 $('oauth-session-first').addEventListener('click', () => run(() => action('oauth/list')));
 $('oauth-session-next').addEventListener('click', () => run(() => action('oauth/list', {cursor: sessionCursor})));
+$('identity-key-refresh').addEventListener('click', () => run(() => action('identity/recovery/status')));
+$('identity-key-email').addEventListener('click', () => run(async () => {
+  await action('identity/recovery/email'); notice('Verification email requested. Use the latest identity-operation code sent to your email.');
+}));
+function identityNotice(result) {
+  notice(result.state === 'completed' ? 'Recovery keys updated.' : result.state === 'unchanged' ? 'These recovery keys are already configured.' : 'Your change is saved. Refresh its status or retry the saved change.');
+}
+form('identity-key-form', async fields => {
+  const keys = fields.keys.split(/\r?\n/).map(key => key.trim()).filter(Boolean);
+  if (keys.length > 4 || new Set(keys).size !== keys.length || keys.some(key => !key.startsWith('did:key:'))) throw new Error('Enter up to four distinct public did:key values, one per line.');
+  const prompt = keys.length ? 'Replace your identity recovery keys with this ordered list?' : 'Remove all independent identity recovery keys? The server will retain its control key.';
+  if (confirm(prompt)) identityNotice(await action('identity/recovery/change', {previousCid: identityEditorVersion, recoveryKeys: keys, code: fields.code}));
+});
+$('identity-key-retry').addEventListener('click', () => run(async () => {
+  const pending = state['recovery-keys']?.pending;
+  if (pending?.kind === 'recovery') identityNotice(await action('identity/recovery/change', {previousCid: pending.previousCid, recoveryKeys: pending.recoveryKeys}));
+}));
 window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
 await run(async () => {
   if (flowId) {

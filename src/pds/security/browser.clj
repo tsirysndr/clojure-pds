@@ -7,6 +7,7 @@
             [pds.db :as db]
             [pds.errors :as errors]
             [pds.oauth.sessions :as oauth-sessions]
+            [pds.plc-recovery-keys :as recovery-keys]
             [pds.protocol.codec :as codec]
             [pds.security.factors :as factors]
             [pds.security.passkeys :as passkeys])
@@ -40,6 +41,7 @@
     (cond-> {:stage stage :csrf (csrf row token)}
       account (assoc :handle (:handle account) :factor (factor-type conn account))
       (= stage "authenticated") (assoc :passkeys (passkeys/list-credentials conn (:did row))
+                                       :recovery-keys (recovery-keys/browser-state conn (:did row))
                                        :oauth-sessions (oauth-sessions/list! conn (:did row) nil)))))
 (defn- output [conn token & [result]]
   {:token token :view (view conn (load! conn token) token) :result result})
@@ -119,6 +121,14 @@
             (when-not (:authenticated_at row) (invalid!))
             (let [did (:did row)
                   result (case action
+                           "identity/recovery/status" nil
+                           "identity/recovery/email"
+                           (let [identity (recovery-keys/browser-state conn did)]
+                             (when-not identity (errors/raise! 400 "UnsupportedDID" "A confirmed managed PLC identity is required"))
+                             (when (:pending identity) (errors/raise! 409 "IdentityUpdatePending" "Finish the pending identity operation first"))
+                             (accounts/require-email! settings)
+                             (accounts/issue-email! conn (account conn row) "plc-operation")
+                             {:sent true})
                            "oauth/list" {:oauth-sessions (oauth-sessions/list! conn did (get body "cursor"))}
                            "oauth/revoke" (oauth-sessions/revoke-owner! conn did (get body "id"))
                            "totp/begin" (factors/begin! conn settings did)

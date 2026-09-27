@@ -167,6 +167,8 @@ Operators can [rotate managed control and repository signing keys](docs/KEY-ROTA
 with `clojure -M:identity`. Control-key rotation preserves recovery priority.
 The [recovery-key command](docs/PLC-RECOVERY-KEYS.md) replaces, reorders or removes
 account-held public recovery keys while retaining PDS control and durable retries.
+Owners can also manage these public keys at `/account`, with email verification
+and saved-change retries.
 Signing-key rotation creates a new signed commit over the same records and emits
 identity/sync checkpoints. PLC changes resume through the durable identity worker;
 hosted web signing-key changes commit atomically.

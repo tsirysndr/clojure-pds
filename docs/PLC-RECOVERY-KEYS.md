@@ -4,7 +4,7 @@ An established managed PLC account can add, replace, reorder or remove its
 account-held recovery keys without changing its repository signing key or PDS
 control key. The operator command uses the durable identity queue, verifies the
 directory before preparation, and records completion only after confirmation.
-Account owners can also use the existing email-authorized XRPC signing flow.
+Account owners can use the email-authorized browser controls or XRPC signing flow.
 
 This is distinct from TOTP recovery codes, lost-authenticator account recovery,
 repository signing-key rotation and the server's encryption master key. PLC
@@ -75,6 +75,34 @@ contains exactly the requested complete ordered list. A safely superseded reques
 with different resulting keys gets a reconciliation receipt, not a false key-change
 completion receipt; a new request must use the newly confirmed CID.
 
+## Account-owner browser flow
+
+Sign in at `/account`, complete any configured second factor, and open **Identity
+recovery keys**. The panel shows the last locally confirmed list for managed PLC
+accounts. Paste up to four public keys, one per line in priority order, request a
+verification email, and enter its code to save the complete replacement list.
+An empty list removes all independent keys while retaining the PDS key. Email
+delivery must be configured; hosted `did:web` accounts do not show this panel.
+
+Each new change requires the five-minute owner session, same-origin JSON and
+session-bound CSRF, plus the one-use `plc-operation` email proof. The account is
+selected exclusively from that owner session. Browser and account locks are
+released during directory requests, then the session, security version, identity
+and proof are checked again before insertion. Email proof consumption and durable
+queue insertion commit together. Invalid input, failed verification and rolled-back
+insertion preserve the proof; a no-op also leaves it usable.
+
+Reloading shows any saved request and its status. **Retry saved change** reuses
+exactly the saved key list and original expected CID; it needs current owner
+authentication but no second email code. Other identity operations temporarily
+prevent editing. Once queued, an authorized change continues even if the browser
+expires or signs out. Sign in again and refresh to check its outcome. The UI does
+not store keys, codes or session state in localStorage.
+
+The displayed list is a local checkpoint, not a live directory query. Every new
+change verifies fresh remote history and refuses drift. If refreshing cannot
+resolve a mismatch, ask the operator to follow the reconciliation procedure.
+
 ## Account-owner XRPC flow
 
 Owners do not need operator database access. With a primary session, call
@@ -87,7 +115,7 @@ identity fields to preserve them. Submit the returned signed `operation` to
 `com.atproto.identity.submitPlcOperation`; retry the same signed operation after
 an ambiguous response. These standard endpoints retain their existing session,
 email-token, credential and directory-authorization checks. They do not create
-operator key-change receipts. Browser key-management controls are not implemented.
+operator key-change receipts.
 
 ## Recovery authority and verification
 
@@ -106,3 +134,10 @@ ambiguous responses, rollback, stale workers, local/remote races and reconciliat
 The pinned PLC reference library independently verifies published key lists and
 the removed key's recovery authority. Public-directory deployment and external
 recovery-tool interoperability remain unverified.
+
+Browser tests additionally cover real HTTP origin/CSRF enforcement, incomplete
+factor authentication, cross-account substitution, expiry/logout/security changes
+during unlocked directory I/O, atomic email consumption, reload/retry, concurrent
+owner submissions, and accepted work surviving logout. Desktop and mobile layouts
+and request/retry interactions were checked in Chrome using simulated UI state;
+the PostgreSQL/TLS tests exercise the actual backend.
