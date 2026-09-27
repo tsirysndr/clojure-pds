@@ -71,15 +71,18 @@
           (errors/invalid! "Blob is missing or does not match its metadata")))))
   (doseq [v (cond (map? value) (vals value) (vector? value) value :else [])]
     (check-blobs! conn did v)))
-(defn record-value! [conn did collection rkey value validate]
+(defn record-value!
+  ([conn did collection rkey value validate]
+   (record-value! conn did collection rkey value validate @lexicon/catalog))
+  ([conn did collection rkey value validate catalog]
   (when-not (and (map? value) (= collection (get value "$type")))
     (errors/invalid! "Record $type must match its collection"))
   (let [native (try (codec/from-json value) (catch Exception _ (errors/invalid! "Invalid AT Protocol record")))
         data (codec/encode native)
-        validation-status (lexicon/validate-record! collection rkey native validate)]
+        validation-status (lexicon/validate-record! catalog collection rkey native validate)]
     (when (> (alength data) 1000000) (errors/raise! 413 "PayloadTooLarge" "Record exceeds 1,000,000 bytes"))
     (check-blobs! conn did native)
-    {:cid (block! conn data) :validation-status validation-status :record native}))
+    {:cid (block! conn data) :validation-status validation-status :record native})))
 (defn apply-writes!
   "Caller owns transaction. Repository lock protects all swap checks and writes."
   ([conn settings did writes swap-commit]
@@ -111,7 +114,8 @@
                  (:create :update :put)
                  (do
                    (when (and (= action :update) (nil? old)) (errors/raise! 400 "RecordNotFound" "Record does not exist"))
-                   (let [{id :cid validation-status :validation-status record :record} (record-value! conn did collection rkey value validate)]
+                   (let [{id :cid validation-status :validation-status record :record}
+                         (record-value! conn did collection rkey value validate (get-in settings [:record-catalogs collection] @lexicon/catalog))]
                      (when (not= id (:cid old))
                        (swap! ops conj (cond-> {"action" (if old "update" "create") "path" (str collection "/" rkey) "cid" (codec/link id)}
                                          old (assoc "prev" (codec/link (:cid old))))))

@@ -9,6 +9,7 @@
             [pds.api.sync :as sync-api]
             [pds.firehose :as firehose]
             [pds.proxy :as proxy]
+            [pds.record-validation :as record-validation]
             [pds.security.web :as security-web]
             [pds.oauth.client :as oauth-client]
             [pds.oauth.grants :as oauth-grants]
@@ -21,7 +22,7 @@
 (defn handler
   ([config] (handler config nil))
   ([config ds]
-   (let [config (if ds (oauth-grants/settings ds config) config)
+   (let [config (if ds (record-validation/settings (oauth-grants/settings ds config)) config)
          banner (slurp (io/resource "pds/banner.txt") :encoding "UTF-8")
          resolver (when ds (oauth-client/resolver config))
          routes (merge (when ds (server-api/routes ds config))

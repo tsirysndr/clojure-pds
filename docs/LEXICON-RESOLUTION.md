@@ -104,7 +104,45 @@ resolution or admission failure. Tests cover all 17 bundled record schemas,
 the upstream record fixture, cross-document recursion, invalid instructions,
 missing references, union target confusion, nested record tags and graph bounds.
 
-Dynamic record writes are not yet connected to this compiler and resolver.
+## Dynamic record writes
+
+`createRecord`, `putRecord` and `applyWrites` now use authenticated resolution for
+explicit `validate=true` writes whose collection is outside the bundled catalog.
+All reachable schema dependencies are authenticated under their own NSID authority.
+Bundled schemas remain pinned, including when referenced by a dynamic schema.
+
+Validation modes retain their protocol semantics:
+
+- `validate=true` requires a complete admitted schema graph. Resolution failures,
+  unsupported instructions or capacity exhaustion return `InvalidRecord` without
+  changing the repository. Successful validation returns `validationStatus: valid`.
+- Omitted `validate` uses bundled schemas or an unexpired cached graph. It does not
+  start network lookups. Unknown schemas remain writable with a validation status
+  of `unknown`; known schemas still reject invalid values.
+- `validate=false` skips schema lookup and validation, and omits validation status.
+  Data-model validation, collection `$type`, blob ownership and size limits remain.
+  Deletes never resolve schemas.
+
+Requests authenticate, check repository ownership, collection/action permissions
+and generic record data before any schema lookup. Resolution holds no database
+transaction. The write transaction then rechecks authentication, ownership,
+current create/update permissions and swap conditions. Credential revocation or a
+concurrent change from create to update cannot bypass authorization. All batch
+entries use fixed per-collection schema graphs and commit or roll back together.
+
+The process-local cache holds at most 128 graphs and 16 MiB of encoded graph data.
+Successful graphs expire after one hour; failed lookups have a one-minute retry
+cooldown. Sixteen requests may resolve simultaneously, with one in-flight lookup
+per collection. Competing cold lookups fail explicit validation promptly. A request
+checks a 30-second budget before and after each bounded remote lookup. There is no
+unbounded queue, stale fallback or partial-graph acceptance. Cache contents are
+discarded on restart; record validation does not reuse OAuth permission-set cache
+policy or grant snapshots.
+
+Tests exercise real HTTP record writes with signed root/dependency proofs, cached
+optimistic validation, skip mode, malformed-proof rejection, retry cooldown,
+concurrency and cache bounds, full batch rollback, account locks remaining free
+during lookup, legacy/OAuth revocation and a concurrent put-action change.
 
 Sources: [Lexicon publication and resolution](https://atproto.com/specs/lexicon#lexicon-publication-and-resolution),
 [permission sets](https://atproto.com/specs/permission#permission-sets).

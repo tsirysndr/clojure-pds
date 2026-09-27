@@ -619,7 +619,9 @@ The process lifecycle test covers starting and stopping the registered worker.
 
 ## Remaining steps
 
-1. Account-status scopes and OAuth authorization for inactive migration accounts.
+1. OAuth authorization for inactive migration accounts. The published permission
+   specification currently defines `email` and `repo` account attributes; status
+   permissions remain unsupported until their semantics are defined.
 2. Full browser/hardware ceremonies and deployed reference-client verification.
 
 Sources: [AT Protocol OAuth profile](https://atproto.com/specs/oauth),

@@ -124,10 +124,16 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   and duplicate retries. Recommended rotation credentials follow the last confirmed
   operation, including removal of an old recovery key. Only canonical successors
   and already-confirmed operations are accepted; recovery forks need an explicit flow.
-- Record schema validation uses 17 record roots in the pinned, checksummed catalog.
+- Record schema validation uses 17 record roots in the pinned, checksummed catalog
+  and [authenticated dynamic schemas](LEXICON-RESOLUTION.md#dynamic-record-writes)
+  for explicitly validated writes outside that catalog.
   Tests cover upstream record fixtures, required/nullable fields, nested unions,
   references, UTF-8/grapheme limits, blobs, string formats, and key rules. Unknown
-  schemas remain writable by default; explicit validation requires a known schema.
+  schemas remain writable by default; explicit validation resolves a complete,
+  bounded schema graph or fails. Default validation also uses unexpired cached
+  graphs. Resolution runs outside transactions, with authorization rechecked before
+  mutation. Tests cover signed cross-namespace dependencies, malformed proofs,
+  cache bounds/expiry, revocation and concurrent put-action changes.
   Invalid batches roll back records, blocks and commits. CID string formats are
   restricted to the blessed AT Protocol CID set; see fixture notes.
 - The catalog now contains 95 schemas covering the record roots and all 58
@@ -290,14 +296,14 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
 
 ## Remaining work for a full PDS
 
-1. Integration of [authenticated dynamic schema resolution](LEXICON-RESOLUTION.md)
-   with record validation, and expanded behavioral
-   conformance/catalog coverage as endpoints and protocol features are added.
+1. Expanded behavioral conformance/catalog coverage as endpoints and protocol
+   features are added, including deployed Lexicon publisher interoperability.
 2. Bounded identity caching,
    signing/rotation key lifecycle, conflicted-operation administration, and migration.
 3. Remaining administrative APIs, record/blob takedowns, and broader account recovery controls.
-4. OAuth authorization server: account-status scopes/inactive
-   migration sessions and deployed reference-client interoperability.
+4. OAuth authorization server: inactive migration sessions and deployed
+   reference-client interoperability. Account-status permission semantics are not
+   yet defined in the published permission specification.
    [DPoP replay protection, metadata/JWKS, confidential clients, PAR/PKCE, browser
    signup/consent, token rotation/revocation, owner session management and transitional
    resource authorization](OAUTH.md) are implemented and mounted with discovery.

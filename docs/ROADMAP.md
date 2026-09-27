@@ -43,7 +43,8 @@ runnable and update this document as features land.
    management scopes and [authenticated Lexicon resolution](LEXICON-RESOLUTION.md)
    are implemented, including permission-set expansion, shared verified schema
    caching, fixed access-token permissions, refresh updates and localized consent.
-   OAuth inactive migration and deployed interoperability remain pending.
+   OAuth inactive migration and deployed interoperability remain pending. Account
+   status permissions await defined semantics in the published permission spec.
 8. **Blob APIs (buffered transfer, references, missing/since listing and temporary/reference cleanup implemented):** streaming upload/download, limits, ownership, record references,
    list/missing blobs and garbage collection. Acceptance: binary round trips,
    interrupted upload cleanup and no cross-account access leaks.
@@ -69,7 +70,7 @@ implemented. See [the compatibility matrix](COMPATIBILITY.md) for exact coverage
 verification evidence, and limits. Full PDS compatibility is not achieved yet.
 
 Next implementation series: [OAuth granular permissions](OAUTH.md),
-then remaining identity/key lifecycle, migration, dynamic Lexicon resolution,
+then remaining identity/key lifecycle, migration,
 administration, and relay conformance.
 Implemented endpoints now have pinned input validation and observed output/event
 schema checks with required endpoint/message coverage. Authenticated buffered
@@ -105,6 +106,11 @@ remain required before a full client integration can be claimed. Preserve atomic
 - Track conformance honestly: unsupported features stay unsupported until their
   invariants are implemented. Health indicates process liveness, not federation
   readiness.
+- Explicit record validation resolves authenticated remote schemas and referenced
+  definitions through a bounded compiler and process-local cache. Optimistic
+  validation uses bundled/cached graphs; skipped validation still enforces the
+  data model. Network resolution holds no account/repository transaction, and
+  write authorization is rechecked afterward. See [dynamic validation](LEXICON-RESOLUTION.md#dynamic-record-writes).
 
 ## Primary references
 

@@ -2,6 +2,7 @@
   (:require [clojure.string :as str]
             [pds.accounts :as accounts]
             [pds.api.server :as server]
+            [pds.auth :as auth]
             [pds.db :as db]
             [pds.errors :as errors]
             [pds.oauth.permissions :as permissions]
@@ -10,6 +11,7 @@
             [pds.protocol.syntax :as syntax]
             [pds.repo :as repo]
             [pds.repo-import :as repo-import]
+            [pds.record-validation :as record-validation]
             [pds.request :as request]))
 
 (defn own-repo! [account body]
@@ -25,18 +27,40 @@
   {:action action :collection (get body "collection") :rkey (get body "rkey") :value (get body "record" (get body "value"))
    :validate (get body "validate")
    :swap-record? (contains? body "swapRecord") :swap-record (get body "swapRecord")})
+(defn- execute-writes! [ds settings request build-writes]
+  (let [{:keys [body writes]}
+        (db/transact! ds
+          (fn [conn]
+            (let [account (auth/authenticate! conn settings request)
+                  body (request/json-body request)]
+              (own-repo! account body) (validation! body)
+              (let [writes (build-writes body)]
+                ;; Reject unauthorized collections and malformed data before any
+                ;; client-selected schema network request. Recheck on mutation.
+                (doseq [{:keys [action collection rkey value]} writes]
+                  (repo/path! collection (or rkey (when (= action :create) "pending")))
+                  (let [exists? (and (= action :put)
+                                     (seq (db/query conn "SELECT 1 FROM records WHERE did = ? AND collection = ? AND rkey = ?"
+                                                    (:did account) collection rkey)))]
+                    (permissions/repo! account collection (if (= action :put) (if exists? :update :create) action)))
+                  (when-not (= :delete action)
+                    (when-not (and (map? value) (= collection (get value "$type")))
+                      (errors/invalid! "Record $type must match its collection"))
+                    (try (codec/from-json value) (catch Exception _ (errors/invalid! "Invalid AT Protocol record")))))
+                {:body body :writes writes}))))
+        catalogs (record-validation/prepare! settings writes)]
+    (db/transact! ds
+      (fn [conn]
+        (let [account (auth/authenticate! conn settings request)]
+          (own-repo! account body)
+          (repo/apply-writes! conn (assoc settings :record-catalogs catalogs) (:did account) writes (get body "swapCommit")
+                             #(permissions/repo! account %1 %2)))))))
 (defn write-route [ds settings action]
-  (server/json-route
-   :post
-   (server/authenticated
-    ds settings
-    (fn [conn account r]
-      (let [body (request/json-body r)]
-        (own-repo! account body) (validation! body)
-        (let [result (repo/apply-writes! conn settings (:did account) [(write action body)] (get body "swapCommit")
-                                         #(permissions/repo! account %1 %2))]
-          (if (= action :delete) {:commit (:commit result)}
-              (assoc (dissoc (first (:results result)) :$type) :commit (:commit result)))))))))
+  (server/json-route :post
+    (fn [request]
+      (let [result (execute-writes! ds settings request #(vector (write action %)))]
+        (if (= action :delete) {:commit (:commit result)}
+          (assoc (dissoc (first (:results result)) :$type) :commit (:commit result)))))))
 (defn query-route [ds f]
   (server/json-route :get
     (fn [r] (with-open [conn (db/connection ds)] (f conn (request/query-params r))))))
@@ -51,21 +75,18 @@
    "/xrpc/com.atproto.repo.deleteRecord" (write-route ds settings :delete)
    "/xrpc/com.atproto.repo.applyWrites"
    (server/json-route :post
-     (server/authenticated ds settings
-       (fn [conn account r]
-         (let [body (request/json-body r) writes (get body "writes")]
-           (own-repo! account body) (validation! body)
+     (fn [r]
+       (execute-writes! ds settings r
+         (fn [body]
+          (let [writes (get body "writes")]
            (when-not (and (vector? writes) (<= 1 (count writes) 200)) (errors/invalid! "Expected 1 to 200 writes"))
-           (repo/apply-writes!
-            conn settings (:did account)
-            (mapv (fn [entry]
+           (mapv (fn [entry]
                     (when-not (map? entry) (errors/invalid! "Invalid write"))
                     (write (case (get entry "$type")
                              "com.atproto.repo.applyWrites#create" :create
                              "com.atproto.repo.applyWrites#update" :update
                              "com.atproto.repo.applyWrites#delete" :delete
-                             (errors/invalid! "Unknown write type")) (assoc entry "validate" (get body "validate")))) writes)
-            (get body "swapCommit") #(permissions/repo! account %1 %2))))))
+                             (errors/invalid! "Unknown write type")) (assoc entry "validate" (get body "validate")))) writes))))))
    "/xrpc/com.atproto.repo.getRecord"
    (query-route ds (fn [conn params]
                     (let [account (accounts/resolve-account conn (get params "repo"))
