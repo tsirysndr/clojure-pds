@@ -222,8 +222,16 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
 - Owned HTTP stream bodies use one 64 KiB buffer and wait for each write callback
   (30-second deadline). Real socket tests cover multiple chunks, empty bodies,
   HEAD/204/304 suppression, declared-length mismatches, read failures, slow-client
-  backpressure, disconnect and shutdown cleanup. Existing endpoint body buffering
-  is unchanged until each endpoint adopts the stream body contract.
+  backpressure, disconnect and shutdown cleanup. Blob downloads adopt this
+  contract; CAR and proxy responses remain buffered.
+- Blob downloads verify size and CID incrementally before responding. PostgreSQL
+  returns bytea slices of at most 64 KiB, and S3 reads at most the recorded size
+  plus one byte. A private temporary file avoids holding the whole blob in the
+  JVM heap and releases backend resources before HTTP delivery. Sixteen permits
+  bound staging plus delivery to 80 MiB of temporary payload per process; overflow
+  returns `503 BlobDownloadBusy`. PostgreSQL/S3 tests cover 5 MiB downloads,
+  corruption, empty blobs, missing objects, capacity release and disconnects.
+  Uploads, internal byte-array reads and remote migration downloads remain buffered.
 - Signing keys use AES-256-GCM with account DID as associated data. Passwords use
   Argon2id. Sessions are persisted and checked on requests; reset/replay/logout
   revocation is tested. Machine-generated app passwords use keyed digests; tests

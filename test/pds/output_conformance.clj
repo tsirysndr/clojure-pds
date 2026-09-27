@@ -7,6 +7,7 @@
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [pds.lexicon :as lexicon]
+            [pds.response-body :as response-body]
             [pds.protocol.codec :as codec])
   (:import [java.nio.file Files]
            [java.util.concurrent TimeUnit]))
@@ -24,8 +25,9 @@
             (swap! observations conj
                    {:id id :kind "output" :encoding encoding :content-type type
                     :value (when (= encoding "application/json") (json/read-str body))
-                    :empty (or (nil? body) (= "" body) (and (bytes? body) (zero? (alength ^bytes body))))
-                    :binary (bytes? body)}))
+                    :empty (or (nil? body) (= "" body) (and (bytes? body) (zero? (alength ^bytes body)))
+                               (and (response-body/stream? body) (zero? (:length body))))
+                    :binary (or (bytes? body) (response-body/stream? body))}))
           (catch Exception _ (swap! observations conj {:id id :kind "malformed-output"})))))))
 
 (defn observe-frame! [id data]

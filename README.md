@@ -453,7 +453,11 @@ a duplicate. Receipts are retained indefinitely; plan retention for larger syste
   Losing the final current record reference removes blob metadata in that record
   transaction. PostgreSQL bytes are removed immediately; S3 locators enter the
   durable deletion queue. Fresh S3 uploads use unique object keys so a delayed
-  deletion cannot erase a later upload with the same CID. Streaming, MIME sniffing,
+  deletion cannot erase a later upload with the same CID. Public downloads verify
+  size/CID into private temporary files using 64 KiB reads, then stream with
+  backpressure and automatic cleanup. Sixteen concurrent staging/delivery slots
+  cap temporary payload at 80 MiB per process; excess downloads return 503.
+  Streaming uploads, MIME sniffing,
   and discovering S3 orphans left by failed metadata commits remain unfinished.
 - Rate limits default to bounded, per-process memory with 120 requests/IP/minute.
   [Optional Redis](docs/REDIS.md) shares counters across instances. Untrusted

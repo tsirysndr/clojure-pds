@@ -12,7 +12,7 @@
             [pds.server-api-test :as api])
   (:import [java.net URI]
            [java.net.http HttpClient HttpRequest HttpRequest$BodyPublishers HttpResponse$BodyHandlers]
-           [java.util UUID]
+           [java.util Arrays Random UUID]
            [software.amazon.awssdk.services.s3 S3Client]
            [software.amazon.awssdk.services.s3.model CreateBucketRequest]))
 
@@ -34,7 +34,8 @@
           settings (api/settings)
           alice (accounts/create! fixture/*ds* settings {"handle" "alice.example.com" "email" "alice@example.com" "password" "test-password"})
           bob (accounts/create! fixture/*ds* settings {"handle" "bob.example.com" "email" "bob@example.com" "password" "test-password"})
-          data (byte-array [0 1 2 -1 -128 42])]
+          data (byte-array blobs/max-size)
+          _ (.nextBytes (Random. 19) data)]
       (with-open [store (s3/open-store config) client (HttpClient/newHttpClient)]
         (.createBucket ^S3Client (:client store) ^CreateBucketRequest (-> (CreateBucketRequest/builder) (.bucket bucket) .build))
         (let [settings (assoc settings :blob-store store)
@@ -50,17 +51,17 @@
               (is (= 400 (:status (api/xrpc client port "GET" (str "com.atproto.sync.getBlob?did=" (:did bob) "&cid=" cid) nil nil))))
               (is (= [] (get-in (api/xrpc client port "GET" (str "com.atproto.sync.listBlobs?did=" (:did alice)) nil nil) [:body "cids"])))
               (is (= 200 (:status (api/xrpc client port "POST" "com.atproto.repo.createRecord"
-                                          {"repo" (:did alice) "collection" "app.bsky.actor.profile" "rkey" "self"
-                                           "record" {"$type" "app.bsky.actor.profile" "avatar" blob}}
+                                          {"repo" (:did alice) "collection" "com.example.file" "rkey" "one"
+                                           "record" {"$type" "com.example.file" "file" blob}}
                                           (:accessJwt alice)))))
               (is (= [cid] (get-in (api/xrpc client port "GET" (str "com.atproto.sync.listBlobs?did=" (:did alice)) nil nil) [:body "cids"])))
-              (is (= (vec data) (vec (:raw (api/xrpc client port "GET" get-path nil nil)))))
+              (is (Arrays/equals data ^bytes (:raw (api/xrpc client port "GET" get-path nil nil))))
               (with-open [conn (db/connection fixture/*ds*)]
                 (let [row (first (db/query conn "SELECT * FROM blobs WHERE did = ? AND cid = ?" (:did alice) cid))]
-                  (is (= "s3" (:storage_backend row))) (is (nil? (:content row))) (is (= 6 (:size row)))
+                  (is (= "s3" (:storage_backend row))) (is (nil? (:content row))) (is (= blobs/max-size (:size row)))
                   ;; Reopen the S3 client to verify reads use persisted locators.
                   (with-open [reopened (s3/open-store (assoc config :prefix "changed-prefix"))]
-                    (is (= (vec data) (vec (:content (blobs/read! conn {:blob-store reopened} (:did alice) cid))))))
+                    (is (Arrays/equals data ^bytes (:content (blobs/read! conn {:blob-store reopened} (:did alice) cid)))))
                   (blobs/delete-object! store bucket (:object_key row))))
               (let [missing (api/xrpc client port "GET" get-path nil nil)]
                 (is (= 503 (:status missing)))

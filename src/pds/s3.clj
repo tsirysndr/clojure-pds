@@ -2,7 +2,8 @@
   (:require [clojure.string :as str]
             [pds.blobs :as blobs]
             [pds.protocol.codec :as codec])
-  (:import [java.net URI]
+  (:import [java.io FilterInputStream]
+           [java.net URI]
            [java.time Duration]
            [java.util UUID]
            [software.amazon.awssdk.auth.credentials AwsBasicCredentials AwsSessionCredentials AwsCredentialsProvider
@@ -67,15 +68,18 @@
                       (.contentType mime-type) .build)]
       (.putObject client ^PutObjectRequest request (RequestBody/fromBytes content))
       {:object-key key :object-bucket bucket}))
-  (get-object! [_ bucket key size]
+  (get-object! [this bucket key size]
     (when-not (<= 0 size blobs/max-size) (blobs/unavailable!))
-    (let [request (-> (GetObjectRequest/builder) (.bucket bucket) (.key key) .build)]
-      (with-open [stream (.getObject client ^GetObjectRequest request)]
-        ;; Close aborts unread excess content. Never buffer an arbitrary remote
-        ;; response, even if its Content-Length header is absent or incorrect.
-        (let [data (.readNBytes stream (int (inc size)))]
-          (when (> (alength data) size) (.abort stream))
-          data))))
+    (with-open [stream (blobs/open-object! this bucket key)]
+      (.readNBytes ^java.io.InputStream stream (int (inc size)))))
+  blobs/ObjectStreaming
+  (open-object! [_ bucket key]
+    (let [request (-> (GetObjectRequest/builder) (.bucket bucket) (.key key) .build)
+          stream (.getObject client ^GetObjectRequest request)]
+      ;; Explicit abort also bounds cleanup if a different SDK HTTP transport
+      ;; is adopted later. Never drain an oversized or failed remote response.
+      (proxy [FilterInputStream] [stream]
+        (close [] (.abort stream)))))
   blobs/ObjectDeletion
   (delete-object! [_ bucket key]
     (.deleteObject client ^DeleteObjectRequest (-> (DeleteObjectRequest/builder) (.bucket bucket) (.key key) .build)))

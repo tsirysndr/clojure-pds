@@ -4,12 +4,14 @@
             [pds.api.repo :as repo-api]
             [pds.api.server :as server]
             [pds.blobs :as blobs]
+            [pds.blob-download :as download]
             [pds.blob-refs :as blob-refs]
             [pds.db :as db]
             [pds.errors :as errors]
             [pds.oauth.permissions :as permissions]
             [pds.protocol.syntax :as syntax]
-            [pds.request :as request]))
+            [pds.request :as request])
+  (:import [java.io Closeable]))
 
 (def max-size blobs/max-size)
 (defn routes [ds settings]
@@ -40,18 +42,25 @@
    {:method :get
     :handler
     (fn [r]
-      (let [params (request/query-params r)]
-        (with-open [conn (db/connection ds)]
-          (let [account (accounts/resolve-account conn (get params "did"))
-                id (repo-api/cid! (get params "cid"))
-                _ (when-not (blobs/referenced? conn (:did account) id)
-                    (errors/raise! 400 "BlobNotFound" "Blob was not found"))
-                blob (blobs/read! conn settings (:did account) id)]
-            {:status 200
-             :headers {"Content-Type" (:mime_type blob) "X-Content-Type-Options" "nosniff"
-                       "Content-Length" (str (:size blob)) "Content-Security-Policy" "default-src 'none'; sandbox"
-                       "Content-Disposition" "attachment"}
-             :body (:content blob)}))))}
+      (let [params (request/query-params r) prepared (atom nil)]
+        (try
+          (with-open [conn (db/connection ds)]
+            (let [account (accounts/resolve-account conn (get params "did"))
+                  id (repo-api/cid! (get params "cid"))
+                  _ (when-not (blobs/referenced? conn (:did account) id)
+                      (errors/raise! 400 "BlobNotFound" "Blob was not found"))
+                  blob (download/prepare! conn settings (:did account) id)]
+              (reset! prepared (:body blob))
+              {:status 200
+               :headers {"Content-Type" (:mime_type blob) "X-Content-Type-Options" "nosniff"
+                         "Content-Length" (str (:size blob)) "Content-Security-Policy" "default-src 'none'; sandbox"
+                         "Content-Disposition" "attachment"}
+               :body (:body blob)}))
+          (catch Throwable error
+            ;; If returning the response fails (including JDBC close), the
+            ;; transport never acquires ownership of the prepared file.
+            (when-let [^Closeable body @prepared] (.close body))
+            (throw error)))))}
    "/xrpc/com.atproto.sync.listBlobs"
    (repo-api/query-route
     ds

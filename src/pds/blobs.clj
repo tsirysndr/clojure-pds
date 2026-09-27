@@ -15,6 +15,11 @@
 (defprotocol ObjectDeletion
   (delete-object! [store bucket key] "Idempotently remove an object."))
 
+(defprotocol ObjectStreaming
+  (open-object! [store bucket key]
+    "Return an owned InputStream. Closing must abort unread remote content,
+    without draining it. The caller bounds reads and verifies length/hash."))
+
 (defn unavailable! [] (errors/raise! 503 "BlobUnavailable" "Blob storage is unavailable"))
 
 (defn lock! [conn did cid]
