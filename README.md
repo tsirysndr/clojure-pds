@@ -301,6 +301,10 @@ code or owner. `disableAccountInvites`/`enableAccountInvites` retain the future-
 policy flag and note; existing codes remain usable. Automatic invite grants are
 disabled, so `createAvailable` currently creates no additional codes.
 
+[Administrative account recovery](docs/ADMIN-ACCOUNTS.md) supports password and
+email updates and account deletion. Credential recovery revokes existing sessions
+and email proofs while preserving enrolled TOTP and passkeys.
+
 Admins can inspect accounts with `com.atproto.admin.getAccountInfo` and manage
 account takedowns through `getSubjectStatus`/`updateSubjectStatus` using a
 `com.atproto.admin.defs#repoRef` subject. Takedown blocks content, login, refresh,

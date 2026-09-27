@@ -92,10 +92,14 @@
   (if (oauth-resource/dpop? request)
     (oauth-resource/authenticate! conn request)
     (let [claims (verify-jwt settings "at+jwt" (bearer request))
+        ;; A join that waits on FOR UPDATE OF a can retain the old snapshot of
+        ;; s.revoked. Acquire the account lock in its own statement, then read
+        ;; the session from a new READ COMMITTED snapshot after any wait.
+        _ (db/query conn "SELECT did FROM accounts WHERE did = ? FOR UPDATE" (get claims "sub"))
         session (first (db/query conn "SELECT a.*, s.app_password_id, p.privileged FROM sessions s JOIN accounts a ON a.did = s.did
                                         LEFT JOIN app_passwords p ON p.id = s.app_password_id
                                         WHERE s.id = ? AND s.did = ? AND NOT s.revoked
-                                          AND s.expires_at > now() FOR UPDATE OF a"
+                                          AND s.expires_at > now()"
                                  (UUID/fromString (get claims "sid")) (get claims "sub")))]
     (when-not (and session (= (access-scope session) (get claims "scope"))
                    (or (= "active" (:status session))
@@ -133,5 +137,8 @@
 
 (defn delete-session! [ds settings request]
   (let [claims (verify-jwt settings "refresh+jwt" (bearer request))]
-    (db/transact! ds #(db/execute! % "UPDATE sessions SET revoked = true WHERE id = ? AND did = ?"
-                                  (UUID/fromString (get claims "sid")) (get claims "sub")))))
+    (db/transact! ds
+      (fn [conn]
+        (db/query conn "SELECT did FROM accounts WHERE did = ? FOR UPDATE" (get claims "sub"))
+        (db/execute! conn "UPDATE sessions SET revoked = true WHERE id = ? AND did = ?"
+                     (UUID/fromString (get claims "sid")) (get claims "sub"))))))

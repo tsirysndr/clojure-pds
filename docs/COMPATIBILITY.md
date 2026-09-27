@@ -18,6 +18,7 @@ All XRPC paths start with `/xrpc/`. Queries use GET (also HEAD); procedures use 
 | `com.atproto.server` | `createInviteCode`, `createInviteCodes`, `getAccountInviteCodes` | Admin-issued codes, bounded batches, account listing and concurrent redemption limits; no automatic grants |
 | `com.atproto.admin` | `disableInviteCodes`, `disableAccountInvites`, `enableAccountInvites` | Optional Basic admin credentials; code invalidation and future-grant policy |
 | `com.atproto.admin` | `getAccountInfo`, `getSubjectStatus`, `updateSubjectStatus` | Private account inspection; account, record and blob takedowns; independent activation state and signed repository data preserved; [moderation semantics](MODERATION.md) |
+| `com.atproto.admin` | `updateAccountPassword`, `updateAccountEmail`, `deleteAccount` | [Operator recovery/deletion](ADMIN-ACCOUNTS.md); session and proof invalidation, retained factors on recovery, transactional deletion and durable object cleanup |
 | `com.atproto.server` | `createSession`, `getSession`, `refreshSession`, `deleteSession` | Primary/app-password sessions, JWT type separation, single-use refresh, revocation |
 | `com.atproto.server` | `getServiceAuth` | Repository-key JWTs, exact audience/service reference, method and expiration checks, primary/app-password privilege policy; shared proxy privilege policy |
 | `com.atproto.server` | `createAppPassword`, `listAppPasswords`, `revokeAppPassword` | One-time secrets, scoped sessions, privileged flag, metadata-only listing, immediate revocation |
@@ -139,7 +140,7 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   cache bounds/expiry, revocation and concurrent put-action changes.
   Invalid batches roll back records, blocks and commits. CID string formats are
   restricted to the blessed AT Protocol CID set; see fixture notes.
-- The catalog now contains 97 schemas covering the record roots and all 60
+- The catalog now contains 100 schemas covering the record roots and all 63
   implemented XRPC endpoints and their references. JSON inputs and typed query
   parameters enforce required/nullable fields, formats, nested references/unions,
   and scalar/array constraints at the existing request-reading boundaries.
@@ -154,7 +155,7 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   WebSocket frames without changing production handlers. Local schema checks and
   the pinned upstream validator check JSON bodies, media types, empty procedure
   responses, frame envelopes, native bytes/CID links, all five message variants
-  and error payloads. Required coverage includes all 60 implemented endpoints and
+  and error payloads. Required coverage includes all 63 implemented endpoints and
   `#commit`, `#sync`, `#identity`, `#account`, `#info`, plus error frames. Negative
   checker tests ensure missing fields, null optional values, wrong content types
   and malformed envelopes fail. HTTP/WebSocket tests additionally connect a

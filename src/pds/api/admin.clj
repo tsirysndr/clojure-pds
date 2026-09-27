@@ -1,5 +1,6 @@
 (ns pds.api.admin
   (:require [pds.admin :as admin]
+            [pds.admin-accounts :as admin-accounts]
             [pds.api.server :as server]
             [pds.db :as db]
             [pds.invites :as invites]
@@ -12,7 +13,13 @@
     (db/transact! ds #(f % r))))
 
 (defn routes [ds settings]
-  {"/xrpc/com.atproto.admin.getAccountInfo"
+  {"/xrpc/com.atproto.admin.updateAccountPassword"
+   (server/empty-route (authenticated ds settings #(admin-accounts/update-password! %1 (request/json-body %2))))
+   "/xrpc/com.atproto.admin.updateAccountEmail"
+   (server/empty-route (authenticated ds settings #(admin-accounts/update-email! %1 (request/json-body %2))))
+   "/xrpc/com.atproto.admin.deleteAccount"
+   (server/empty-route (authenticated ds settings #(admin-accounts/delete! %1 (request/json-body %2))))
+   "/xrpc/com.atproto.admin.getAccountInfo"
    (server/json-route :get (authenticated ds settings #(moderation/account-info %1 (get (request/query-params %2) "did"))))
    "/xrpc/com.atproto.admin.getSubjectStatus"
    (server/json-route :get (authenticated ds settings #(moderation/get-status %1 (request/query-params %2))))

@@ -283,6 +283,32 @@
   (require-email! settings)
   (issue-email! conn account "delete-account"))
 
+(defn erase-account!
+  "Erase a locked account's private state and queue durable object cleanup.
+  Callers must lock the account first and authorize the deletion separately."
+  [conn account]
+  (let [did (:did account)]
+    (when (.getAutoCommit ^java.sql.Connection conn)
+      (throw (ex-info "Account deletion requires a transaction" {})))
+    (when (= "provisioning" (:status account))
+      (errors/raise! 409 "RegistrationPending" "Finish identity registration before deleting this account"))
+    (when (seq (db/query conn "SELECT 1 FROM handle_updates WHERE did = ?" did))
+      (errors/raise! 409 "IdentityUpdatePending" "Finish the pending identity update before deleting this account"))
+    (db/execute! conn "UPDATE handle_reservations SET permanent = true WHERE did = ?" did)
+    (db/execute! conn "INSERT INTO blob_delete_jobs(did, cid, object_bucket, object_key)
+                      SELECT did, cid, object_bucket, object_key FROM blobs WHERE did = ? AND storage_backend = 's3'
+                      ON CONFLICT (object_bucket, object_key) DO UPDATE
+                      SET did = excluded.did, cid = excluded.cid, status = 'pending', attempts = 0,
+                          available_at = now(), last_error = NULL" did)
+    (doseq [table ["sessions" "app_passwords" "account_tokens" "account_totp" "webauthn_challenges" "account_webauthn_users" "account_preferences" "blobs" "account_imports" "plc_identities" "repositories"]]
+      (db/execute! conn (str "DELETE FROM " table " WHERE did = ?") did))
+    (db/execute! conn "DELETE FROM email_outbox WHERE payload->>'to' = ?" (:email account))
+    (db/execute! conn "DELETE FROM repo_events WHERE did = ? AND event_type IN ('commit', 'sync')" did)
+    ;; Reserve the DID/handle permanently while erasing credentials/email.
+    (db/execute! conn "UPDATE accounts SET status = 'deleted', email = NULL, password_hash = NULL,
+                        email_confirmed = false, email_auth_factor = false, delete_after = NULL WHERE did = ?" did)
+    (events/account! conn did "deleted")))
+
 (defn delete! [ds body]
   ;; The upstream endpoint authenticates with both primary password and a
   ;; one-use email token; a Bearer session is not required for the final step.
@@ -293,22 +319,7 @@
           (when-not (and account (crypto/password-matches? (get body "password") (:password_hash account)))
             (errors/raise! 401 "AuthenticationRequired" "Invalid DID or password"))
           (consume-token! conn "delete-account" (get body "token") did (:email account))
-          (when (seq (db/query conn "SELECT 1 FROM handle_updates WHERE did = ?" did))
-            (errors/raise! 409 "IdentityUpdatePending" "Finish the pending identity update before deleting this account"))
-          (db/execute! conn "UPDATE handle_reservations SET permanent = true WHERE did = ?" did)
-          (db/execute! conn "INSERT INTO blob_delete_jobs(did, cid, object_bucket, object_key)
-                            SELECT did, cid, object_bucket, object_key FROM blobs WHERE did = ? AND storage_backend = 's3'
-                            ON CONFLICT (object_bucket, object_key) DO UPDATE
-                            SET did = excluded.did, cid = excluded.cid, status = 'pending', attempts = 0,
-                                available_at = now(), last_error = NULL" did)
-          (doseq [table ["sessions" "app_passwords" "account_tokens" "account_totp" "webauthn_challenges" "account_webauthn_users" "account_preferences" "blobs" "account_imports" "plc_identities" "repositories"]]
-            (db/execute! conn (str "DELETE FROM " table " WHERE did = ?") did))
-          (db/execute! conn "DELETE FROM email_outbox WHERE payload->>'to' = ?" (:email account))
-          (db/execute! conn "DELETE FROM repo_events WHERE did = ? AND event_type IN ('commit', 'sync')" did)
-          ;; Reserve the DID/handle permanently while erasing credentials/email.
-          (db/execute! conn "UPDATE accounts SET status = 'deleted', email = NULL, password_hash = NULL,
-                              email_confirmed = false, email_auth_factor = false, delete_after = NULL WHERE did = ?" did)
-          (events/account! conn did "deleted"))))))
+          (erase-account! conn account))))))
 
 (defn request-email-update! [conn settings account]
   (auth/require-management! account :account "email")

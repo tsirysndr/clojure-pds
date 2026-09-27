@@ -31,6 +31,9 @@ runnable and update this document as features land.
 6. **Sessions and account lifecycle (sessions/app passwords/email security/lifecycle/invites implemented):** password hashing, access/refresh tokens,
    refresh rotation/revocation, app passwords, invites, email verification/reset,
    account activation/deactivation/deletion and administrative authorization.
+   [Administrative recovery](ADMIN-ACCOUNTS.md) supports password/email updates and
+   account deletion, with session invalidation, factor preservation and durable
+   object cleanup.
    Optional [authenticator security](ACCOUNT-SECURITY.md): TOTP storage, confirmation,
    recovery codes and legacy/OAuth verification are implemented, as are WebAuthn
    passkey registration/assertion primitives. Secure browser enrollment/removal and

@@ -45,7 +45,8 @@ created after a successful factor-authenticated primary login remain explicitly
 delegated credentials, as with the existing email factor.
 
 Password reset preserves the authenticator requirement. Account deletion erases
-its secret and recovery codes. The existing deletion protocol still requires its
+its secret and recovery codes. [Administrative recovery](ADMIN-ACCOUNTS.md) also
+preserves enrolled factors; operator deletion removes them. The owner deletion protocol requires its
 primary password and one-use email deletion proof. Password recovery does not
 silently disable TOTP; users who lose their authenticator need a saved recovery code.
 
