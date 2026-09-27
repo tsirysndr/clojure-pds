@@ -19,6 +19,9 @@ selected service retain the ordinary `MethodNotImplemented` response.
 | `PDS_PROXY_MAX_REQUEST_BYTES` | `5242880` | Disk-staged POST body limit; maximum 64 MiB |
 | `PDS_PROXY_MAX_RESPONSE_BYTES` | `10485760` | Disk-staged upstream response limit; maximum 64 MiB |
 | `PDS_PROXY_TIMEOUT_MS` | `10000` | Upstream exchange deadline; maximum 60,000 ms |
+| `PDS_PROXY_ACCOUNT_RATE_LIMIT_ENABLED` | `true` | `false` disables the per-account proxy budget |
+| `PDS_PROXY_ACCOUNT_RATE_LIMIT_REQUESTS` | `600` | Proxy requests per account per window; 1–1,000,000 |
+| `PDS_PROXY_ACCOUNT_RATE_LIMIT_WINDOW_SECONDS` | `300` | Per-account budget window; 1–86,400 s |
 
 All numeric settings must be positive integers. Explicit `atproto-proxy` overrides
 the configured default. Labeler methods without a labeler default require an
@@ -73,7 +76,12 @@ Location and hop-by-hop headers are not relayed. Valid XRPC errors retain their
 4xx/5xx status and bounded error/message when the complete error envelope is at
 most 64 KiB. Larger, malformed or HTML errors become a generic `UpstreamFailure`. Network, TLS, oversize response and timeout failures produce
 502, full proxy capacity produces 503, and the configured memory/Redis request
-limiter also applies. Oversize request bodies produce 413. Temporary-file failures
+limiter also applies. Each authenticated account additionally has its own proxy
+budget (600 requests per 5 minutes by default), charged after authentication and
+before request staging, DID resolution or the upstream exchange; exceeding it
+produces `429 RateLimitExceeded` with `Retry-After`, and an unavailable shared
+limiter fails closed with 503. The budget uses the configured rate-limit backend,
+so Redis deployments share it across instances. Oversize request bodies produce 413. Temporary-file failures
 produce a sanitized `503 ProxyUnavailable`.
 
 ## Response staging and resource ownership
@@ -125,10 +133,12 @@ after headers and a partial body. Request tests cover megabyte fixed-length and
 chunked HTTP uploads with a known upstream Content-Length, oversize rejection
 before remote work, sanitized staging failures and request/response file cleanup.
 Local OAuth tests cover exact method/audience permissions and credential
-replacement.
+replacement. Budget tests cover per-account 429 responses with Retry-After
+before any remote work, independent accounts, uncharged local routes and a
+failed shared limiter failing closed.
 
-Service-specific account abuse budgets and interoperability
-with deployed AppViews/labelers remain on the full PDS roadmap. DPoP passthrough
+Interoperability
+with deployed AppViews/labelers remains on the full PDS roadmap. DPoP passthrough
 and WebSocket proxying are explicitly rejected. Tests use isolated local services;
 no external account or service has been contacted to establish interoperability.
 

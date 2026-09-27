@@ -27,7 +27,14 @@
                          {:enabled (= "true" write-enabled)
                           :max-requests (integer-setting env "PDS_RECORD_WRITE_RATE_LIMIT_REQUESTS" (:max-requests options) 1000000)
                           :window-ms (* 1000 (integer-setting env "PDS_RECORD_WRITE_RATE_LIMIT_WINDOW_SECONDS" (quot (:window-ms options) 1000) 86400))})
-                  options)]
+                  options)
+        proxy-enabled (get env "PDS_PROXY_ACCOUNT_RATE_LIMIT_ENABLED" "true")
+        _ (when-not (#{"true" "false"} proxy-enabled)
+            (config-error! "PDS_PROXY_ACCOUNT_RATE_LIMIT_ENABLED must be true or false"))
+        options (assoc options :proxy-account
+                       {:enabled (= "true" proxy-enabled)
+                        :max-requests (integer-setting env "PDS_PROXY_ACCOUNT_RATE_LIMIT_REQUESTS" 600 1000000)
+                        :window-ms (* 1000 (integer-setting env "PDS_PROXY_ACCOUNT_RATE_LIMIT_WINDOW_SECONDS" 300 86400))})]
     (when-not (#{"memory" "redis"} backend) (config-error! "PDS_RATE_LIMIT_BACKEND must be memory or redis"))
     (if (= "memory" backend) options
         (let [^URI uri (try (URI. (get env "PDS_REDIS_URL" "")) (catch Exception _ nil))
@@ -87,23 +94,32 @@
           ;; Do not expose credentials from a Redis URI through exception data.
           (throw (ex-info "Unable to connect to the configured Redis rate limiter" {})))))))
 
-(defn open-limiter [{:keys [backend record-writes] :as options}]
-  (let [base (open-base-limiter options)]
-    (if-not record-writes base
-      (let [writes (when (:enabled record-writes)
-                     (if (= "memory" backend)
-                       (rate-limit/memory-limiter record-writes)
-                       ;; Share one connection pool, with a separate counter namespace.
-                       (assoc base :prefix (str (:prefix options) ":record-write")
-                                   :max-requests (:max-requests record-writes) :window-ms (:window-ms record-writes))))]
+(defn open-limiter [{:keys [backend record-writes proxy-account] :as options}]
+  (let [base (open-base-limiter options)
+        ;; Derived budgets share the Redis connection pool with a separate
+        ;; counter namespace; the memory backend uses independent windows.
+        derived (fn [{:keys [enabled] :as budget} scope]
+                  (when enabled
+                    (if (= "memory" backend)
+                      (rate-limit/memory-limiter budget)
+                      (assoc base :prefix (str (:prefix options) ":" scope)
+                                  :max-requests (:max-requests budget) :window-ms (:window-ms budget)))))]
+    (if-not (or record-writes proxy-account) base
+      (let [writes (when record-writes (derived record-writes "record-write"))
+            proxy (when proxy-account (derived proxy-account "proxy-account"))]
         (reify
           rate-limit/Limiter
           (admit! [_ key] (rate-limit/admit! base key))
           rate-limit/RequestLimiter
           (admit-request! [_ request]
-            (let [limiter (if (rate-limit/record-write? request) writes base)]
-              (if limiter
-                (rate-limit/admit! limiter (or (:remote-addr request) "unknown"))
-                {:allowed? true :retry-after 0})))
+            (let [address (or (:remote-addr request) "unknown")]
+              (if (and record-writes (rate-limit/record-write? request))
+                (if writes (rate-limit/admit! writes address) {:allowed? true :retry-after 0})
+                (rate-limit/admit! base address))))
+          rate-limit/AccountLimiter
+          (admit-account! [_ scope did]
+            (if proxy
+              (rate-limit/admit! proxy (str scope ":" did))
+              {:allowed? true :retry-after 0}))
           java.io.Closeable
           (close [_] (when (instance? java.io.Closeable base) (.close ^java.io.Closeable base))))))))

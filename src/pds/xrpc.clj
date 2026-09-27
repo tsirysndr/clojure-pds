@@ -28,9 +28,10 @@
           (fallback request))
         (catch clojure.lang.ExceptionInfo e
           (if (:xrpc (ex-data e))
-            (let [{:keys [status error www-authenticate allow]} (ex-data e)]
+            (let [{:keys [status error www-authenticate allow retry-after]} (ex-data e)]
               (cond-> (error-response status error (.getMessage e))
                 allow (assoc-in [:headers "Allow"] allow)
+                retry-after (assoc-in [:headers "Retry-After"] retry-after)
                 (= status 401) (assoc-in [:headers "WWW-Authenticate"] (or www-authenticate "Bearer"))))
             (error-response 500 "InternalServerError" "An internal server error occurred")))
         (catch java.sql.SQLTransientConnectionException _

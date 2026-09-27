@@ -4,7 +4,21 @@
             [pds.rate-limit :as rate-limit]))
 
 (deftest redis-is-optional-and-configurable
-  (is (= {:backend "memory" :max-requests 120 :window-ms 60000} (redis/settings {})))
+  (is (= {:backend "memory" :max-requests 120 :window-ms 60000
+          :proxy-account {:enabled true :max-requests 600 :window-ms 300000}} (redis/settings {})))
+  (is (= {:enabled false :max-requests 30 :window-ms 60000}
+         (:proxy-account (redis/settings {"PDS_PROXY_ACCOUNT_RATE_LIMIT_ENABLED" "false"
+                                          "PDS_PROXY_ACCOUNT_RATE_LIMIT_REQUESTS" "30"
+                                          "PDS_PROXY_ACCOUNT_RATE_LIMIT_WINDOW_SECONDS" "60"}))))
+  (is (thrown? clojure.lang.ExceptionInfo (redis/settings {"PDS_PROXY_ACCOUNT_RATE_LIMIT_ENABLED" "maybe"})))
+  (is (thrown? clojure.lang.ExceptionInfo (redis/settings {"PDS_PROXY_ACCOUNT_RATE_LIMIT_REQUESTS" "0"})))
+  (let [limiter (redis/open-limiter (redis/settings {}))]
+    (is (satisfies? rate-limit/AccountLimiter limiter))
+    (is (true? (:allowed? (rate-limit/admit-account! limiter "proxy" "did:web:alice.example.com")))))
+  (let [limiter (redis/open-limiter (redis/settings {"PDS_PROXY_ACCOUNT_RATE_LIMIT_ENABLED" "false"}))]
+    (dotimes [_ 3]
+      (is (true? (:allowed? (rate-limit/admit-account! limiter "proxy" "did:web:alice.example.com")))
+          "A disabled per-account budget admits unconditionally")))
   (is (satisfies? rate-limit/Limiter (redis/open-limiter (redis/settings {}))))
   (let [env {"PDS_RATE_LIMIT_BACKEND" "redis" "PDS_REDIS_URL" "rediss://user:password@redis.example.com:6380/2"}]
     (is (= "rediss" (.getScheme (:uri (redis/settings env)))))

@@ -7,6 +7,9 @@
 (defprotocol RequestLimiter
   (admit-request! [limiter request] "Select the configured budget for this request."))
 
+(defprotocol AccountLimiter
+  (admit-account! [limiter scope did] "Per-account budget for one named scope."))
+
 (defn record-write? [request]
   (and (= :post (:request-method request))
        (contains? #{"/xrpc/com.atproto.repo.createRecord" "/xrpc/com.atproto.repo.putRecord"

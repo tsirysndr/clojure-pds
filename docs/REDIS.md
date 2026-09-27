@@ -45,8 +45,9 @@ cluster and Sentinel discovery are not implemented.
 Both backends use the socket peer address and ignore `X-Forwarded-For`. Behind a
 reverse proxy, configure proxy-level limits or a future trusted-proxy policy;
 otherwise callers share the proxy's IP budget. The general limiter applies to every route, including health, unless a record-write
-override is configured. Credential/identity-specific abuse controls remain work
-for the full PDS.
+override is configured. Proxied requests additionally charge a
+[per-account budget](#per-account-proxy-budget); other credential-specific abuse
+controls remain work for the full PDS.
 
 ## Record-write overrides
 
@@ -76,6 +77,15 @@ apply. The switch works with memory and Redis. Other endpoints still use the
 configured backend, so Redis mode continues to require Redis at startup.
 Separate Redis write counters use the same pool and a distinct namespace. Use
 identical configuration across instances and restart the PDS after changing it.
+
+## Per-account proxy budget
+
+The [authenticated service proxy](PROXY.md) charges each account its own budget
+(`PDS_PROXY_ACCOUNT_RATE_LIMIT_*`, 600 requests per 300 seconds by default,
+disable with `ENABLED=false`). It uses the configured backend: Redis mode shares
+one budget per account across instances in a distinct counter namespace on the
+same pool; memory mode counts per process. An unavailable shared limiter fails
+closed. The general IP budget still applies to proxied requests.
 
 ## Verification
 

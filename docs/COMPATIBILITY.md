@@ -51,7 +51,8 @@ identity documents at `/.well-known/did.json` and `/.well-known/atproto-did`.
 Unknown XRPC routes also support [authenticated service proxying](PROXY.md) to
 explicit DID service references or configured AppView/labeler defaults. Local
 routes retain precedence. Real HTTP/TLS fixtures verify authentication, scoped
-upstream JWT signatures, raw forwarding, network boundaries and failure handling.
+upstream JWT signatures, raw forwarding, per-account proxy budgets, network
+boundaries and failure handling.
 OAuth discovery, browser authorization and DPoP resources are mounted; see
 [the OAuth coverage and limits](OAUTH.md). External service interoperability remains pending.
 
@@ -461,7 +462,7 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
    define separate state-transfer mechanisms.
 7. Streaming repository import, S3 orphan and historical-block reclamation,
    incremental MST mutation, streaming, quotas and bulk blob-backend migration.
-8. Account-specific abuse controls, metrics/logging, database load/failover testing,
+8. Metrics/logging, database load/failover testing,
    operational deployment/TLS, production PITR and external S3 recovery drills.
    Local logical database backup/restore is tested. Push CI is configured;
    its first GitHub execution still requires a push.

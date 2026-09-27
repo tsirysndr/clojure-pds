@@ -8,6 +8,7 @@
             [pds.oauth.permissions :as permissions]
             [pds.oauth.resource :as oauth-resource]
             [pds.protocol.syntax :as syntax]
+            [pds.rate-limit :as rate-limit]
             [pds.request :as request]
             [pds.response-body :as body]
             [pds.tempfile :as tempfile]
@@ -78,6 +79,23 @@
                                     (if (and valid? (string? message) (<= (count message) 4096)) message "Upstream service returned an error"))
                 :headers merge base forwarded (when (= status 401) {"WWW-Authenticate" "Bearer"})))
       :else (errors/raise! 502 "UpstreamFailure" "Upstream redirects and protocol upgrades are not supported"))))
+
+(defn- account-budget!
+  "Per-account proxy budget, charged after authentication and before request
+  staging, DID resolution or the upstream exchange. A configured shared limiter
+  outage fails closed."
+  [config did]
+  (let [limiter (:rate-limiter config)]
+    (when (satisfies? rate-limit/AccountLimiter limiter)
+      (let [decision (try (rate-limit/admit-account! limiter "proxy" did) (catch Exception _ nil))]
+        (cond
+          (nil? decision)
+          (throw (ex-info "Rate limiting is unavailable"
+                          {:xrpc true :status 503 :error "RateLimitUnavailable" :retry-after "1"}))
+          (not (:allowed? decision))
+          (throw (ex-info "This account is sending proxy requests too quickly"
+                          {:xrpc true :status 429 :error "RateLimitExceeded"
+                           :retry-after (str (:retry-after decision))})))))))
 
 (defn- staged-request!
   "Copy a POST body into a private temporary file before any remote work, in
@@ -160,7 +178,11 @@
                   release! #(when (compare-and-set! released? false true) (.release permits))]
              (try
               ;; Authenticate before any remote lookup or reading a request body.
-              (db/transact! ds #(service-auth/authorize! (auth/authenticate! % config r) method target))
+              (account-budget! config
+                (db/transact! ds (fn [conn]
+                                   (let [account (auth/authenticate! conn config r)]
+                                     (service-auth/authorize! account method target)
+                                     (:did account)))))
               (let [service (service! target)
                     ^FileChannel body (staged-request! r (:proxy-max-request-bytes config))]
                 (try

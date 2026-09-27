@@ -2,6 +2,7 @@
   (:require [clojure.data.json :as json]
             [clojure.string :as str]
             [clojure.test :refer [deftest is use-fixtures]]
+            [pds.accounts :as accounts]
             [pds.app :as app]
             [pds.crypto :as crypto]
             [pds.db :as db]
@@ -11,6 +12,7 @@
             [pds.net-test :as net-test]
             [pds.proxy-test :as upstream]
             [pds.rate-limit :as rate-limit]
+            [pds.redis :as redis]
             [pds.repo-import-test :as imports]
             [pds.server-api-test :as api]
             [pds.service-auth-test :as jwt])
@@ -204,3 +206,45 @@
               (is (some? (get-in limited [:headers "retry-after"])))
               (is (= before (count @calls)))))
           (finally (deliver release true) ((:stop! server))))))))
+
+(deftest per-account-proxy-budgets-bound-remote-work
+  (upstream/with-service
+    (fn [{:keys [calls] :as remote}]
+      (let [limiter (redis/open-limiter {:backend "memory" :max-requests 1000 :window-ms 60000
+                                         :proxy-account {:enabled true :max-requests 2 :window-ms 60000}})
+            settings (assoc (config remote) :rate-limiter limiter)
+            alice (imports/local! settings)
+            bob (accounts/create! fixture/*ds* settings {"handle" "bob.example.com" "email" "bob@example.com" "password" "test-password"})
+            handler (app/handler settings fixture/*ds*)
+            release! (fn [response]
+                       (when (instance? java.io.Closeable (:body response))
+                         (.close ^java.io.Closeable (:body response)))
+                       response)
+            proxy-get (fn [account] (release! (handler {:uri "/xrpc/com.example.read" :request-method :get
+                                                        :headers {"authorization" (str "Bearer " (:accessJwt account))}})))]
+        (is (= [200 200] (mapv (comp :status proxy-get) [alice alice])))
+        (let [before (count @calls)
+              body (proxy [java.io.InputStream] [] (read [& _] (throw (AssertionError. "Over-budget bodies must not be read"))))
+              response (handler {:uri "/xrpc/com.example.read" :request-method :post
+                                 :headers {"authorization" (str "Bearer " (:accessJwt alice)) "content-type" "application/test"}
+                                 :body body})]
+          (is (= 429 (:status response)))
+          (is (= "RateLimitExceeded" (get (json/read-str (:body response)) "error")))
+          (is (contains? (:headers response) "Retry-After"))
+          (is (= before (count @calls)) "Over-budget requests never reach the upstream"))
+        (is (= 200 (:status (proxy-get bob))) "Each account has an independent budget")
+        (is (= 200 (:status (release! (handler {:uri "/xrpc/com.atproto.server.getSession" :request-method :get
+                                                :headers {"authorization" (str "Bearer " (:accessJwt alice))}}))))
+            "Local routes are not charged against the proxy budget")
+        (let [failing (reify
+                        rate-limit/Limiter
+                        (admit! [_ _] {:allowed? true :retry-after 0})
+                        rate-limit/AccountLimiter
+                        (admit-account! [_ _ _] (throw (ex-info "limiter outage" {}))))
+              handler (app/handler (assoc settings :rate-limiter failing) fixture/*ds*)
+              before (count @calls)
+              response (handler {:uri "/xrpc/com.example.read" :request-method :get
+                                 :headers {"authorization" (str "Bearer " (:accessJwt alice))}})]
+          (is (= 503 (:status response)))
+          (is (= "RateLimitUnavailable" (get (json/read-str (:body response)) "error")))
+          (is (= before (count @calls)) "A shared limiter outage fails closed"))))))
