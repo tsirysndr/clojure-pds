@@ -5,7 +5,8 @@ of the [Lume](https://lume.land) static site published at
 <https://clojure-pds.tsirysndr.deno.net/>. The engine lives alongside
 them: `_config.ts` (navigation, table of contents, search index, repository
 link resolution), `_includes/layouts/`, and `assets/` (flat violet theme, no
-gradients, wordmark logo, client-side search).
+gradients, Roboto Mono downloaded and self-hosted at build time,
+wordmark logo, client-side search).
 
 ```sh
 deno task serve    # local preview at http://localhost:3000

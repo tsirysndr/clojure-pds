@@ -1,5 +1,6 @@
 import lume from "lume/mod.ts";
 import codeHighlight from "lume/plugins/code_highlight.ts";
+import googleFonts from "lume/plugins/google_fonts.ts";
 import resolveUrls from "lume/plugins/resolve_urls.ts";
 import sitemap from "lume/plugins/sitemap.ts";
 import slugifyUrls from "lume/plugins/slugify_urls.ts";
@@ -91,6 +92,18 @@ site.data("sidebar", sidebar);
 site.data("repo", "https://github.com/tsirysndr/clojure-pds");
 
 site.add("assets");
+
+// Downloaded at build time into assets/fonts; the site loads no third-party
+// resources at runtime.
+site.use(googleFonts({
+  fonts: {
+    "Roboto Mono":
+      "https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,100..700;1,100..700",
+  },
+  cssFile: "/assets/fonts.css",
+  fontsFolder: "/assets/fonts",
+  subsets: ["latin", "latin-ext"],
+}));
 
 site.use(slugifyUrls());
 site.use(resolveUrls());

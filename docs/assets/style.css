@@ -1,6 +1,8 @@
 :root {
   color-scheme: light;
 
+  --tracking-tight: -0.02em;
+
   --bg: #ffffff;
   --bg-soft: #f8f6fb;
   --bg-sunken: #f1edf7;
@@ -36,10 +38,10 @@
   --content-max: 48rem;
   --radius: 0.625rem;
 
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Inter,
-    Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
-    "Liberation Mono", monospace;
+  --font-sans: "Roboto Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo,
+    Consolas, "Liberation Mono", monospace;
+  --font-mono: "Roboto Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo,
+    Consolas, "Liberation Mono", monospace;
 }
 
 :root[data-theme="dark"] {
