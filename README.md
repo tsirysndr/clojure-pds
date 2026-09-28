@@ -37,6 +37,7 @@ Run the tests with `bash scripts/test-postgres.sh`; see
 ### Setup and operations
 
 - [Getting started](docs/GETTING-STARTED.md) — install, run, master key, account UI
+- [Deployment](docs/DEPLOYMENT.md) — VPS checklist, Docker image, Nix flake
 - [Configuration](docs/CONFIGURATION.md) — environment variables and migrations
 - [Development](docs/DEVELOPMENT.md) — test suites, CI, REPL
 - [Database pool](docs/DATABASE.md) — connection pool lifecycle and limits
