@@ -4,7 +4,7 @@
 // built site is staged in a temp directory outside the repository and
 // uploaded from there.
 
-const APP = "clojure-pds-docs";
+const APP = "clojure-pds";
 const ORG = "tsirysndr";
 const SITE_URL = Deno.env.get("SITE_URL") ?? `https://${APP}.${ORG}.deno.net/`;
 

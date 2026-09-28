@@ -40,7 +40,7 @@ Run the tests with `bash scripts/test-postgres.sh`; see
 ## Documentation
 
 Browse these pages as a website at
-<https://clojure-pds-docs.tsirysndr.deno.net/> (`docs/` doubles as a Lume
+<https://clojure-pds.tsirysndr.deno.net/> (`docs/` doubles as a Lume
 static site; see [docs/README.md](docs/README.md)).
 
 ### Setup and operations

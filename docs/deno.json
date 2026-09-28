@@ -23,6 +23,6 @@
   },
   "deploy": {
     "org": "tsirysndr",
-    "app": "clojure-pds-docs"
+    "app": "clojure-pds"
   }
 }
