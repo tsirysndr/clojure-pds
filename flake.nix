@@ -59,10 +59,17 @@
               mkdir -p "$cache/m2" "$cache/gitlibs" "$cache/cpcache"
               export GITLIBS="$cache/gitlibs"
               export CLJ_CACHE="$cache/cpcache"
-              alias="''${1:-run}"
+
+              # Sources live in the read-only store, so the zero-configuration
+              # SQLite database goes in the directory this was invoked from.
+              if [ -z "''${PDS_DATABASE_URL:-}''${PDS_DATABASE_USER:-}''${PDS_DATABASE_PASSWORD:-}" ]; then
+                export PDS_SQLITE_PATH="''${PDS_SQLITE_PATH:-$PWD/data/clojure-pds.sqlite3}"
+              fi
+
+              subcommand="''${1:-run}"
               if [ "$#" -gt 0 ]; then shift; fi
-              cd ${source}
-              exec clojure -Sdeps "{:mvn/local-repo \"$cache/m2\"}" -M:"$alias" "$@"
+              cd "${source}"
+              exec clojure -Sdeps "{:mvn/local-repo \"$cache/m2\"}" -M:"$subcommand" "$@"
             '';
           };
           default = clojure-pds;

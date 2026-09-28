@@ -26,18 +26,17 @@ jobs:
       - name: Build the launcher
         run: nix build .#clojure-pds --print-build-logs
 
-      - name: Check the launcher starts and fetches dependencies
+      - name: Check the launcher applies migrations to a temporary database
         run: |
           test -x result/bin/clojure-pds
-          # Without PDS_MASTER_KEY the server must fail fast after resolving
-          # dependencies, proving the wrapper and classpath work end to end.
-          set +e
-          output=$(./result/bin/clojure-pds run 2>&1)
-          status=$?
-          set -e
-          echo "$output" | tail -5
-          test "$status" -ne 0
-          echo "$output" | grep -q "PDS_MASTER_KEY"
+          # Migrating a throwaway SQLite file exercises the wrapper, the
+          # classpath, dependency resolution and the schema in one step, and
+          # proves data is written outside the read-only store.
+          PDS_SQLITE_PATH="$(mktemp -d)/pds.sqlite3"
+          export PDS_SQLITE_PATH
+          ./result/bin/clojure-pds migrate | tee migrate.log
+          grep -q "SQLite migrations applied" migrate.log
+          test -f "$PDS_SQLITE_PATH"
 
       - name: Check the development shell
         run: nix develop --command clojure --version
