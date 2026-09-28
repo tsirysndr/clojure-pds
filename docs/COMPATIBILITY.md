@@ -218,10 +218,13 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   immediate write transactions replace row/advisory locking; declared-type
   read coercion preserves Java types; and the consolidated baseline schema
   reproduces checks, keys, partial indexes and the OAuth-epoch trigger. A
-  dedicated end-to-end slice (signup, sessions, records, exports, blobs,
-  events, resets, lifecycle, reservations) runs on SQLite in every suite
-  execution; the remaining integration matrix, the offline master-key CLI and
-  the backup drill are PostgreSQL-only so far. See [scope](SQLITE.md).
+  dedicated end-to-end slice plus 66 integration namespaces (295 tests) run
+  against temporary SQLite files in every suite execution, covering accounts,
+  OAuth, repositories, blobs, the firehose, moderation, PLC operations, the
+  service proxy and the operator recovery CLI. Migration-history replays,
+  row-lock choreography, `ALTER CONSTRAINT` fault injection, pool
+  connection-identity tests, the master-key CLI and the backup drill remain
+  PostgreSQL-only. See [scope](SQLITE.md).
 - PostgreSQL migrations are locked, transactional, and checksummed. Tests verify
   rollback, persistence across connections, binary data, signed commits, atomic
   batches, concurrent swap conflicts, and isolation between accounts.

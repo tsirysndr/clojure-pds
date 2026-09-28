@@ -97,7 +97,7 @@
               (is (= 400 (:status (call "POST" "com.atproto.server.createAccount" (assoc (signup) "password" "wrong-password")))))
               (is (= 1 (count (directory-test/posts calls))))
               (let [persisted (first (rows "SELECT operation, operation_cid FROM plc_identities"))
-                    restarted (db/datasource {:url (.getURL fixture/*ds*) :user (.getUser fixture/*ds*) :password (.getPassword fixture/*ds*)})]
+                    restarted (db/datasource fixture/*database*)]
                 (due!)
                 (reset! mode :accept)
                 (is (= :ready (accounts/provision-one! restarted (assoc settings :plc-url "https://changed-directory.example.com") nil))

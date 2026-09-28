@@ -33,7 +33,7 @@
 (use-fixtures :each fixture/isolated-database)
 (defn tx [f] (db/transact! fixture/*ds* f))
 (defn error [f] (try (f) nil (catch clojure.lang.ExceptionInfo e (:master-key-error (ex-data e)))))
-(defn env [] {"PDS_DATABASE_URL" (.getURL fixture/*ds*) "PDS_DATABASE_USER" (.getUser fixture/*ds*) "PDS_DATABASE_PASSWORD" (.getPassword fixture/*ds*)})
+(defn env [] (fixture/database-env))
 (defn secrets []
   (into {}
         (for [{:keys [table column]} keys/columns]

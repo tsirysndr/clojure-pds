@@ -60,12 +60,17 @@
   ;; Ordered: special cases before the generic cast/keyword removals.
   [[#"(?s)SELECT EXISTS \(SELECT 1 FROM pg_locks.*?\) AS held" "SELECT 1 AS held"]
    [#"set_config\('[^']*', '[^']*', \w+\)" "'clojure-pds'"]
-   [#"pg_advisory_xact_lock\(\d+\)" "1"]
+   [#"pg_(?:try_)?advisory_(?:xact_)?lock(?:_shared)?\(\d+\)" "1"]
    [#"pg_(?:try_advisory_(?:xact_)?lock(?:_shared)?|advisory_xact_lock|advisory_unlock_shared)\((?:hashtextextended\()?\?(?:, 0\))?\)"
     "(ifnull(?, 0) IS NOT NULL)"]
-   [#"substring\((\w+) FROM \?(?:::integer)? FOR \?(?:::integer)?\)" "substr($1, ?, ?)"]
+   ;; PostgreSQL substring of an empty/short bytea yields empty bytes, never NULL.
+   [#"substring\((\w+) FROM \?(?:::integer)? FOR \?(?:::integer)?\)" "coalesce(substr($1, ?, ?), x'')"]
+   [#"(?i)\bcurrent_user\b" "'sqlite'"]
+   ;; Left-pad to a fixed width: build the pad run, concatenate, keep the tail.
+   [#"lpad\((\w+)::text, (\d+), '(.)'\)"
+    "substr(replace(hex(zeroblob($2)), '00', '$3') || $1, -$2)"]
    [#"min\(seq\) FILTER \(WHERE created_at >= \?\)" "min(CASE WHEN created_at >= ? THEN seq END)"]
-   [#"extract\(epoch FROM ([\w.]+) - ([\w.]+)\)"
+   [#"extract\(epoch FROM ([\w.]+|now\(\)) - ([\w.]+|now\(\))\)"
     "(CAST(strftime('%s',$1) AS INTEGER) - CAST(strftime('%s',$2) AS INTEGER))"]
    [#"\(extract\(epoch FROM ([\w.]+)\) \* 1000000\)::bigint"
     "(CAST(strftime('%s',$1) AS INTEGER)*1000000 + CAST(substr($1,21,3) AS INTEGER)*1000)"]
@@ -89,7 +94,17 @@
    [#"octet_length\(" "length("]])
 
 (def ^:private leftovers
-  #"::|pg_|jsonb|\binterval\b|FILTER \(|now\(\)|COLLATE|->>|octet_length")
+  #"::|pg_|jsonb|\binterval\b|FILTER \(|now\(\)|COLLATE|->>|octet_length|generate_series|lpad\(")
+
+(defn- expand-generate-series
+  "Rewrite a `generate_series(1, n)` source into an equivalent recursive CTE,
+  which SQLite places before the statement."
+  [sql]
+  (if-let [[match bound alias] (re-find #"generate_series\(1, (\d+)\)(?: AS)? (\w+)" sql)]
+    (str "WITH RECURSIVE " alias "(" alias ") AS (SELECT 1 UNION ALL SELECT "
+         alias " + 1 FROM " alias " WHERE " alias " < " bound ") "
+         (str/replace sql match alias))
+    sql))
 
 (defn- translate* [sql]
   (cond
@@ -98,7 +113,8 @@
     ["DROP TABLE IF EXISTS pds_car_export_seen"
      "CREATE TEMP TABLE pds_car_export_seen (cid text PRIMARY KEY)"]
     :else
-    (let [result (reduce (fn [text [pattern replacement]] (str/replace text pattern replacement)) sql rules)]
+    (let [result (reduce (fn [text [pattern replacement]] (str/replace text pattern replacement))
+                         (expand-generate-series sql) rules)]
       (when (re-find leftovers result)
         (throw (ex-info "SQL construct is not translated for the SQLite backend"
                         {:sql sql :translated result})))

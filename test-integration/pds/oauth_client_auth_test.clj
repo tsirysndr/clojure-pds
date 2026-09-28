@@ -34,7 +34,7 @@
              (rows "SELECT client_id_hash, jti_hash FROM oauth_client_assertion_uses")))
       (is (= "invalid_client" (client/error #(accept resolved (client/params other claims))))
           "Publishing another key cannot reuse an accepted jti")
-      (let [reopened (db/datasource {:url (.getURL fixture/*ds*) :user (.getUser fixture/*ds*) :password (.getPassword fixture/*ds*)})]
+      (let [reopened (db/datasource fixture/*database*)]
         (is (= "invalid_client" (client/error #(auth/accept! reopened resolved client/settings input)))))
       (with-open [conn (db/connection fixture/*ds*)]
         (is (thrown? Exception (auth/consume! conn (auth/verify! resolved client/settings input))))))))

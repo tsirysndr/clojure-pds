@@ -35,8 +35,7 @@
 (defn child [args password]
   (let [builder (ProcessBuilder. ^java.util.List (into ["mise" "exec" "--" "clojure" "-M:account-admin"] args)) env (.environment builder)]
     (doseq [name ["PDS_MASTER_KEY" "PDS_ADMIN_PASSWORD" "PDS_RECOVERY_PASSWORD"]] (.remove env name))
-    (.putAll env {"PDS_DATABASE_URL" (.getURL fixture/*ds*) "PDS_DATABASE_USER" (.getUser fixture/*ds*)
-                 "PDS_DATABASE_PASSWORD" (.getPassword fixture/*ds*)})
+    (.putAll env (fixture/database-env))
     (when password (.put env "PDS_RECOVERY_PASSWORD" password))
     (let [process (.start builder) output (future (slurp (.getInputStream process))) errors (future (slurp (.getErrorStream process)))]
       (try
@@ -174,6 +173,10 @@
     (is (= did (:did (accounts/login! fixture/*ds* settings {"identifier" did "password" "replacement-password"}))))))
 
 (deftest recovery-does-not-deadlock-a-browser-already-waiting-for-the-account
+  ;; Interleaves two writers around a `FOR UPDATE` account lock. SQLite
+  ;; serializes writers for the whole transaction, so the interleaving under
+  ;; test cannot be constructed there.
+  (when (fixture/postgres?)
   (let [settings (api/settings) _ (owner/account! settings) did owner/did
         browser (browser-test/login settings) before (status did)
         entered (promise) release (promise) query db/query]
@@ -192,4 +195,4 @@
               (is (= "BrowserSessionRequired" (deref request 10000 :timeout)))
               (is (empty? (rows "SELECT * FROM account_totp WHERE did = ?" did)))
               (finally (deliver release true) (deref recovery 10000 nil))))
-          (finally (deliver release true) (deref request 10000 nil)))))))
+          (finally (deliver release true) (deref request 10000 nil))))))))

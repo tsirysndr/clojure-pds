@@ -78,6 +78,9 @@
       (is (= [] (get-in (listing handler did "") [:body "cids"]))))))
 
 (deftest revision-upgrade-uses-a-conservative-baseline-without-changing-the-head
+  ;; Replays a prefix of the PostgreSQL migration chain; the SQLite backend
+  ;; ships one consolidated baseline with no partial history.
+  (when (fixture/postgres?)
   (let [all db/migrations]
     (with-redefs [db/migrations (vec (take 20 all))]
       (fixture/isolated-database
@@ -96,4 +99,4 @@
               (is (= [{:repo_rev rev}] (rows "SELECT repo_rev FROM records")))
               (let [handler (app/handler settings fixture/*ds*)]
                 (is (= [(:cid (get native "ref"))] (get-in (listing handler did "&since=2222222222222") [:body "cids"])))
-                (is (= [] (get-in (listing handler did (str "&since=" rev)) [:body "cids"])))))))))))
+                (is (= [] (get-in (listing handler did (str "&since=" rev)) [:body "cids"]))))))))))))

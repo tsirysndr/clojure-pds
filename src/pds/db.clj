@@ -127,6 +127,18 @@
   (or (= "23505" (.getSQLState e))
       (boolean (re-find #"(?i)UNIQUE constraint failed|SQLITE_CONSTRAINT" (str (.getMessage e))))))
 
+(defn- clear-temporary-state!
+  "SQLite temporary tables live for the connection, while their PostgreSQL
+  originals are ON COMMIT DROP. Pooled connections must not carry one
+  transaction's temporary rows into the next."
+  [^Connection conn]
+  (when (sqlite/sqlite-connection? conn)
+    (try
+      (doseq [name (map :name (query conn "SELECT name FROM sqlite_temp_master WHERE type = 'table'"))]
+        (execute! conn (str "DROP TABLE IF EXISTS temp.\"" name "\"")))
+      (.commit conn)
+      (catch Throwable _ nil))))
+
 (defn transact!
   "Run f with an owned connection. Exceptions roll back all changes."
   [ds f]
@@ -136,7 +148,8 @@
       (let [result (f conn)] (.commit conn) result)
       (catch Throwable t
         (try (.rollback conn) (catch Throwable rollback (.addSuppressed t rollback)))
-        (throw t)))))
+        (throw t))
+      (finally (clear-temporary-state! conn)))))
 
 (def migrations ["001-storage.sql" "002-email.sql" "003-sessions.sql" "004-repo-events.sql"
                  "005-blob-storage.sql" "006-app-passwords.sql" "007-account-lifecycle.sql"

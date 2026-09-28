@@ -98,6 +98,9 @@
     (is (= 0 (scalar "SELECT count(*) AS n FROM record_blob_refs")))))
 
 (deftest upgrade-backfills-existing-records-without-rewriting-them
+  ;; Replays a prefix of the PostgreSQL migration chain; the SQLite backend
+  ;; ships one consolidated baseline with no partial history.
+  (when (fixture/postgres?)
   (let [all db/migrations]
     (with-redefs [db/migrations (vec (take 19 all))]
       (fixture/isolated-database
@@ -113,4 +116,4 @@
               (is (= before (rows "SELECT head, rev FROM repositories")))
               (is (= [{:cid (:cid (get-in value ["file" "ref"]))}] (rows "SELECT cid FROM record_blob_refs")))
               (with-open [conn (db/connection fixture/*ds*)]
-                (is (= 1 (count (refs/missing conn did nil 10))))))))))))
+                (is (= 1 (count (refs/missing conn did nil 10)))))))))))))

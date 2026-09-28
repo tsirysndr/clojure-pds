@@ -81,7 +81,7 @@
           (is (= :invalid-data (:type (error #(export/response! fixture/*ds* settings did))))))
         (is (every? #(not (.isOpen ^FileChannel %)) @channels))
         (with-open [conn (db/connection fixture/*ds*)]
-          (is (empty? (db/query conn "SELECT 1 FROM pg_tables WHERE tablename = 'pds_car_export_seen'"))))))))
+          (is (fixture/export-table-absent? conn)))))))
 
 (deftest concurrent-writes-wait-for-snapshot-preparation-but-not-http-consumption
   (let [settings (api/settings) did (:did (imports/local! settings))
@@ -117,7 +117,7 @@
 
 (deftest pooled-connections-drop-temporary-state-before-delivery-and-can-be-reused
   (let [settings (api/settings) did (:did (imports/local! settings))
-        database {:url (.getURL fixture/*ds*) :user (.getUser fixture/*ds*) :password (.getPassword fixture/*ds*)}]
+        database fixture/*database*]
     (with-open [pool (db/open-pool! database {:maximum-size 1 :timeout-ms 500})]
       (is (= 413 (:status (error #(export/response! pool (assoc settings :repo-export-max-bytes 100) did)))))
       (let [pids (atom #{})]
@@ -126,8 +126,7 @@
         (dotimes [_ 8]
           (with-open [b (:body (export/response! pool settings did))]
             (with-open [conn (db/connection pool)]
-              (let [row (first (db/query conn "SELECT pg_backend_pid() AS pid, to_regclass('pg_temp.pds_car_export_seen') IS NULL AS absent"))]
-                (swap! pids conj (:pid row))
-                (is (:absent row))))
+              (swap! pids conj (fixture/connection-id conn))
+              (is (fixture/export-table-absent? conn)))
             (is (seq (.readAllBytes ^InputStream (:input b))))))
         (is (= 1 (count @pids)))))))

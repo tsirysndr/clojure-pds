@@ -327,9 +327,9 @@
       (let [settings (provision/settings client origin) alice (accounts/create! fixture/*ds* settings (provision/signup)) did (:did alice)
             old (ct/stored did) key (ct/old-key settings did old)
             remote (ops/update-op (codec/decode (:operation old)) key {"alsoKnownAs" ["at://cli.example.com"]})
-            env {"PDS_DATABASE_URL" (.getURL fixture/*ds*) "PDS_DATABASE_USER" (.getUser fixture/*ds*)
-                 "PDS_DATABASE_PASSWORD" (.getPassword fixture/*ds*) "PDS_HOSTNAME" (:hostname settings)
-                 "PDS_USER_DOMAIN" (:user-domain settings) "PDS_PUBLIC_URL" (:public-url settings)}
+            env (merge (fixture/database-env)
+                 {"PDS_HOSTNAME" (:hostname settings)
+                  "PDS_USER_DOMAIN" (:user-domain settings) "PDS_PUBLIC_URL" (:public-url settings)})
             audit! directory/audit!]
         (external! settings did remote)
         ;; Only replace transport trust for the real loopback TLS fixture; run!

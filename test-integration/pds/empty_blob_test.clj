@@ -64,6 +64,9 @@
         (round-trip! (assoc (api/settings) :blob-store store))))))
 
 (deftest upgrade-recovers-empty-references-without-changing-the-repository
+  ;; Replays a prefix of the PostgreSQL migration chain. The SQLite backend
+  ;; ships one consolidated baseline, so there is no partial history to replay.
+  (when (fixture/postgres?)
   (let [all db/migrations]
     (with-redefs [db/migrations (vec (take 22 all))]
       (fixture/isolated-database
@@ -89,4 +92,4 @@
               (is (= [{:cid (codec/cid 85 empty)}] (rows "SELECT cid FROM record_blob_refs")))
               (db/transact! fixture/*ds* #(blobs/store! % settings did empty "image/png"))
               (with-open [conn (db/connection fixture/*ds*)]
-                (is (= [] (vec (:content (blobs/read! conn settings did (codec/cid 85 empty))))))))))))))
+                (is (= [] (vec (:content (blobs/read! conn settings did (codec/cid 85 empty)))))))))))))))

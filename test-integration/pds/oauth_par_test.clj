@@ -40,7 +40,7 @@
             (db/transact! fixture/*ds* (fn [conn]
                                        (par/claim! conn metadata/client-id uri)
                                        (throw (ex-info "Failed to create browser interaction" {}))))))
-      (let [reopened (db/datasource {:url (.getURL fixture/*ds*) :user (.getUser fixture/*ds*) :password (.getPassword fixture/*ds*)})
+      (let [reopened (db/datasource fixture/*database*)
             gate (promise) tasks (mapv (fn [_] (future @gate
                                                 (try (db/transact! reopened #(par/claim! % metadata/client-id uri))
                                                      (catch clojure.lang.ExceptionInfo e (:oauth-error (ex-data e)))))) (range 12))]

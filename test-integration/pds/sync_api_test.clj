@@ -87,6 +87,9 @@
       (finally ((:stop! server))))))
 
 (deftest ownership-upgrade-retains-history-without-following-record-links
+  ;; Replays a prefix of the PostgreSQL migration chain; the SQLite backend
+  ;; ships one consolidated baseline with no partial history.
+  (when (fixture/postgres?)
   (let [all-migrations db/migrations]
     (with-redefs [db/migrations (vec (take 11 all-migrations))]
       (fixture/isolated-database
@@ -122,7 +125,7 @@
                 (is (= "sync" (:event_type event)))
                 (is (= did (get payload "did"))))
               (is (= (conj (set (keys (:blocks tree))) old-cid head current-head (:root empty-tree))
-                     (set (map :cid (db/query conn "SELECT cid FROM repo_block_owners WHERE did = ?" did))))))))))))
+                     (set (map :cid (db/query conn "SELECT cid FROM repo_block_owners WHERE did = ?" did)))))))))))))
 
 (deftest repositories-enumerate-by-record-collection
   (let [settings (api/settings)

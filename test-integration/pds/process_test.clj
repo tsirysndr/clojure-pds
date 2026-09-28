@@ -14,14 +14,13 @@
         builder (ProcessBuilder. ^java.util.List [java "-cp" (System/getProperty "java.class.path") "clojure.main" "-m" "pds.main"])
         env (.environment builder)]
     (doseq [name ["PDS_EMAIL_WORKER_URL" "PDS_EMAIL_WORKER_TOKEN" "PDS_EMAIL_FROM" "PDS_RELAY_URLS" "PDS_RELAY_INTERVAL_SECONDS"]] (.remove env name))
-    (.putAll env {"PDS_DATABASE_URL" (.getURL fixture/*ds*)
-                 "PDS_DB_POOL_SIZE" "2" "PDS_DB_POOL_TIMEOUT_MS" "1000"
-                 "PDS_DATABASE_USER" (.getUser fixture/*ds*) "PDS_DATABASE_PASSWORD" (.getPassword fixture/*ds*)
+    (.putAll env (merge (fixture/database-env)
+                {"PDS_DB_POOL_SIZE" "2" "PDS_DB_POOL_TIMEOUT_MS" "1000"
                  "PDS_MASTER_KEY" (crypto/b64 (crypto/random-bytes 32))
                  "PDS_HOST" "127.0.0.1" "PDS_PORT" "0" "PDS_HOSTNAME" "localhost"
                  "PDS_PUBLIC_URL" "http://localhost:3000" "PDS_USER_DOMAIN" "pds.localhost"
                  "PDS_DID_METHOD" "web" "PDS_PLC_URL" "https://plc.directory"
-                 "PDS_ENABLE_SIGNUP" "false"})
+                 "PDS_ENABLE_SIGNUP" "false"}))
     (.putAll env (if-let [endpoint (System/getenv "PDS_TEST_S3_ENDPOINT")]
                    {"PDS_BLOB_BACKEND" "s3" "PDS_S3_ENDPOINT" endpoint "PDS_S3_BUCKET" "startup-test"
                     "PDS_S3_ACCESS_KEY_ID" "test-access" "PDS_S3_SECRET_ACCESS_KEY" "test-secret"

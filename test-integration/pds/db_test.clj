@@ -5,12 +5,48 @@
 
 (def ^:dynamic *ds*)
 
+(defn postgres?
+  "True when the fixture runs against PostgreSQL. Tests that exercise
+  PostgreSQL-only mechanics (migration-history replays, ALTER CONSTRAINT
+  fault injection, row-lock choreography) guard their bodies with this."
+  []
+  (not (.startsWith ^String (or (System/getenv "PDS_TEST_DATABASE_URL") "") "jdbc:sqlite:")))
+
+(def ^:dynamic *database*
+  "Connection settings for the fixture database, for child processes and
+  secondary pools. Recorded by the fixture so callers never reflect on a
+  backend-specific datasource class.")
+
+(defn database-env
+  "Environment variables pointing another process at the fixture database."
+  []
+  (cond-> {"PDS_DATABASE_URL" (:url *database*)}
+    (:user *database*) (assoc "PDS_DATABASE_USER" (:user *database*))
+    (some? (:password *database*)) (assoc "PDS_DATABASE_PASSWORD" (:password *database*))))
+
+(defn export-table-absent?
+  "Whether the transaction-local CAR export table is invisible on this
+  connection. Temporary-object catalogs differ between the backends."
+  [conn]
+  (if (postgres?)
+    (:absent (first (db/query conn "SELECT to_regclass('pg_temp.pds_car_export_seen') IS NULL AS absent")))
+    (empty? (db/query conn "SELECT 1 FROM sqlite_temp_master WHERE type = 'table' AND name = 'pds_car_export_seen'"))))
+
+(defn connection-id
+  "Identifier of the physical backend connection, for reuse assertions.
+  SQLite has no server process, so every connection reports the same value."
+  [conn]
+  (if (postgres?)
+    (:pid (first (db/query conn "SELECT pg_backend_pid() AS pid")))
+    :sqlite))
+
 (defn- isolated-sqlite [f]
   (let [file (java.io.File/createTempFile "pds-test-" ".sqlite3")
-        ds (db/datasource {:url (str "jdbc:sqlite:" (.getPath file))})]
+        settings {:url (str "jdbc:sqlite:" (.getPath file))}
+        ds (db/datasource settings)]
     (try
       (db/migrate! ds)
-      (binding [*ds* ds] (f))
+      (binding [*ds* ds *database* settings] (f))
       (finally
         (doseq [suffix ["" "-wal" "-shm"]]
           (.delete (java.io.File. (str (.getPath file) suffix))))))))
@@ -29,7 +65,10 @@
           (db/execute! conn (str "CREATE SCHEMA " schema)))
         (try
           (db/migrate! ds)
-          (binding [*ds* ds] (f))
+          (binding [*ds* ds
+                    *database* (assoc settings :url (str url (if (.contains url "?") "&" "?")
+                                                        "currentSchema=" schema))]
+            (f))
           (finally
             (with-open [conn (db/connection admin)]
               (db/execute! conn (str "DROP SCHEMA " schema " CASCADE")))))))))

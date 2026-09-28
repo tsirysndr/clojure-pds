@@ -64,6 +64,9 @@
     (is (= empty-sweep (cleanup/collect! fixture/*ds*)))))
 
 (deftest cleanup-skips-in-flight-family-and-code-locks
+  ;; Holds row locks across concurrent cleanup passes. SQLite serializes
+  ;; writers for the whole transaction, so the overlap cannot be built.
+  (when (fixture/postgres?)
   (let [env (token/env) _ (token/issue env (token/approved env))]
     (expire!)
     (with-open [conn (db/connection fixture/*ds*)]
@@ -87,7 +90,7 @@
         (let [sweep (future (cleanup/collect! fixture/*ds*))]
           (is (= {:tokens 1 :sessions 1 :codes 0} (deref sweep 2000 :timeout))))
         (finally (.rollback conn))))
-    (is (= {:tokens 0 :sessions 0 :codes 1} (cleanup/collect! fixture/*ds*)))))
+    (is (= {:tokens 0 :sessions 0 :codes 1} (cleanup/collect! fixture/*ds*))))))
 
 (deftest concurrent-sweeps-and-refresh-preserve-live-grants
   (let [env (token/env) issued (token/issue env (token/approved env))

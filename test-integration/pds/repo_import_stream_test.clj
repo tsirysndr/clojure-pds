@@ -116,7 +116,7 @@
 
 (deftest upload-holds-no-connection-or-account-lock-and-rechecks-revocation
   (let [{:keys [settings account did key]} (env) f (imports/repo-car did key {"com.example.record/a" {}})
-        database {:url (.getURL fixture/*ds*) :user (.getUser fixture/*ds*) :password (.getPassword fixture/*ds*)}
+        database fixture/*database*
         changed? (atom false) before (imports/state)]
     (with-open [pool (db/open-pool! database {:maximum-size 1 :timeout-ms 500})]
       (let [handler (app/handler settings pool)

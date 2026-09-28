@@ -133,6 +133,9 @@
       (is (= 4 (par-test/scalar "SELECT count(*) AS n FROM oauth_tokens"))))))
 
 (deftest issuance-failure-rolls-back-grant-but-not-proof-use
+  ;; Injects a mint failure with ALTER TABLE ... ADD CONSTRAINT, which
+  ;; SQLite cannot express on an existing table.
+  (when (fixture/postgres?)
   (let [{:keys [settings resolver key] :as env} (env) code (approved env)
         params (merge (credentials env) code) dpop-proof (proof/sign key (proof/claims))]
     (owner/mutate "ALTER TABLE oauth_tokens ADD CONSTRAINT test_mint_failure CHECK (kind <> 'access')")
@@ -146,7 +149,7 @@
       (is (thrown? java.sql.SQLException (issue env (refresh-params issued))))
       (is (= 0 (par-test/scalar "SELECT count(*) AS n FROM oauth_tokens WHERE used_at IS NOT NULL")))
       (owner/mutate "ALTER TABLE oauth_tokens DROP CONSTRAINT test_mint_failure")
-      (is (map? (issue env (refresh-params issued)))))))
+      (is (map? (issue env (refresh-params issued))))))))
 
 (deftest access-only-clients-and-http-token-contract
   (let [{:keys [settings resolver key document] :as env} (env)]

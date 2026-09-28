@@ -53,7 +53,7 @@
           (is (= [{:issuer issuer :nonce_hash (crypto/digest-token (get-in verified [:claims "jti"]))}]
                  (rows "SELECT issuer, nonce_hash FROM service_token_uses")))
           (is (= "JwtReplay" (error #(db/transact! fixture/*ds* (fn [conn] (service-auth/consume! conn alternate))))))
-          (let [reopened (db/datasource {:url (.getURL fixture/*ds*) :user (.getUser fixture/*ds*) :password (.getPassword fixture/*ds*)})]
+          (let [reopened (db/datasource fixture/*database*)]
             (is (= "JwtReplay" (error #(db/transact! reopened (fn [conn] (service-auth/consume! conn verified)))))))
           (with-open [conn (db/connection fixture/*ds*)]
             (is (thrown? Exception (service-auth/consume! conn verified)) "Autocommit consumption cannot be used accidentally")))))))

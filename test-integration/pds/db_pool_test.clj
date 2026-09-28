@@ -22,7 +22,7 @@
 (use-fixtures :each fixture/isolated-database)
 
 (defn database-settings []
-  {:url (.getURL fixture/*ds*) :user (.getUser fixture/*ds*) :password (.getPassword fixture/*ds*)})
+  fixture/*database*)
 
 (defn pool [size]
   (db/open-pool! (database-settings) {:maximum-size size :timeout-ms 500}))
@@ -35,7 +35,7 @@
                                               {:maximum-size 1 :timeout-ms 500})]
                     nil)
                   (catch clojure.lang.ExceptionInfo e e))]
-    (is (= "Unable to connect to the configured PostgreSQL database" (some-> failure .getMessage)))
+    (is (= "Unable to connect to the configured database" (some-> failure .getMessage)))
     (is (= {} (ex-data failure)))
     (is (nil? (some-> failure .getCause)))))
 

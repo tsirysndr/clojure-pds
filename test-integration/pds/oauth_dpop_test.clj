@@ -96,8 +96,7 @@
                         "(with-redefs [dpop/now (constantly (get input \"now\"))] "
                         "(System/exit (if (= \"invalid_dpop_proof\" (proof/error #(store/accept! ds proof/settings (get input \"token\") proof/context))) 0 1))))")
               builder (ProcessBuilder. [(str (System/getProperty "java.home") "/bin/java") "-cp" (System/getProperty "java.class.path") "clojure.main" "-e" code])]
-          (.putAll (.environment builder) {"PDS_DATABASE_URL" (.getURL fixture/*ds*) "PDS_DATABASE_USER" (.getUser fixture/*ds*)
-                                          "PDS_DATABASE_PASSWORD" (.getPassword fixture/*ds*) "PDS_PROOF_FIXTURE" (str path)})
+          (.putAll (.environment builder) (merge (fixture/database-env) {"PDS_PROOF_FIXTURE" (str path)}))
           (.redirectErrorStream builder true)
           (let [process (.start builder) done? (.waitFor process 30 TimeUnit/SECONDS)]
             (when-not done? (.destroyForcibly process))

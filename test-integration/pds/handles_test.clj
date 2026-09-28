@@ -166,6 +166,9 @@
           (is (empty? (provision-test/rows "SELECT * FROM handle_updates"))))))))
 
 (deftest handle-reservations-backfill-existing-accounts
+  ;; Replays a prefix of the PostgreSQL migration chain; the SQLite backend
+  ;; ships one consolidated baseline with no partial history.
+  (when (fixture/postgres?)
   (let [migrations db/migrations]
     (with-redefs [db/migrations (vec (take-while #(not= "015-handle-updates.sql" %) migrations))]
       (fixture/isolated-database
@@ -174,7 +177,7 @@
                             ('did:web:original.example.com', 'current.example.com', 'old@example.com', 'unused')"))
           (with-redefs [db/migrations migrations] (db/migrate! fixture/*ds*))
           (is (= [{:handle "current.example.com" :permanent false} {:handle "original.example.com" :permanent true}]
-                 (provision-test/rows "SELECT handle, permanent FROM handle_reservations ORDER BY handle"))))))))
+                 (provision-test/rows "SELECT handle, permanent FROM handle_reservations ORDER BY handle")))))))))
 
 (deftest expired-handle-lease-cannot-overwrite-a-later-update
   (directory-test/with-directory

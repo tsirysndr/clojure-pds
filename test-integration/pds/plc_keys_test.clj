@@ -50,8 +50,7 @@
 
 (defn child-status [did]
   (let [builder (ProcessBuilder. ["mise" "exec" "--" "clojure" "-M:identity" "status" did]) env (.environment builder)]
-    (.putAll env {"PDS_DATABASE_URL" (.getURL fixture/*ds*) "PDS_DATABASE_USER" (.getUser fixture/*ds*)
-                  "PDS_DATABASE_PASSWORD" (.getPassword fixture/*ds*)})
+    (.putAll env (fixture/database-env))
     (.remove env "PDS_MASTER_KEY")
     (let [process (.start builder) output (future (slurp (.getInputStream process))) errors (future (slurp (.getErrorStream process)))]
       (try

@@ -45,7 +45,7 @@
       (let [settings (assoc (wire/config remote) :proxy-max-concurrent 1 :proxy-max-response-bytes (* 3 1024 1024))
             account (imports/local! settings) data (byte-array (* 2 1024 1024))
             _ (java.util.Arrays/fill data (byte 37)) channels (atom []) original tempfile/open-channel!
-            database {:url (.getURL fixture/*ds*) :user (.getUser fixture/*ds*) :password (.getPassword fixture/*ds*)}]
+            database fixture/*database*]
         (reset! respond #(streaming/reply! % 200 data true))
         (with-open [pool (db/open-pool! database {:maximum-size 1 :timeout-ms 500})]
           (let [handler (app/handler settings pool) req (request account)]

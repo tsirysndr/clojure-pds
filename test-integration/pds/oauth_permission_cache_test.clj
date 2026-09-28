@@ -70,7 +70,11 @@
                                      (swap! calls inc)
                                      (db/transact! fixture/*ds*
                                        (fn [conn]
-                                         (is (= true (:locked (first (db/query conn "SELECT pg_try_advisory_xact_lock(731946282) AS locked")))))))
+                                         ;; PostgreSQL-only probe: SQLite has no advisory locks, so a
+                                         ;; translated call would assert nothing. The single-refresh
+                                         ;; and call-count assertions below still cover both backends.
+                                         (when (fixture/postgres?)
+                                           (is (= true (:locked (first (db/query conn "SELECT pg_try_advisory_xact_lock(731946282) AS locked"))))))))
                                      (deliver entered true) @release (resolved nsid 2)))]
     (swap! clock + cache/stale-seconds)
     (let [leader (future (cache/resolve! other sets/nsid))]

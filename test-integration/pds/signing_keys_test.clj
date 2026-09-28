@@ -230,6 +230,9 @@
             (is (not= (:head old) (:head (state did))))))))))
 
 (deftest a-writer-waiting-on-the-account-lock-observes-newly-queued-rotation
+  ;; Detects a blocked writer through PostgreSQL lock introspection
+  ;; (pg_blocking_pids). SQLite has no equivalent and serializes writers.
+  (when (fixture/postgres?)
   (tls/with-directory
     (fn [{:keys [client origin]}]
       (let [settings (provision/settings client origin) alice (seed! settings) did (:did alice)
@@ -262,4 +265,4 @@
                   (is (= (:head old) (:head (state did))))
                   (is (empty? (provision/rows "SELECT * FROM records WHERE did = ? AND rkey = 'late'" did)))
                   (finally (deliver release true) (deref writer 10000 nil))))
-              (finally (deliver release true) (deref rotation 10000 nil)))))))))
+              (finally (deliver release true) (deref rotation 10000 nil))))))))))
