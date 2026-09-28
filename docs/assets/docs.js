@@ -11,7 +11,7 @@ document.querySelector(".theme-toggle")?.addEventListener("click", () => {
   const next = currentTheme() === "dark" ? "light" : "dark";
   root.dataset.theme = next;
   try {
-    localStorage.setItem("atoll-theme", next);
+    localStorage.setItem("clojure-pds-theme", next);
   } catch { /* private mode */ }
 });
 

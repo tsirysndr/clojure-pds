@@ -9,12 +9,13 @@
 <link rel="stylesheet" href="/assets/style.css">
 <script>
   // Applied before first paint so the page never flashes the wrong theme.
+  // Dark by default; an explicit choice from the toggle wins.
+  let theme = "dark";
   try {
     const stored = localStorage.getItem("clojure-pds-theme");
-    if (stored === "light" || stored === "dark") {
-      document.documentElement.dataset.theme = stored;
-    }
+    if (stored === "light" || stored === "dark") theme = stored;
   } catch (_) { /* private mode */ }
+  document.documentElement.dataset.theme = theme;
 </script>
 </head>
 <body>
