@@ -1,0 +1,43 @@
+name: nix
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nix-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: nix build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: DeterminateSystems/nix-installer-action@v23
+
+      - name: Build the launcher
+        run: nix build .#clojure-pds --print-build-logs
+
+      - name: Check the launcher starts and fetches dependencies
+        run: |
+          test -x result/bin/clojure-pds
+          # Without PDS_MASTER_KEY the server must fail fast after resolving
+          # dependencies, proving the wrapper and classpath work end to end.
+          set +e
+          output=$(./result/bin/clojure-pds run 2>&1)
+          status=$?
+          set -e
+          echo "$output" | tail -5
+          test "$status" -ne 0
+          echo "$output" | grep -q "PDS_MASTER_KEY"
+
+      - name: Check the development shell
+        run: nix develop --command clojure --version
