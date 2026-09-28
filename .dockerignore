@@ -1,0 +1,17 @@
+.git
+.github
+.cpcache
+.clj-kondo
+.lsp
+target
+data
+docs
+examples
+frontend/node_modules
+scripts
+test
+test-integration
+*.log
+.env
+.env.example
+compose.yaml
