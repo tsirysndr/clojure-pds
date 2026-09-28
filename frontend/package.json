@@ -1,6 +1,7 @@
 {
   "name": "pds-account-ui",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",

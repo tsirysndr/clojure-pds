@@ -57,3 +57,9 @@ implementations (`@atproto/repo`, `@atproto/xrpc-server`, `@did-plc/lib`, the
 reference OAuth client). No live relay, AppView, or deployed Bluesky client
 has consumed this PDS yet — treat deployments as experiments and read the
 [roadmap](ROADMAP.md) for what remains.
+
+## License
+
+clojure-pds is released under the [MIT License](https://github.com/tsirysndr/clojure-pds/blob/main/LICENSE).
+Vendored conformance fixtures retain their upstream CC0 license, and vendored
+Lexicons retain their upstream MIT/Apache notices.

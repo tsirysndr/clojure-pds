@@ -93,5 +93,5 @@ static site; see [docs/README.md](docs/README.md)).
 
 ## License
 
-No project license has been selected. Vendored conformance fixtures retain their
-upstream CC0 license; vendored Lexicons retain their upstream MIT/Apache notices.
+[MIT](LICENSE). Vendored conformance fixtures retain their upstream CC0
+license; vendored Lexicons retain their upstream MIT/Apache notices.
