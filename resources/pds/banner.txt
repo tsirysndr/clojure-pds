@@ -12,3 +12,6 @@
 This is an AT Protocol Personal Data Server (aka, an atproto PDS)
 
 Most API routes are under /xrpc/
+
+Docs: https://clojure-pds.tsirysndr.deno.net
+Code: https://github.com/tsirysndr/clojure-pds
