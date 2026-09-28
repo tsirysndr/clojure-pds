@@ -1,144 +1,15 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
-  <title>Account security · atproto PDS</title>
+  <title>Account · atproto PDS</title>
   <link rel="stylesheet" href="/account/style.css">
   <script type="module" src="/account/app.js"></script>
 </head>
-<body data-stage="login">
-  <main class="auth-shell">
-    <div class="auth-card">
-      <header class="space-y-5 px-4 pt-2 text-center">
-        <a href="/" id="server-name" class="block break-words text-sm font-medium">atproto PDS</a>
-        <div class="space-y-1">
-          <h1 class="text-xl font-medium leading-snug" id="heading">Sign in</h1>
-          <p class="text-sm text-muted" id="subtitle">Enter your username and password</p>
-        </div>
-      </header>
-      <div class="px-4">
-        <p id="notice" class="notice mb-4" role="status" aria-live="polite" hidden></p>
-        <noscript><p class="notice">Enable JavaScript to manage your account securely.</p></noscript>
-        <section id="login" hidden>
-          <form id="password-form" class="space-y-4">
-            <label class="field" for="identifier">Identifier
-              <span class="input-wrap"><span class="input-icon" aria-hidden="true">@</span><input name="identifier" id="identifier" autocomplete="username webauthn" autocapitalize="none" spellcheck="false" required maxlength="2048" aria-describedby="identifier-help"></span>
-            </label>
-            <span id="identifier-help" class="sr-only">Your handle, email address, or DID</span>
-            <div class="field"><label for="password">Password</label>
-            <div class="input-wrap password-wrap">
-              <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="1024">
-              <button id="password-visibility" class="input-action" type="button" aria-label="Show password" aria-pressed="false"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="size-5"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
-            </div></div>
-            <aside class="notice flex items-start gap-2">
-              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="mt-0.5 size-4 shrink-0 text-brand"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v2"/></svg>
-              <div><h2 class="font-semibold">Warning</h2><p class="mt-1 text-muted">Verify the website address before entering your password. Only sign in on sites you recognize and trust.</p></div>
-            </aside>
-            <div class="flex justify-end"><button class="primary" type="submit">Sign in</button></div>
-          </form>
-          <div class="my-4 flex items-center gap-3 text-xs text-muted"><hr class="grow border-line">or<hr class="grow border-line"></div>
-          <button id="passkey-login" class="secondary w-full" type="button">Sign in with a passkey</button>
-          <p class="mt-2 text-xs text-muted">Enter your identifier above to use a passkey.</p>
-          <button id="show-signup" class="secondary mt-4" type="button" hidden>Create a new account</button>
-        </section>
-        <section id="signup" hidden>
-          <p id="signup-unavailable" class="notice mb-4" hidden>Account creation is disabled on this server. You can sign in with an existing account.</p>
-          <form id="signup-form" class="space-y-4">
-            <label class="field">Username<input name="username" autocomplete="username" autocapitalize="none" spellcheck="false" pattern="[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?" maxlength="63" required aria-describedby="signup-domain"></label>
-            <p id="signup-domain" class="break-all text-xs text-muted"></p>
-            <label class="field">Email<input name="email" type="email" autocomplete="email" maxlength="254" required></label>
-            <label class="field">Password<input name="password" type="password" autocomplete="new-password" minlength="8" maxlength="1024" required></label>
-            <label id="signup-invite-label" class="field"><span id="signup-invite-title">Invite code</span><input name="inviteCode" id="signup-invite" autocomplete="off" maxlength="256" spellcheck="false"></label>
-            <p class="text-xs leading-5 text-muted">Your account and public posts will be hosted on this server.</p>
-            <div class="flex justify-end"><button class="primary" type="submit">Create account</button></div>
-          </form>
-          <button id="show-login" class="secondary mt-4" type="button">Use an existing account</button>
-        </section>
-        <section id="oauth-account" class="space-y-4" hidden>
-          <p class="text-sm text-muted">Continue with this account, or sign in with another account.</p>
-          <button id="oauth-continue" class="primary" type="button">Continue</button>
-          <button id="oauth-other" class="secondary" type="button">Use another account</button>
-        </section>
-        <section id="consent" class="space-y-4" hidden>
-          <p class="text-sm text-muted">This application is requesting access to your account:</p>
-          <p id="oauth-client" class="break-all rounded-lg border border-line p-3 text-sm font-medium"></p>
-          <p class="text-xs text-muted">Check the full address. Application names and logos are not verified identities.</p>
-          <ul id="oauth-scopes" class="list-disc space-y-2 pl-5 text-sm"></ul>
-          <p id="oauth-did" class="break-all text-xs text-muted"></p>
-          <div class="flex justify-end gap-2"><button id="oauth-deny" class="secondary" type="button">Cancel</button><button id="oauth-approve" class="primary" type="button">Allow access</button></div>
-        </section>
-    <section id="factor" class="space-y-4" hidden>
-      <h2 class="text-xl font-semibold">One more step</h2><p id="factor-help" class="mt-2 mb-6 text-sm text-muted"></p>
-      <form id="factor-form" class="space-y-5">
-        <label class="field">Verification code<input name="code" autocomplete="one-time-code" required maxlength="256" spellcheck="false"></label>
-        <button class="primary w-full">Verify and continue</button>
-      </form>
-    </section>
-    <section id="settings" class="grid items-start gap-4 md:grid-cols-2" hidden>
-      <div class="panel">
-        <div class="mb-6"><h2 class="text-xl font-semibold">Passkeys</h2><p class="mt-2 text-sm leading-6 text-muted">Sign in using your fingerprint, face, or device PIN. Add more than one device to keep a backup.</p></div>
-        <ul id="passkey-list" class="mb-6 space-y-3"></ul>
-        <form id="passkey-form" class="space-y-4">
-          <label class="field">Passkey name<input name="name" required maxlength="64" placeholder="My laptop"></label>
-          <button class="primary">Add a passkey</button>
-        </form>
-      </div>
-      <div class="panel">
-        <h2 class="text-xl font-semibold">Two-factor authentication</h2>
-        <p id="totp-status" class="mt-2 mb-6 text-sm leading-6 text-muted"></p>
-        <button id="totp-begin" class="primary">Set up an authenticator</button>
-        <button id="email-disable" class="secondary" hidden>Turn off email verification</button>
-        <div id="totp-enrollment" class="mt-6 space-y-5" hidden>
-          <p class="text-sm leading-6 text-muted">In Google Authenticator or another authenticator app, add a time-based account and enter this setup key.</p>
-          <code id="totp-secret" class="block break-all rounded-lg bg-muted-surface p-4 font-mono text-sm tracking-wide"></code>
-          <form id="totp-confirm-form" class="space-y-4"><label class="field">Six-digit code<input name="code" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required></label><button class="primary">Enable authenticator</button></form>
-        </div>
-        <form id="totp-disable-form" class="space-y-4" hidden>
-          <label class="field">A new authenticator or recovery code<input name="code" autocomplete="one-time-code" maxlength="256" required></label>
-          <button class="secondary text-danger">Remove authenticator</button>
-        </form>
-      </div>
-      <section class="panel md:col-span-2">
-        <h2 class="text-xl font-semibold">Connected apps</h2>
-        <p class="mt-2 mb-6 text-sm leading-6 text-muted">Review active OAuth sessions. Disconnecting a session stops that app from using its access and refresh tokens. Other sessions stay signed in.</p>
-        <ul id="oauth-session-list" class="mb-4 space-y-3"></ul>
-        <div class="flex flex-wrap gap-2">
-          <button id="oauth-session-first" class="secondary" type="button">Refresh list</button>
-          <button id="oauth-session-next" class="secondary" type="button" hidden>Next page</button>
-        </div>
-      </section>
-      <section id="identity-recovery" class="panel min-w-0 space-y-4 md:col-span-2" hidden>
-        <h2 class="text-xl font-semibold">Identity recovery keys</h2>
-        <p class="text-sm leading-6 text-muted">Keep control of your identity with keys you hold independently. Add only public did:key values here. Keep their private keys somewhere safe.</p>
-        <div><h3 class="text-sm font-medium">Last confirmed recovery keys</h3><ol id="identity-key-list" class="mt-2 list-decimal space-y-2 pl-5 text-sm"></ol></div>
-        <p class="text-xs leading-5 text-muted">Keys are ordered from highest to lowest priority. The server keeps its own control key after these keys. A removed key may retain PLC recovery authority for up to 72 hours.</p>
-        <p id="identity-key-status" class="notice" role="status"></p>
-        <ol id="identity-key-pending" class="list-decimal space-y-2 pl-5 text-sm" hidden></ol>
-        <div class="flex flex-wrap gap-2"><button id="identity-key-refresh" class="secondary" type="button">Refresh status</button><button id="identity-key-retry" class="primary" type="button" hidden>Retry saved change</button></div>
-        <form id="identity-key-form" class="space-y-4" hidden>
-          <label class="field">Recovery public keys<textarea id="identity-key-input" name="keys" rows="4" maxlength="2048" spellcheck="false" autocapitalize="none" aria-describedby="identity-key-help"></textarea></label>
-          <p id="identity-key-help" class="text-xs leading-5 text-muted">One public did:key per line, up to four. Put the highest-priority key first. Leave this empty to remove all independent recovery keys.</p>
-          <button id="identity-key-email" class="secondary" type="button">Send verification email</button>
-          <label class="field">Email verification code<input name="code" autocomplete="one-time-code" maxlength="256" required spellcheck="false"></label>
-          <button class="primary" type="submit">Save recovery keys</button>
-        </form>
-      </section>
-      <section id="recovery" class="panel md:col-span-2" hidden>
-        <h2 class="text-xl font-semibold">Save your recovery codes</h2>
-        <p class="mt-2 text-sm leading-6 text-muted">Each code works once if you lose your authenticator. Save these somewhere safe. They will not be shown again.</p>
-        <pre id="recovery-codes" class="my-6 overflow-auto rounded-lg bg-muted-surface p-5 text-sm leading-7"></pre>
-        <button id="recovery-saved" class="primary">I saved my codes</button>
-      </section>
-    </section>
-      </div>
-      <footer class="flex flex-col items-center gap-3 rounded-b-xl border-t border-line bg-muted-surface/50 p-4 text-center">
-        <button id="oauth-cancel" class="secondary" hidden>Cancel authorization</button>
-        <button id="logout" class="secondary" hidden>Sign out</button>
-        <p id="session-note" class="text-xs text-muted">Account security · Sessions expire after five minutes</p>
-        <p class="max-w-full break-all text-xs text-muted" id="server-origin"></p>
-      </footer>
-    </div>
-  </main>
+<body>
+  <div id="root"></div>
+  <noscript><p style="font-family: monospace; padding: 2rem; text-align: center;">Enable JavaScript to manage your account securely.</p></noscript>
 </body>
 </html>

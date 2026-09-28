@@ -5,8 +5,13 @@ mise exec -- clojure -M:test        # unit, conformance-fixture, HTTP adapter te
 bash scripts/test-postgres.sh      # all tests, isolated PostgreSQL 18 cluster
 bash scripts/test-conformance.sh   # plus pinned upstream repository/proof verifier (Node 22+)
 node --test examples/email-worker/handler.test.mjs
+npm run --prefix frontend test     # React account/OAuth pages (vitest + Testing Library)
 mise exec -- clojure -M:repl        # Rebel Readline
 ```
+
+The browser account/OAuth interface is a React app in `frontend/`; see
+[building the interface](ACCOUNT-SECURITY.md#building-the-interface) for its
+build, test and dev-server workflow.
 
 The GitHub Actions workflow `ci` runs on every push. It uses the mise-pinned JDK,
 PostgreSQL and Redis services, a local S3 emulator, the pinned upstream repository

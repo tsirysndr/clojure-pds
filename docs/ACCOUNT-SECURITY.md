@@ -153,16 +153,26 @@ Real hardware ceremonies and complete browser automation remain to be verified.
 
 ## Building the interface
 
-The server serves committed assets; Node is only needed to rebuild CSS:
+The browser pages (login, signup, two-factor, passkeys, recovery keys, OAuth
+authorization and connected-app management) are a React single-page app in
+[`frontend/`](../frontend), built with Vite, Tailwind CSS, HeroUI, jotai,
+TanStack Query, Tabler icons, and react-hook-form with zod validation. It talks
+only to the same-origin JSON endpoints (`/account/session`,
+`/account/action/*`, `/oauth/flow/*`) with the rotating CSRF token, under the
+existing strict CSP; no CDN is used at runtime.
+
+The server serves committed assets; Node is only needed to rebuild them:
 
 ```sh
-npm ci --prefix scripts/ui --ignore-scripts
-npm run --prefix scripts/ui build
+npm ci --prefix frontend --ignore-scripts
+npm run --prefix frontend test    # vitest + React Testing Library against an msw backend double
+npm run --prefix frontend build   # type-checks, then emits resources/security/{app.js,style.css}
 ```
 
-Edit `resources/security/index.html`, `resources/security/app.js` and
-`scripts/ui/input.css`, then commit the generated `resources/security/style.css`.
-No CDN or React runtime is required. Visual references:
+Commit the regenerated `resources/security/app.js` and `style.css`; CI rebuilds
+them and fails on drift. `npm run --prefix frontend dev` starts a Vite dev
+server that proxies API calls to a locally running PDS (`PDS_DEV_ORIGIN`
+overrides the default `http://127.0.0.1:3000`). Visual references:
 [Witchcraft sign-in](https://pds.witchcraft.systems/account/sign-in),
 [selfhosted.social sign-in](https://selfhosted.social/account/sign-in).
 

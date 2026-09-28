@@ -1,0 +1,32 @@
+@import "tailwindcss";
+@plugin "./hero.ts";
+@source "./**/*.{ts,tsx}";
+@source "../node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}";
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --color-brand: #8338ec;
+  --color-brand-hover: #7025d5;
+  --color-brand-soft: #f5edff;
+  /* The account CSP has no font-src; stay on locally installed fonts. */
+  --font-sans: ui-monospace, "SF Mono", Menlo, "Cascadia Mono", monospace;
+  --font-mono: ui-monospace, "SF Mono", Menlo, "Cascadia Mono", monospace;
+}
+
+@layer base {
+  html {
+    @apply min-h-full;
+    color-scheme: light dark;
+  }
+
+  body {
+    @apply min-h-svh bg-background font-sans text-foreground antialiased;
+    font-synthesis-weight: none;
+    letter-spacing: -0.01em;
+  }
+
+  #root:empty::after {
+    content: "";
+    @apply block min-h-svh;
+  }
+}
