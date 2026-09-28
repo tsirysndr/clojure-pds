@@ -14,7 +14,7 @@ account you care about. See [the compatibility matrix](COMPATIBILITY.md).
   upgrades and preserves the `Host` header.
 - Wildcard DNS for the handle domain (`*.example.com`) plus the PDS hostname.
 - A stable `PDS_MASTER_KEY`, generated once and backed up separately from the
-  database; see [master-key handling](GETTING-STARTED.md) and
+  database; see [master-key handling](get-started.md) and
   [rotation](MASTER-KEY.md).
 
 Minimal production environment:

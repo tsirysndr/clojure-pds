@@ -10,6 +10,10 @@ bash scripts/test-sqlite.sh        # SQLite-backend portion of the matrix, no da
 mise exec -- clojure -M:repl        # Rebel Readline
 ```
 
+The documentation you are reading doubles as a Lume static site; `deno task
+serve` inside `docs/` previews it and [docs/README.md](README.md) covers the
+workflow.
+
 The browser account/OAuth interface is a React app in `frontend/`; see
 [building the interface](ACCOUNT-SECURITY.md#building-the-interface) for its
 build, test and dev-server workflow.

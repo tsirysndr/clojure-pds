@@ -30,7 +30,7 @@ For PostgreSQL (recommended beyond a single small host), export
 `PDS_DATABASE_PASSWORD` and `docker compose up -d postgres` first; any
 `PDS_DATABASE_*` variable switches the backend.
 
-See [getting started](docs/GETTING-STARTED.md) for prerequisites, master-key
+See [get started](docs/get-started.md) for prerequisites, master-key
 handling and the account UI, and [the configuration reference](docs/CONFIGURATION.md)
 for every environment variable ([.env.example](.env.example) is a template).
 
@@ -39,9 +39,14 @@ Run the tests with `bash scripts/test-postgres.sh`; see
 
 ## Documentation
 
+Browse these pages as a website at
+<https://clojure-pds-docs.tsirysndr.deno.net/> (`docs/` doubles as a Lume
+static site; see [docs/README.md](docs/README.md)).
+
 ### Setup and operations
 
-- [Getting started](docs/GETTING-STARTED.md) — install, run, master key, account UI
+- [Get started](docs/get-started.md) — install, run, master key, account UI
+- [Installation](docs/installation.md) — toolchain, source, Docker image, Nix flake
 - [Deployment](docs/DEPLOYMENT.md) — VPS checklist, Docker image, Nix flake
 - [Configuration](docs/CONFIGURATION.md) — environment variables and migrations
 - [Development](docs/DEVELOPMENT.md) — test suites, CI, REPL

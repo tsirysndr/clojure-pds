@@ -8,3 +8,5 @@
 *.log
 .DS_Store
 node_modules/
+/docs/_site/
+/docs/.lume/
