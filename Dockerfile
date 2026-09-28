@@ -19,7 +19,10 @@ ENV GITLIBS="/app/.gitlibs" \
     CLJ_CACHE="/app/.cpcache"
 
 COPY deps.edn ./
-RUN clojure -P && clojure -P -M:run && clojure -P -M:migrate
+# The cache directories are created up front: with no git dependencies the
+# resolver never creates GITLIBS, and the runner stage copies both paths.
+RUN mkdir -p "$GITLIBS" "$CLJ_CACHE" \
+  && clojure -P && clojure -P -M:run && clojure -P -M:migrate
 
 COPY resources resources
 COPY src src
