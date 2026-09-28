@@ -30,7 +30,7 @@
                   (db/execute! conn "INSERT INTO reserved_signing_keys(key_did, did, signing_key, public_key) VALUES (?, ?, ?, ?)"
                                key-did did (crypto/seal (:master-key settings) (purpose key-did) (:private key)) (:public key))
                   (catch java.sql.SQLException e
-                    (when-not (= "23505" (.getSQLState e)) (throw e))
+                    (when-not (db/unique-violation? e) (throw e))
                     (errors/raise! 409 "ConcurrentReservation" "A reservation for this DID was just created; retry")))
                 {:signingKey key-did})))))))
 

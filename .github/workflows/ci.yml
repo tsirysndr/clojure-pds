@@ -82,5 +82,7 @@ jobs:
           "$PG_BIN/pg_dump" --version
       - name: Run Clojure, PostgreSQL, Redis, S3 and upstream conformance tests
         run: uv run scripts/test-s3.py
+      - name: Run the SQLite backend suite
+        run: bash scripts/test-sqlite.sh
       - name: Test the email Worker contract
         run: node --test examples/email-worker/handler.test.mjs

@@ -49,7 +49,7 @@
         (db/execute! conn "UPDATE accounts SET email = ?, email_confirmed = false, email_auth_factor = false,
                             oauth_epoch = oauth_epoch + 1 WHERE did = ?" address (:did account))
         (catch java.sql.SQLException e
-          (if (= "23505" (.getSQLState e)) (errors/invalid! "Email is unavailable") (throw e))))
+          (if (db/unique-violation? e) (errors/invalid! "Email is unavailable") (throw e))))
       (invalidate! conn account))))
 
 (defn send-email! [conn settings body]

@@ -5,22 +5,34 @@
 
 (def ^:dynamic *ds*)
 
-(defn isolated-database [f]
-  (let [url (or (System/getenv "PDS_TEST_DATABASE_URL")
-                (throw (ex-info "Integration tests require PDS_TEST_DATABASE_URL" {})))
-        settings (assoc (db/settings) :url url)
-        admin (db/datasource settings)
-        schema (str "test_" (clojure.string/replace (str (UUID/randomUUID)) "-" ""))
-        ds (db/datasource (assoc settings :url (str url (if (.contains url "?") "&" "?")
-                                                  "currentSchema=" schema)))]
-    (with-open [conn (db/connection admin)]
-      (db/execute! conn (str "CREATE SCHEMA " schema)))
+(defn- isolated-sqlite [f]
+  (let [file (java.io.File/createTempFile "pds-test-" ".sqlite3")
+        ds (db/datasource {:url (str "jdbc:sqlite:" (.getPath file))})]
     (try
       (db/migrate! ds)
       (binding [*ds* ds] (f))
       (finally
+        (doseq [suffix ["" "-wal" "-shm"]]
+          (.delete (java.io.File. (str (.getPath file) suffix))))))))
+
+(defn isolated-database [f]
+  (let [url (or (System/getenv "PDS_TEST_DATABASE_URL")
+                (throw (ex-info "Integration tests require PDS_TEST_DATABASE_URL" {})))]
+    (if (.startsWith ^String url "jdbc:sqlite:")
+      (isolated-sqlite f)
+      (let [settings (assoc (db/settings) :url url)
+            admin (db/datasource settings)
+            schema (str "test_" (clojure.string/replace (str (UUID/randomUUID)) "-" ""))
+            ds (db/datasource (assoc settings :url (str url (if (.contains url "?") "&" "?")
+                                                      "currentSchema=" schema)))]
         (with-open [conn (db/connection admin)]
-          (db/execute! conn (str "DROP SCHEMA " schema " CASCADE")))))))
+          (db/execute! conn (str "CREATE SCHEMA " schema)))
+        (try
+          (db/migrate! ds)
+          (binding [*ds* ds] (f))
+          (finally
+            (with-open [conn (db/connection admin)]
+              (db/execute! conn (str "DROP SCHEMA " schema " CASCADE")))))))))
 
 (use-fixtures :each isolated-database)
 

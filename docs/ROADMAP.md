@@ -20,6 +20,9 @@ runnable and update this document as features land.
    cryptographic vectors. Do not substitute JSON hashes for repository CIDs.
 3. **Durable storage (in progress):** PostgreSQL migrations, transactions, account metadata, key
    storage, content-addressed blocks and blobs, restart/recovery tests.
+   An experimental [SQLite fallback backend](SQLITE.md) translates the
+   PostgreSQL dialect at the statement boundary with immediate write
+   transactions; an end-to-end slice is verified, the full matrix is pending.
 4. **Repositories (core, disk-staged verified imports and streaming full/partial exports implemented; performance work pending):** deterministic Merkle Search Tree, signed version-3 commits,
    atomic writes with swap checks, record CRUD, pagination, repository description,
    CAR import/export. Acceptance: reference implementation verifies our exports

@@ -19,7 +19,8 @@ template. Topic-specific settings are documented with their features:
 | `PDS_IDENTITY_CACHE_MAX_ENTRIES` | `1024` | Maximum cached/in-flight identity entries; 1–10,000 |
 | `PDS_ENABLE_SIGNUP` | `false` | Enable account creation |
 | `PDS_MASTER_KEY` | required | Stable base64url-encoded 32-byte master key |
-| `PDS_DATABASE_URL` | `jdbc:postgresql://127.0.0.1:5432/clojure_pds` | PostgreSQL JDBC URL |
+| `PDS_DATABASE_URL` | see below | PostgreSQL (`jdbc:postgresql://...`) or SQLite (`jdbc:sqlite:<path>`) JDBC URL |
+| `PDS_SQLITE_PATH` | `data/clojure-pds.sqlite3` | SQLite file used by the zero-configuration fallback |
 | `PDS_DATABASE_USER` | `pds` | Database role |
 | `PDS_DATABASE_PASSWORD` | empty | Database password |
 | `PDS_DB_POOL_SIZE` | `20` | Maximum PostgreSQL connections per server; 1–256; [pool lifecycle](DATABASE.md) |
@@ -34,6 +35,15 @@ template. Topic-specific settings are documented with their features:
 | `PDS_EMAIL_WORKER_URL` | unset | Email Worker HTTPS endpoint |
 | `PDS_EMAIL_WORKER_TOKEN` | unset | Worker shared secret |
 | `PDS_EMAIL_FROM` | unset | Verified sending address |
+
+When none of `PDS_DATABASE_URL`, `PDS_DATABASE_USER`, or
+`PDS_DATABASE_PASSWORD` is set, the server falls back to an embedded
+single-file **SQLite** database at `PDS_SQLITE_PATH` — no database service
+required. Setting any of them selects PostgreSQL, with
+`jdbc:postgresql://127.0.0.1:5432/clojure_pds` as the URL default. The SQLite
+backend runs the same persistence code through a dialect layer with immediate
+write transactions; see [the backend notes](SQLITE.md) for semantics, scope,
+and current test coverage.
 
 For hosted PostgreSQL use `sslmode=verify-full`. Startup runs checksummed,
 transactional migrations under an advisory lock before binding HTTP. Run migrations

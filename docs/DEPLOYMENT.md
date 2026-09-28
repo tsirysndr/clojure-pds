@@ -8,6 +8,8 @@ account you care about. See [the compatibility matrix](COMPATIBILITY.md).
 ## Requirements
 
 - PostgreSQL 14+ (managed or self-hosted; use `sslmode=verify-full` off-host).
+  For a single small host, the experimental [SQLite backend](SQLITE.md) needs
+  no database service — back up its data file instead.
 - An HTTPS reverse proxy (Caddy, nginx, Traefik) that passes WebSocket
   upgrades and preserves the `Host` header.
 - Wildcard DNS for the handle domain (`*.example.com`) plus the PDS hostname.

@@ -1,6 +1,7 @@
 # clojure-pds
 
-An AT Protocol Personal Data Server in Clojure with PostgreSQL persistence.
+An AT Protocol Personal Data Server in Clojure with PostgreSQL persistence
+and a zero-configuration SQLite fallback.
 **In development: not yet a fully federating PDS.**
 
 Implemented: hosted did:web/did:plc accounts, sessions and app passwords, email
@@ -15,15 +16,19 @@ exact coverage and the [roadmap](docs/ROADMAP.md) for remaining work.
 
 ```sh
 mise trust && mise install
-export PDS_DATABASE_PASSWORD='choose-a-local-password'
-docker compose up -d postgres
 
 # Generate ONCE and save securely; reuse this key across restarts.
 export PDS_MASTER_KEY="$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n')"
+
+# Zero configuration: stores everything in data/clojure-pds.sqlite3.
 mise exec -- clojure -M:run
 
 curl http://127.0.0.1:3000/xrpc/_health
 ```
+
+For PostgreSQL (recommended beyond a single small host), export
+`PDS_DATABASE_PASSWORD` and `docker compose up -d postgres` first; any
+`PDS_DATABASE_*` variable switches the backend.
 
 See [getting started](docs/GETTING-STARTED.md) for prerequisites, master-key
 handling and the account UI, and [the configuration reference](docs/CONFIGURATION.md)
@@ -41,6 +46,7 @@ Run the tests with `bash scripts/test-postgres.sh`; see
 - [Configuration](docs/CONFIGURATION.md) — environment variables and migrations
 - [Development](docs/DEVELOPMENT.md) — test suites, CI, REPL
 - [Database pool](docs/DATABASE.md) — connection pool lifecycle and limits
+- [SQLite backend](docs/SQLITE.md) — the single-file fallback, dialect layer, scope
 - [Backup and restore](docs/BACKUP.md) — checksummed archives and the recovery drill
 - [Master key rotation](docs/MASTER-KEY.md) — offline re-encryption of stored secrets
 - [S3 blob storage](docs/S3.md) — optional S3-compatible backend

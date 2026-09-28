@@ -73,7 +73,7 @@
                 (when (:email-enabled settings) (accounts/issue-email! conn account "confirm-email"))
                 (merge (accounts/public-account account) (auth/issue! conn settings did nil) {:didDoc document}))))
           (catch java.sql.SQLException e
-            (if (= "23505" (.getSQLState e))
+            (if (db/unique-violation? e)
               (errors/raise! 400 "HandleNotAvailable" "DID, handle or email is already registered")
               (throw e))))))))
 

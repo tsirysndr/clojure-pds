@@ -169,7 +169,7 @@
                (merge (public-account account) (when issue-session? (auth/issue! conn settings did nil))
                       {:didDoc (did-document settings account (:public_key (repo/state conn did)))}))))
           (catch java.sql.SQLException e
-            (if (= "23505" (.getSQLState e))
+            (if (db/unique-violation? e)
               (errors/raise! 400 "HandleNotAvailable" "Handle or email is already registered") (throw e))))))))
 
 (defn create! [ds settings body]
@@ -348,7 +348,7 @@
       (db/execute! conn "UPDATE accounts SET email = ?, email_confirmed = ?, email_auth_factor = ? WHERE did = ?"
                    address (and (not changed?) (:email_confirmed account)) factor (:did account))
       (catch java.sql.SQLException e
-        (if (= "23505" (.getSQLState e)) (errors/invalid! "Email is unavailable") (throw e))))
+        (if (db/unique-violation? e) (errors/invalid! "Email is unavailable") (throw e))))
     (when (or changed? (not= factor (:email_auth_factor account)))
       (db/execute! conn "DELETE FROM account_tokens WHERE did = ?" (:did account))
       (db/execute! conn "DELETE FROM email_outbox WHERE payload->>'to' = ?" (:email account))
