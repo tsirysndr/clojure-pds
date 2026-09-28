@@ -1,4 +1,6 @@
 # clojure-pds
+[![ci](https://github.com/tsirysndr/clojure-pds/actions/workflows/ci.yml/badge.svg)](https://github.com/tsirysndr/clojure-pds/actions/workflows/ci.yml)
+[![nix](https://github.com/tsirysndr/clojure-pds/actions/workflows/nix.yml/badge.svg)](https://github.com/tsirysndr/clojure-pds/actions/workflows/nix.yml)
 
 An AT Protocol Personal Data Server in Clojure with PostgreSQL persistence
 and a zero-configuration SQLite fallback.
