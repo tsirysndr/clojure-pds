@@ -18,7 +18,7 @@
             [pds.oauth.server :as oauth-server]
             [pds.rate-limit :as rate-limit]))
 
-(def version "0.1.0-dev")
+(def version "clojure-pds v0.1.0-dev")
 
 (defn handler
   ([config] (handler config nil))

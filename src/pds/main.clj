@@ -80,7 +80,7 @@
                 runtime (Runtime/getRuntime)]
             (try
               (.addShutdownHook runtime hook)
-              (println (str "clojure-pds " app/version " listening on " (:host settings) ":" port))
+              (println (str app/version " listening on " (:host settings) ":" port))
               (loop []
                 (when (= ::check (deref stopped 1000 ::check))
                   (when-not (master-keys/live? lease)
