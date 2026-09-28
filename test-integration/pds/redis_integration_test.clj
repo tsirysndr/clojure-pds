@@ -18,13 +18,16 @@
           (is (:allowed? (rate-limit/admit! b "127.0.0.2")))
           (with-open [reopened (redis/open-limiter config)]
             (is (false? (:allowed? (rate-limit/admit! reopened "127.0.0.1")))))
-          (let [key (redis/bucket-key prefix "127.0.0.1")]
-            (is (= "10" (.get ^RedisClient (:client a) key)))
-            (is (pos? (.pttl ^RedisClient (:client a) key)))
-            ;; Expire a single namespaced test key using the real Redis clock.
-            (.pexpire ^RedisClient (:client a) key 1)
-            (Thread/sleep 10)
-            (is (:allowed? (rate-limit/admit! b "127.0.0.1"))))
+          ;; The public limiter wraps derived budgets; open a bare record to
+          ;; inspect raw keys with its Redis client.
+          (with-open [inspector (redis/open-limiter (dissoc config :proxy-account :record-writes))]
+            (let [key (redis/bucket-key prefix "127.0.0.1") ^RedisClient client (:client inspector)]
+              (is (= "10" (.get client key)))
+              (is (pos? (.pttl client key)))
+              ;; Expire a single namespaced test key using the real Redis clock.
+              (.pexpire client key 1)
+              (Thread/sleep 10)
+              (is (:allowed? (rate-limit/admit! b "127.0.0.1")))))
           (with-open [isolated (redis/open-limiter (assoc config :prefix (str prefix "-other")))]
             (is (:allowed? (rate-limit/admit! isolated "127.0.0.1"))))
           (.close ^java.io.Closeable a)
@@ -48,3 +51,23 @@
           (.close ^java.io.Closeable disabled)
           (is (= 200 (:status ((rate-limit/wrap (constantly {:status 200}) disabled) request))))
           (is (= 503 (:status ((rate-limit/wrap (constantly {:status 200}) disabled) (assoc request :uri "/"))))))))))
+
+(when-let [url (System/getenv "PDS_TEST_REDIS_URL")]
+  (deftest per-account-proxy-budgets-are-shared-and-namespaced
+    (let [config (redis/settings {"PDS_RATE_LIMIT_BACKEND" "redis" "PDS_REDIS_URL" url
+                                  "PDS_REDIS_PREFIX" (str "test-" (UUID/randomUUID))
+                                  "PDS_RATE_LIMIT_REQUESTS" "100"
+                                  "PDS_PROXY_ACCOUNT_RATE_LIMIT_REQUESTS" "2"
+                                  "PDS_PROXY_ACCOUNT_RATE_LIMIT_WINDOW_SECONDS" "60"})
+          alice "did:web:alice.example.com"]
+      (with-open [a (redis/open-limiter config) b (redis/open-limiter config)]
+        (is (:allowed? (rate-limit/admit-account! a "proxy" alice)))
+        (is (:allowed? (rate-limit/admit-account! b "proxy" alice)))
+        (is (false? (:allowed? (rate-limit/admit-account! a "proxy" alice)))
+            "Two processes share one per-account budget")
+        (is (:allowed? (rate-limit/admit-account! b "proxy" "did:web:bob.example.com")))
+        (is (:allowed? (rate-limit/admit! a alice))
+            "The account namespace is separate from the general budget")
+        (with-open [disabled (redis/open-limiter (assoc-in config [:proxy-account :enabled] false))]
+          (dotimes [_ 3]
+            (is (:allowed? (rate-limit/admit-account! disabled "proxy" alice)))))))))
