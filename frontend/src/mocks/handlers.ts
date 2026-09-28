@@ -1,4 +1,4 @@
-import { http, HttpResponse } from "msw";
+import { delay, http, HttpResponse } from "msw";
 import type { Flow, Session } from "../api";
 import { anonymousFlow, attachedFlow, authenticatedSession, factorSession, loginSession } from "../test/fixtures";
 
@@ -8,12 +8,14 @@ export const scenario: {
   flow: Flow;
   password: string;
   factorCode: string;
+  latency: number;
   requests: Array<{ action: string; body: Record<string, unknown> }>;
 } = {
   session: loginSession,
   flow: anonymousFlow,
   password: "correct horse battery",
   factorCode: "123456",
+  latency: 0,
   requests: [],
 };
 
@@ -22,6 +24,7 @@ export function resetScenario() {
   scenario.flow = anonymousFlow;
   scenario.password = "correct horse battery";
   scenario.factorCode = "123456";
+  scenario.latency = 0;
   scenario.requests = [];
 }
 
@@ -36,6 +39,7 @@ export const handlers = [
     const action = new URL(request.url).pathname.slice("/account/action/".length);
     const body = (await request.json()) as Record<string, unknown>;
     scenario.requests.push({ action, body });
+    if (scenario.latency > 0) await delay(scenario.latency);
     if (request.headers.get("x-csrf-token") !== scenario.session.csrf)
       return failure(403, "InvalidCsrf");
 
@@ -91,6 +95,7 @@ export const handlers = [
     const action = String(params.action);
     const body = (await request.json()) as Record<string, unknown>;
     scenario.requests.push({ action: `flow/${action}`, body });
+    if (scenario.latency > 0) await delay(scenario.latency);
     if (request.headers.get("x-csrf-token") !== scenario.flow.csrf)
       return HttpResponse.json({ error: "InvalidCsrf" }, { status: 403 });
 

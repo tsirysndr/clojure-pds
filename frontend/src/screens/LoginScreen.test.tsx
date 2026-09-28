@@ -75,3 +75,36 @@ describe("LoginScreen", () => {
     expect(await screen.findByRole("heading", { name: /create your account/i })).toBeInTheDocument();
   });
 });
+
+describe("request feedback", () => {
+  it("spins the sign-in button immediately and settles after the response", async () => {
+    scenario.latency = 200;
+    const user = userEvent.setup();
+    render(<App client={client()} />);
+
+    await user.type(await screen.findByLabelText(/username or email address/i), "alice.example.com");
+    await user.type(screen.getByLabelText(/^password/i), "correct horse battery");
+    const button = screen.getByRole("button", { name: /sign in$/i });
+    await user.click(button);
+
+    expect(button).toHaveAttribute("data-loading", "true");
+    expect(screen.getByRole("button", { name: /passkey/i })).toBeDisabled();
+    expect(await screen.findByRole("heading", { name: "alice.example.com" })).toBeInTheDocument();
+  });
+
+  it("spins only the clicked consent button", async () => {
+    const { attachedFlow, authenticatedSession, flowPath } = await import("../test/fixtures");
+    window.history.replaceState({}, "", flowPath);
+    scenario.session = authenticatedSession;
+    scenario.flow = attachedFlow;
+    scenario.latency = 200;
+    const user = userEvent.setup();
+    render(<App client={client()} />);
+
+    const allow = await screen.findByRole("button", { name: /allow access/i });
+    await user.click(allow);
+
+    expect(allow).toHaveAttribute("data-loading", "true");
+    expect(screen.getByRole("button", { name: /deny/i })).toBeDisabled();
+  });
+});

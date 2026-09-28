@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button, Chip, Snippet } from "@heroui/react";
 import { useAtom } from "jotai";
+import { usePending } from "../pending";
 import {
   IconDeviceMobile,
   IconFingerprint,
@@ -25,11 +26,10 @@ import {
   type RecoveryKeysValues,
   type TotpCodeValues,
 } from "../schemas";
-import { busyAtom, recoveryCodesAtom, totpEnrollmentAtom } from "../atoms";
+import { recoveryCodesAtom, totpEnrollmentAtom } from "../atoms";
 import { Alert } from "../components/Alert";
 import { TextField, TextAreaField } from "../components/Field";
 import { ceremonyOptions, credentialJSON, type ServerOptions } from "../webauthn";
-import { useNotice } from "../notice";
 
 function Section({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
   return (
@@ -53,24 +53,11 @@ function timestamp(value: string | null | undefined): string {
 
 export function SettingsScreen({ session }: { session: Session }) {
   const action = useAction();
-  const [busy, setBusy] = useAtom(busyAtom);
-  const { notice, show, showError, clear } = useNotice();
+  const { busy, pending: pendingAction, run, buttonProps, notice, show } = usePending();
+  const pendingIs = (label: string) => pendingAction === label;
   const [enrollment, setEnrollment] = useAtom(totpEnrollmentAtom);
   const [recoveryCodes, setRecoveryCodes] = useAtom(recoveryCodesAtom);
   const [sessions, setSessions] = useState<SessionList | null>(null);
-
-  const run = async (work: () => Promise<void>) => {
-    if (busy) return;
-    setBusy(true);
-    clear();
-    try {
-      await work();
-    } catch (error) {
-      showError(error);
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const passkeyForm = useForm<PasskeyNameValues>({
     resolver: zodResolver(passkeyNameSchema),
@@ -84,7 +71,7 @@ export function SettingsScreen({ session }: { session: Session }) {
   });
 
   const addPasskey = passkeyForm.handleSubmit((values) =>
-    run(async () => {
+    run("passkey-add", async () => {
       const started = await action.mutateAsync({ action: "passkeys/begin", body: values });
       const credential = (await navigator.credentials.create(
         ceremonyOptions(started.options as ServerOptions, true),
@@ -100,13 +87,13 @@ export function SettingsScreen({ session }: { session: Session }) {
   );
 
   const beginTotp = () =>
-    run(async () => {
+    run("totp-begin", async () => {
       const result = await action.mutateAsync({ action: "totp/begin" });
       setEnrollment({ secret: String(result.secret), uri: String(result.uri) });
     });
 
   const confirmTotp = totpForm.handleSubmit((values) =>
-    run(async () => {
+    run("totp-confirm", async () => {
       const result = await action.mutateAsync({ action: "totp/confirm", body: values });
       setEnrollment(null);
       totpForm.reset();
@@ -116,7 +103,7 @@ export function SettingsScreen({ session }: { session: Session }) {
   );
 
   const disableTotp = disableForm.handleSubmit((values) =>
-    run(async () => {
+    run("totp-disable", async () => {
       if (!window.confirm("Remove your authenticator and invalidate its recovery codes?")) return;
       await action.mutateAsync({ action: "totp/disable", body: values });
       disableForm.reset();
@@ -125,7 +112,7 @@ export function SettingsScreen({ session }: { session: Session }) {
   );
 
   const listSessions = (cursor?: string) =>
-    run(async () => {
+    run(cursor ? "sessions-more" : "sessions-refresh", async () => {
       const result = await action.mutateAsync({ action: "oauth/list", body: cursor ? { cursor } : {} });
       const page = result["oauth-sessions"] as SessionList;
       setSessions((current) =>
@@ -135,7 +122,7 @@ export function SettingsScreen({ session }: { session: Session }) {
 
   const recoveryState = session["recovery-keys"];
   const changeRecovery = recoveryForm.handleSubmit((values) =>
-    run(async () => {
+    run("recovery-save", async () => {
       const keys = values.keys
         .split(/\r?\n/)
         .map((key) => key.trim())
@@ -180,10 +167,10 @@ export function SettingsScreen({ session }: { session: Session }) {
         <Button
           variant="bordered"
           radius="sm"
-          isDisabled={busy}
+          {...buttonProps("logout")}
           startContent={<IconLogout size={16} stroke={1.75} />}
           onPress={() =>
-            void run(async () => {
+            void run("logout", async () => {
               await action.mutateAsync({ action: "logout" });
               window.location.replace("/account");
             })
@@ -235,9 +222,9 @@ export function SettingsScreen({ session }: { session: Session }) {
                     color="danger"
                     radius="full"
                     aria-label={`Remove passkey ${passkey.name}`}
-                    isDisabled={busy}
+                    {...buttonProps(`passkey-remove-${passkey.id}`)}
                     onPress={() =>
-                      void run(async () => {
+                      void run(`passkey-remove-${passkey.id}`, async () => {
                         if (!window.confirm(`Remove the passkey "${passkey.name}"?`)) return;
                         await action.mutateAsync({ action: "passkeys/remove", body: { id: passkey.id } });
                         show("Passkey removed.");
@@ -261,7 +248,7 @@ export function SettingsScreen({ session }: { session: Session }) {
                 maxLength={64}
               />
             </div>
-            <Button type="submit" color="primary" radius="sm" className="h-12" isLoading={busy}>
+            <Button type="submit" color="primary" radius="sm" className="h-12" {...buttonProps("passkey-add")}>
               Add passkey
             </Button>
           </form>
@@ -289,7 +276,7 @@ export function SettingsScreen({ session }: { session: Session }) {
                   maxLength={26}
                 />
               </div>
-              <Button type="submit" color="danger" variant="flat" radius="sm" className="h-12" isLoading={busy}>
+              <Button type="submit" color="danger" variant="flat" radius="sm" className="h-12" {...buttonProps("totp-disable")}>
                 Remove
               </Button>
             </form>
@@ -305,9 +292,9 @@ export function SettingsScreen({ session }: { session: Session }) {
               variant="flat"
               radius="sm"
               className="self-start"
-              isDisabled={busy}
+              {...buttonProps("email-off")}
               onPress={() =>
-                void run(async () => {
+                void run("email-off", async () => {
                   if (!window.confirm("Turn off email verification for sign-in?")) return;
                   await action.mutateAsync({ action: "email/disable" });
                   show("Email verification turned off. You can now add an authenticator.");
@@ -337,7 +324,7 @@ export function SettingsScreen({ session }: { session: Session }) {
                   maxLength={26}
                 />
               </div>
-              <Button type="submit" color="primary" radius="sm" className="h-12" isLoading={busy}>
+              <Button type="submit" color="primary" radius="sm" className="h-12" {...buttonProps("totp-confirm")}>
                 Confirm
               </Button>
             </form>
@@ -352,7 +339,7 @@ export function SettingsScreen({ session }: { session: Session }) {
               variant="flat"
               radius="sm"
               className="self-start"
-              isDisabled={busy}
+              {...buttonProps("totp-begin")}
               startContent={<IconDeviceMobile size={16} stroke={1.75} />}
               onPress={() => void beginTotp()}
             >
@@ -378,9 +365,9 @@ export function SettingsScreen({ session }: { session: Session }) {
                   variant="flat"
                   color="danger"
                   radius="sm"
-                  isDisabled={busy}
+                  {...buttonProps(`revoke-${entry.id}`)}
                   onPress={() =>
-                    void run(async () => {
+                    void run(`revoke-${entry.id}`, async () => {
                       await action.mutateAsync({ action: "oauth/revoke", body: { id: entry.id } });
                       setSessions((current) =>
                         current ? { ...current, items: current.items.filter((item) => item.id !== entry.id) } : current,
@@ -400,14 +387,14 @@ export function SettingsScreen({ session }: { session: Session }) {
             size="sm"
             variant="bordered"
             radius="sm"
-            isDisabled={busy}
+            {...buttonProps("sessions-refresh")}
             startContent={<IconRefresh size={14} stroke={1.75} />}
             onPress={() => void listSessions()}
           >
             Refresh
           </Button>
           {shown?.cursor ? (
-            <Button size="sm" variant="bordered" radius="sm" isDisabled={busy} onPress={() => void listSessions(shown.cursor)}>
+            <Button size="sm" variant="bordered" radius="sm" {...buttonProps("sessions-more")} onPress={() => void listSessions(shown.cursor)}>
               Load more
             </Button>
           ) : null}
@@ -445,9 +432,9 @@ export function SettingsScreen({ session }: { session: Session }) {
               size="sm"
               variant="bordered"
               radius="sm"
-              isDisabled={busy}
+              {...buttonProps("recovery-status")}
               startContent={<IconRefresh size={14} stroke={1.75} />}
-              onPress={() => void run(async () => void (await action.mutateAsync({ action: "identity/recovery/status" })))}
+              onPress={() => void run("recovery-status", async () => void (await action.mutateAsync({ action: "identity/recovery/status" })))}
             >
               Refresh status
             </Button>
@@ -455,10 +442,11 @@ export function SettingsScreen({ session }: { session: Session }) {
               size="sm"
               variant="bordered"
               radius="sm"
-              isDisabled={busy || !session["email-enabled"]}
+              isLoading={pendingIs("recovery-email")}
+              isDisabled={(busy && !pendingIs("recovery-email")) || !session["email-enabled"]}
               startContent={<IconMail size={14} stroke={1.75} />}
               onPress={() =>
-                void run(async () => {
+                void run("recovery-email", async () => {
                   await action.mutateAsync({ action: "identity/recovery/email" });
                   show("Verification email requested. Use the latest identity-operation code from your inbox.");
                 })
@@ -472,9 +460,9 @@ export function SettingsScreen({ session }: { session: Session }) {
                 color="primary"
                 variant="flat"
                 radius="sm"
-                isDisabled={busy}
+                {...buttonProps("recovery-retry")}
                 onPress={() =>
-                  void run(async () => {
+                  void run("recovery-retry", async () => {
                     const result = await action.mutateAsync({
                       action: "identity/recovery/change",
                       body: { previousCid: pending.previousCid, recoveryKeys: pending.recoveryKeys },
@@ -510,7 +498,7 @@ export function SettingsScreen({ session }: { session: Session }) {
                   maxLength={64}
                 />
               </div>
-              <Button type="submit" color="primary" radius="sm" className="h-12" isLoading={busy}>
+              <Button type="submit" color="primary" radius="sm" className="h-12" {...buttonProps("recovery-save")}>
                 Save keys
               </Button>
             </div>

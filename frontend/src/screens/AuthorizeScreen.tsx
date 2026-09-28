@@ -1,32 +1,22 @@
 import { Button } from "@heroui/react";
-import { useAtom } from "jotai";
 import type { Flow, Session } from "../api";
 import { useFlowAction } from "../api";
-import { busyAtom } from "../atoms";
 import { navigate } from "../navigation";
 import { AuthCard } from "../components/AuthCard";
 import { Alert } from "../components/Alert";
 import { ClientPanel } from "../components/ClientPanel";
 import { PermissionList } from "../components/PermissionList";
-import { useNotice } from "../notice";
+import { usePending } from "../pending";
 
 export function AuthorizeScreen({ flow, session }: { flow: Flow; session: Session }) {
   const flowAction = useFlowAction();
-  const [busy, setBusy] = useAtom(busyAtom);
-  const { notice, showError, clear } = useNotice();
+  const { run, buttonProps, notice } = usePending();
 
-  const decide = async (approve: boolean) => {
-    if (busy) return;
-    setBusy(true);
-    clear();
-    try {
+  const decide = (approve: boolean) =>
+    run(approve ? "approve" : "deny", async () => {
       const result = await flowAction.mutateAsync({ action: "decide", body: { approve } });
       navigate(result.location as string);
-    } catch (error) {
-      showError(error);
-      setBusy(false);
-    }
-  };
+    });
 
   return (
     <AuthCard title="Authorize access" service={session.origin} width="wide">
@@ -42,7 +32,7 @@ export function AuthorizeScreen({ flow, session }: { flow: Flow; session: Sessio
           size="lg"
           radius="sm"
           className="font-medium sm:flex-1"
-          isLoading={busy}
+          {...buttonProps("approve")}
           onPress={() => void decide(true)}
         >
           Allow access
@@ -52,7 +42,7 @@ export function AuthorizeScreen({ flow, session }: { flow: Flow; session: Sessio
           size="lg"
           radius="sm"
           className="sm:flex-1"
-          isDisabled={busy}
+          {...buttonProps("deny")}
           onPress={() => void decide(false)}
         >
           Deny
@@ -77,22 +67,8 @@ export function ContinueScreen({
   onContinue: () => Promise<void>;
   onSwitchAccount: () => Promise<void>;
 }) {
-  const [busy, setBusy] = useAtom(busyAtom);
-  const { notice, showError, clear } = useNotice();
+  const { run, buttonProps, notice } = usePending();
   const freshLogin = flow.parameters.prompt === "login";
-
-  const run = async (work: () => Promise<void>) => {
-    if (busy) return;
-    setBusy(true);
-    clear();
-    try {
-      await work();
-    } catch (error) {
-      showError(error);
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <AuthCard title="Continue to the application" service={session.origin}>
@@ -110,12 +86,12 @@ export function ContinueScreen({
           size="lg"
           radius="sm"
           className="font-medium"
-          isLoading={busy}
-          onPress={() => void run(freshLogin ? onSwitchAccount : onContinue)}
+          {...buttonProps("continue")}
+          onPress={() => void run("continue", freshLogin ? onSwitchAccount : onContinue)}
         >
           {freshLogin ? "Sign in again" : `Continue as ${session.handle ?? "this account"}`}
         </Button>
-        <Button variant="bordered" size="lg" radius="sm" isDisabled={busy} onPress={() => void run(onSwitchAccount)}>
+        <Button variant="bordered" size="lg" radius="sm" {...buttonProps("switch")} onPress={() => void run("switch", onSwitchAccount)}>
           Use another account
         </Button>
       </div>

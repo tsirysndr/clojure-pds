@@ -1,16 +1,14 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@heroui/react";
-import { useAtom } from "jotai";
 import { IconShieldLock } from "@tabler/icons-react";
 import type { Session } from "../api";
 import { useAction } from "../api";
 import { factorSchema, type FactorValues } from "../schemas";
-import { busyAtom } from "../atoms";
 import { AuthCard } from "../components/AuthCard";
 import { Alert } from "../components/Alert";
 import { TextField } from "../components/Field";
-import { useNotice } from "../notice";
+import { usePending } from "../pending";
 
 export function FactorScreen({
   session,
@@ -20,8 +18,7 @@ export function FactorScreen({
   onAuthenticated: () => Promise<void>;
 }) {
   const action = useAction();
-  const [busy, setBusy] = useAtom(busyAtom);
-  const { notice, showError, clear } = useNotice();
+  const { run, buttonProps, notice } = usePending();
   const email = session.factor === "email";
 
   const form = useForm<FactorValues>({
@@ -29,19 +26,12 @@ export function FactorScreen({
     defaultValues: { code: "" },
   });
 
-  const submit = form.handleSubmit(async (values) => {
-    if (busy) return;
-    setBusy(true);
-    clear();
-    try {
+  const submit = form.handleSubmit((values) =>
+    run("factor", async () => {
       await action.mutateAsync({ action: "login/factor", body: values });
       await onAuthenticated();
-    } catch (error) {
-      showError(error);
-    } finally {
-      setBusy(false);
-    }
-  });
+    }),
+  );
 
   return (
     <AuthCard
@@ -68,7 +58,7 @@ export function FactorScreen({
           autoFocus
         />
 
-        <Button type="submit" color="primary" size="lg" radius="sm" isLoading={busy} className="font-medium">
+        <Button type="submit" color="primary" size="lg" radius="sm" {...buttonProps("factor")} className="font-medium">
           Continue
         </Button>
       </form>

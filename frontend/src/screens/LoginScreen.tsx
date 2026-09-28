@@ -1,18 +1,18 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button, Divider } from "@heroui/react";
-import { useAtom, useSetAtom } from "jotai";
+import { useSetAtom } from "jotai";
 import { IconAt, IconFingerprint, IconLock } from "@tabler/icons-react";
 import type { Session } from "../api";
 import { useAction } from "../api";
 import { loginSchema, type LoginValues } from "../schemas";
-import { busyAtom, signupModeAtom } from "../atoms";
+import { signupModeAtom } from "../atoms";
 import { AuthCard } from "../components/AuthCard";
 import { Alert } from "../components/Alert";
 import { ClientPanel } from "../components/ClientPanel";
 import { TextField, PasswordField } from "../components/Field";
 import { ceremonyOptions, credentialJSON, type ServerOptions } from "../webauthn";
-import { useNotice } from "../notice";
+import { usePending } from "../pending";
 
 export function LoginScreen({
   session,
@@ -27,8 +27,7 @@ export function LoginScreen({
 }) {
   const action = useAction();
   const setSignup = useSetAtom(signupModeAtom);
-  const [busy, setBusy] = useAtom(busyAtom);
-  const { notice, showError, clear } = useNotice();
+  const { run, buttonProps, notice } = usePending();
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
@@ -36,28 +35,15 @@ export function LoginScreen({
     defaultValues: { identifier: loginHint ?? "", password: "" },
   });
 
-  const run = async (work: () => Promise<void>) => {
-    if (busy) return;
-    setBusy(true);
-    clear();
-    try {
-      await work();
-    } catch (error) {
-      showError(error);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const submit = form.handleSubmit((values) =>
-    run(async () => {
+    run("password", async () => {
       await action.mutateAsync({ action: "login/password", body: values });
       await onAuthenticated();
     }),
   );
 
   const passkeyLogin = () =>
-    run(async () => {
+    run("passkey", async () => {
       const identifier = form.getValues("identifier").trim();
       if (!identifier) {
         form.setError("identifier", { message: "Enter your username or email address first" });
@@ -109,7 +95,7 @@ export function LoginScreen({
           Verify the address bar before entering your password.
         </p>
 
-        <Button type="submit" color="primary" size="lg" radius="sm" isLoading={busy} className="mt-1 font-medium">
+        <Button type="submit" color="primary" size="lg" radius="sm" {...buttonProps("password")} className="mt-1 font-medium">
           Sign in
         </Button>
       </form>
@@ -127,7 +113,7 @@ export function LoginScreen({
             size="lg"
             radius="sm"
             fullWidth
-            isDisabled={busy}
+            {...buttonProps("passkey")}
             startContent={<IconFingerprint size={18} stroke={1.75} />}
             onPress={() => void passkeyLogin()}
           >

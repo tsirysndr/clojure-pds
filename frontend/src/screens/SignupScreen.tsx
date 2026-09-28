@@ -1,17 +1,17 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@heroui/react";
-import { useAtom, useSetAtom } from "jotai";
+import { useSetAtom } from "jotai";
 import { IconAt, IconMail, IconTicket } from "@tabler/icons-react";
 import type { Session } from "../api";
 import { useAction } from "../api";
 import { signupSchema, type SignupValues } from "../schemas";
-import { busyAtom, signupModeAtom } from "../atoms";
+import { signupModeAtom } from "../atoms";
 import { AuthCard } from "../components/AuthCard";
 import { Alert } from "../components/Alert";
 import { ClientPanel } from "../components/ClientPanel";
 import { TextField, PasswordField } from "../components/Field";
-import { useNotice } from "../notice";
+import { usePending } from "../pending";
 
 export function SignupScreen({
   session,
@@ -24,8 +24,7 @@ export function SignupScreen({
 }) {
   const action = useAction();
   const setSignup = useSetAtom(signupModeAtom);
-  const [busy, setBusy] = useAtom(busyAtom);
-  const { notice, showError, clear } = useNotice();
+  const { run, buttonProps, notice } = usePending();
   const domain = session["user-domain"];
 
   const form = useForm<SignupValues>({
@@ -33,11 +32,8 @@ export function SignupScreen({
     defaultValues: { username: "", email: "", password: "", inviteCode: "" },
   });
 
-  const submit = form.handleSubmit(async (values) => {
-    if (busy) return;
-    setBusy(true);
-    clear();
-    try {
+  const submit = form.handleSubmit((values) =>
+    run("signup", async () => {
       const body: Record<string, unknown> = {
         handle: `${values.username.toLowerCase()}.${domain}`,
         email: values.email,
@@ -47,12 +43,8 @@ export function SignupScreen({
       await action.mutateAsync({ action: "signup", body });
       setSignup(false);
       await onAuthenticated();
-    } catch (error) {
-      showError(error);
-    } finally {
-      setBusy(false);
-    }
-  });
+    }),
+  );
 
   return (
     <AuthCard title="Create your account" service={session.origin}>
@@ -104,7 +96,7 @@ export function SignupScreen({
           maxLength={256}
         />
 
-        <Button type="submit" color="primary" size="lg" radius="sm" isLoading={busy} className="mt-1 font-medium">
+        <Button type="submit" color="primary" size="lg" radius="sm" {...buttonProps("signup")} className="mt-1 font-medium">
           Create account
         </Button>
       </form>
