@@ -82,7 +82,10 @@ Put Caddy in front, bound to a high port when `/etc/caddy` is not writable:
 
 ```text
 :8080 {
-	reverse_proxy 127.0.0.1:3000
+	reverse_proxy 127.0.0.1:3000 {
+		lb_try_duration 25s
+		lb_try_interval 500ms
+	}
 }
 ```
 
@@ -92,6 +95,14 @@ a `header_up Host` directive makes the service DID document answer
 in place of `:8080` and nothing else. Behind a Cloudflare Tunnel, point the
 ingress at `http://localhost:8080`; WebSocket upgrades reach
 `subscribeRepos` over HTTP/1.1, and an HTTP/2 request answers `426` by design.
+
+The retry window matters more than it looks. Starting from source takes about
+twenty seconds, and without it the proxy fails the dial immediately and answers
+`502`. A CDN in front will replace that with its own error page, which carries
+no `Access-Control-Allow-Origin`, so a browser application reports a routine
+restart as a CORS failure rather than the gateway error it is — and the CORS
+headers this server sets never reach it, because the response never came from
+this server. Holding the request across the gap avoids the error entirely.
 
 Back up the SQLite file and the master key separately, and read logs with
 `journalctl --user -u clojure-pds` — or `journalctl
