@@ -26,17 +26,27 @@ export const factorSchema = z.object({
 
 export type FactorValues = z.infer<typeof factorSchema>;
 
-export const signupSchema = z.object({
-  username: z
-    .string()
-    .trim()
-    .min(1, "Choose a username")
-    .max(63, "That username is too long")
-    .regex(/^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/, "Use letters, numbers, and inner hyphens"),
-  email: z.email("Enter a valid email address").max(320, "That email address is too long"),
-  password,
-  inviteCode: z.string().trim().max(256, "That invite code is too long").or(z.literal("")),
-});
+export const signupSchema = z
+  .object({
+    username: z
+      .string()
+      .trim()
+      .min(1, "Choose a username")
+      .max(63, "That username is too long")
+      .regex(/^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/, "Use letters, numbers, and inner hyphens"),
+    email: z.email("Enter a valid email address").max(320, "That email address is too long"),
+    password,
+    confirmPassword: z.string().max(1024, "That password is too long"),
+    inviteCode: z.string().trim().max(256, "That invite code is too long").or(z.literal("")),
+  })
+  .superRefine((value, context) => {
+    if (value.confirmPassword !== value.password)
+      context.addIssue({
+        code: "custom",
+        path: ["confirmPassword"],
+        message: "Those passwords do not match",
+      });
+  });
 
 export type SignupValues = z.infer<typeof signupSchema>;
 

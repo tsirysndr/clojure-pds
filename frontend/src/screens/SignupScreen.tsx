@@ -29,7 +29,7 @@ export function SignupScreen({
 
   const form = useForm<SignupValues>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { username: "", email: "", password: "", inviteCode: "" },
+    defaultValues: { username: "", email: "", password: "", confirmPassword: "", inviteCode: "" },
   });
 
   const submit = form.handleSubmit((values) =>
@@ -82,6 +82,15 @@ export function SignupScreen({
           placeholder="At least 8 characters"
           registration={form.register("password")}
           error={form.formState.errors.password}
+          autoComplete="new-password"
+          maxLength={1024}
+        />
+
+        <PasswordField
+          label="Confirm password"
+          placeholder="Re-enter your password"
+          registration={form.register("confirmPassword")}
+          error={form.formState.errors.confirmPassword}
           autoComplete="new-password"
           maxLength={1024}
         />

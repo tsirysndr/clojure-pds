@@ -8,10 +8,27 @@ import { loginSession } from "../test/fixtures";
 
 const client = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
-async function openSignup(user: ReturnType<typeof userEvent.setup>) {
+type User = ReturnType<typeof userEvent.setup>;
+
+async function openSignup(user: User) {
   render(<App client={client()} />);
   await user.click(await screen.findByRole("button", { name: /create one/i }));
   await screen.findByRole("heading", { name: /create your account/i });
+}
+
+async function fill(
+  user: User,
+  {
+    username,
+    email,
+    password = "a strong password",
+    confirm = password,
+  }: { username: string; email: string; password?: string; confirm?: string },
+) {
+  await user.type(screen.getByLabelText(/username/i), username);
+  await user.type(screen.getByLabelText(/email address/i), email);
+  await user.type(screen.getByLabelText(/^password/i), password);
+  await user.type(screen.getByLabelText(/confirm password/i), confirm);
 }
 
 describe("SignupScreen", () => {
@@ -21,15 +38,36 @@ describe("SignupScreen", () => {
 
     expect(screen.getByText(/username\.example\.com/i)).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText(/username/i), "Carol");
-    await user.type(screen.getByLabelText(/email address/i), "carol@example.com");
-    await user.type(screen.getByLabelText(/^password/i), "a strong password");
+    await fill(user, { username: "Carol", email: "carol@example.com" });
     await user.click(screen.getByRole("button", { name: /create account/i }));
 
     expect(await screen.findByRole("heading", { name: "carol.example.com" })).toBeInTheDocument();
     const signup = scenario.requests.find((entry) => entry.action === "signup");
     expect(signup?.body).toMatchObject({ handle: "carol.example.com", email: "carol@example.com" });
     expect(signup?.body).not.toHaveProperty("inviteCode");
+    expect(signup?.body).not.toHaveProperty("confirmPassword");
+  });
+
+  it("will not submit until the confirmation matches", async () => {
+    const user = userEvent.setup();
+    await openSignup(user);
+
+    await fill(user, {
+      username: "erin",
+      email: "erin@example.com",
+      password: "a strong password",
+      confirm: "a strong passward",
+    });
+    await user.click(screen.getByRole("button", { name: /create account/i }));
+
+    expect(await screen.findByText(/do not match/i)).toBeInTheDocument();
+    expect(scenario.requests).toHaveLength(0);
+
+    await user.clear(screen.getByLabelText(/confirm password/i));
+    await user.type(screen.getByLabelText(/confirm password/i), "a strong password");
+    await user.click(screen.getByRole("button", { name: /create account/i }));
+
+    expect(await screen.findByRole("heading", { name: "erin.example.com" })).toBeInTheDocument();
   });
 
   it("hides the invite code field when the server does not require one", async () => {
@@ -44,9 +82,7 @@ describe("SignupScreen", () => {
     const user = userEvent.setup();
     await openSignup(user);
 
-    await user.type(screen.getByLabelText(/username/i), "dave");
-    await user.type(screen.getByLabelText(/email address/i), "dave@example.com");
-    await user.type(screen.getByLabelText(/^password/i), "a strong password");
+    await fill(user, { username: "dave", email: "dave@example.com" });
     await user.type(screen.getByLabelText(/invite code/i), "invite-123");
     await user.click(screen.getByRole("button", { name: /create account/i }));
 
@@ -59,9 +95,7 @@ describe("SignupScreen", () => {
     const user = userEvent.setup();
     await openSignup(user);
 
-    await user.type(screen.getByLabelText(/username/i), "taken");
-    await user.type(screen.getByLabelText(/email address/i), "taken@example.com");
-    await user.type(screen.getByLabelText(/^password/i), "a strong password");
+    await fill(user, { username: "taken", email: "taken@example.com" });
     await user.click(screen.getByRole("button", { name: /create account/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/already exists/i);
@@ -71,9 +105,7 @@ describe("SignupScreen", () => {
     const user = userEvent.setup();
     await openSignup(user);
 
-    await user.type(screen.getByLabelText(/username/i), "no dots");
-    await user.type(screen.getByLabelText(/email address/i), "carol@example.com");
-    await user.type(screen.getByLabelText(/^password/i), "a strong password");
+    await fill(user, { username: "no dots", email: "carol@example.com" });
     await user.click(screen.getByRole("button", { name: /create account/i }));
 
     expect(await screen.findByText(/letters, numbers/i)).toBeInTheDocument();
