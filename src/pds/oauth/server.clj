@@ -76,8 +76,10 @@
                        (update response :headers merge
                                {"Access-Control-Allow-Origin" "*"
                                 "Access-Control-Allow-Methods" (cond protocol? "POST, OPTIONS" metadata? "GET, HEAD, OPTIONS" :else "GET, HEAD, POST, OPTIONS")
-                                "Access-Control-Allow-Headers" (get resource/cors-headers "Access-Control-Allow-Headers")
-                                "Access-Control-Expose-Headers" "DPoP-Nonce, WWW-Authenticate, Retry-After, Atproto-Repo-Rev, Atproto-Content-Labelers"})
+                                "Access-Control-Allow-Headers" (resource/allow-headers request)
+                                "Access-Control-Expose-Headers" "DPoP-Nonce, WWW-Authenticate, Retry-After, Atproto-Repo-Rev, Atproto-Content-Labelers"
+                                "Access-Control-Max-Age" "600"
+                                "Vary" "Access-Control-Request-Headers"})
                        response)
             response (if (or protocol? metadata? (and xrpc? oauth?))
                        (update response :headers merge {"Cache-Control" "no-store" "Pragma" "no-cache"

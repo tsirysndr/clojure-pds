@@ -79,10 +79,32 @@
                               "temporarily_unavailable" "OAuth authentication is temporarily unavailable"
                               "server_error" "An internal server error occurred"
                               "Invalid OAuth resource authentication"))))
-(def cors-headers
+(def default-allow-headers
+  "Advertised when a preflight names no specific headers."
+  "Authorization, DPoP, Content-Type, Atproto-Proxy, Atproto-Accept-Labelers, Accept-Language, X-Bsky-Topics")
+
+;; RFC 9110 field-name token characters, so a reflected value can never inject
+;; a second header or control bytes.
+(defn- header-token? [value]
+  (boolean (re-matches #"[!#$%&'*+.^_`|~0-9A-Za-z-]+" value)))
+
+(defn allow-headers
+  "Reflect the header names a preflight asks for, like the reference PDS. The
+  allowed origin is a wildcard and so can never carry cookies, which makes a
+  fixed allowlist a way to block legitimate clients rather than a protection."
+  [request]
+  (let [requested (get-in request [:headers "access-control-request-headers"] "")
+        names (into [] (comp (map str/trim) (remove str/blank?)) (str/split requested #","))]
+    (if (and (<= (count requested) 4096) (seq names) (every? header-token? names))
+      (str/join ", " names)
+      default-allow-headers)))
+
+(defn cors-headers [request]
   {"Access-Control-Allow-Origin" "*" "Access-Control-Allow-Methods" "GET, HEAD, POST, OPTIONS"
-   "Access-Control-Allow-Headers" "Authorization, DPoP, Content-Type, Atproto-Proxy, Atproto-Accept-Labelers, Accept-Language, X-Bsky-Topics"
-   "Access-Control-Expose-Headers" "DPoP-Nonce, WWW-Authenticate"})
+   "Access-Control-Allow-Headers" (allow-headers request)
+   "Access-Control-Expose-Headers" "DPoP-Nonce, WWW-Authenticate"
+   "Access-Control-Max-Age" "600"
+   "Vary" "Access-Control-Request-Headers"})
 (defn- challenge [response]
   (let [error (when (#{401 403} (:status response))
                 (try (get (json/read-str (:body response)) "error") (catch Exception _ nil)))]
@@ -100,9 +122,9 @@
           oauth? (or (dpop? request) (contains? (:headers request) "dpop"))]
       (cond
         (not (str/starts-with? (:uri request) "/xrpc/")) (handler request)
-        (= :options (:request-method request)) {:status 204 :headers (assoc cors-headers "Cache-Control" "no-store") :body ""}
-        (not oauth?) (update (handler request) :headers merge cors-headers)
+        (= :options (:request-method request)) {:status 204 :headers (assoc (cors-headers request) "Cache-Control" "no-store") :body ""}
+        (not oauth?) (update (handler request) :headers merge (cors-headers request))
         :else
         (let [response (try (handler (prepare! ds settings resolver request)) (catch Exception e (error-response e)))]
-          (update (challenge response) :headers merge cors-headers
+          (update (challenge response) :headers merge (cors-headers request)
                   {"Cache-Control" "no-store" "Pragma" "no-cache" "DPoP-Nonce" (dpop/nonce settings)})))))))

@@ -163,11 +163,25 @@
                                   (:headers (request env issued :get session-path {"nonce" (get-in missing [:headers "dpop-nonce"])})) nil)]
           (is (= 204 (:status preflight)))
           (is (= "*" (get-in preflight [:headers "access-control-allow-origin"])))
-          (is (str/includes? (get-in preflight [:headers "access-control-allow-headers"]) "DPoP"))
+          ;; Requested header names are reflected, so a browser sending any
+          ;; header a client library adds is not blocked by a fixed allowlist.
+          (is (= "authorization, dpop" (get-in preflight [:headers "access-control-allow-headers"])))
+          (is (= "600" (get-in preflight [:headers "access-control-max-age"])))
+          (is (= "Access-Control-Request-Headers" (get-in preflight [:headers "vary"])))
           (is (= 401 (:status missing)))
           (is (= "DPoP error=\"use_dpop_nonce\", resource_metadata=\"https://pds.example.com/.well-known/oauth-protected-resource\"" (get-in missing [:headers "www-authenticate"])))
           (is (= 200 (:status response)))
-          (is (= owner/did (get-in response [:body "did"])))))
+          (is (= owner/did (get-in response [:body "did"]))))
+        ;; An unknown header is still allowed, and a value that is not a list
+        ;; of field-name tokens falls back to the advertised default instead of
+        ;; reflecting anything that could inject a header.
+        (let [preflight #(wire/call client (:port server) "OPTIONS" session-path nil
+                                    {"Origin" "https://app.example.com" "Access-Control-Request-Method" "POST"
+                                     "Access-Control-Request-Headers" %} nil)]
+          (is (= "x-client-added" (get-in (preflight "x-client-added") [:headers "access-control-allow-headers"])))
+          (doseq [hostile ["evil: value" "has space" "" (apply str (repeat 5000 "a"))]]
+            (is (= resource/default-allow-headers
+                   (get-in (preflight hostile) [:headers "access-control-allow-headers"]))))))
       (finally ((:stop! server))))))
 
 (deftest endpoint-transaction-rechecks-expiry-and-revocation-after-proof-acceptance

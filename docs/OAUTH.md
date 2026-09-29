@@ -327,8 +327,19 @@ as legacy Bearer credentials. Proofs must match the access-token hash (`ath`),
 session key, exact HTTP method and configured public origin plus request path.
 Host and forwarding headers cannot override that origin. OAuth responses from this
 middleware include a current server nonce and no-store headers; authentication failures use
-the DPoP `WWW-Authenticate` challenge. XRPC preflight responses allow Authorization,
-DPoP and supported proxy headers, without credentialed cookie CORS.
+the DPoP `WWW-Authenticate` challenge.
+
+Browser access uses a wildcard origin and therefore never carries cookies, so
+preflight responses **reflect** the header names the browser asks for rather
+than enforcing a fixed allowlist, matching the reference PDS: a client library
+that adds its own header is not blocked. Reflected names must be RFC 9110
+field-name tokens and the request value is bounded, so a reflected value can
+never inject another header; anything else falls back to the advertised default
+(`Authorization, DPoP, Content-Type, Atproto-Proxy, Atproto-Accept-Labelers,
+Accept-Language, X-Bsky-Topics`). Preflights are cacheable for 600 seconds and
+carry `Vary: Access-Control-Request-Headers`. XRPC, OAuth protocol and OAuth
+metadata paths all expose `DPoP-Nonce`, `WWW-Authenticate`, `Retry-After`,
+`Atproto-Repo-Rev` and `Atproto-Content-Labelers`.
 
 The middleware validates the stored grant and proof before resolving fresh client
 metadata. It then rechecks the grant and commits proof consumption before calling
