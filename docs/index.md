@@ -55,10 +55,11 @@ what remains.
 Everything above is verified against local fixtures and pinned upstream
 implementations (`@atproto/repo`, `@atproto/xrpc-server`, `@did-plc/lib`, the
 reference OAuth client). The official client SDK and the official
-relay-style firehose consumer both drive a local server end to end. No
-*hosted* relay or AppView has consumed this PDS on the live network yet —
-treat deployments as experiments and read the [roadmap](ROADMAP.md) for what
-remains.
+relay-style firehose consumer both drive a local server end to end. A deployed
+instance announces itself to the production Bluesky relay, which accepts the
+crawl request and reports the host active, but no repository event has crossed
+that link yet — treat deployments as experiments and read the
+[roadmap](ROADMAP.md) for what remains.
 
 ## License
 

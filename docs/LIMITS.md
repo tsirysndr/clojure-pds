@@ -65,5 +65,8 @@
   forwarding headers are ignored; reverse proxies need an appropriate limit policy.
 - OAuth, external service/relay interoperability, and production
   operations remain on the roadmap. The official client SDK and firehose
-  consumer are exercised against a local server; a hosted relay or AppView on
-  the live network has not yet consumed this PDS.
+  consumer are exercised against a local server. A deployed instance announces
+  itself to the production Bluesky relay with `com.atproto.sync.requestCrawl`,
+  which accepts it and reports the host `active`; no repository event has
+  crossed that link yet, so live federation and AppView visibility remain
+  unverified.

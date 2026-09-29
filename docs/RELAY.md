@@ -77,8 +77,20 @@ Tests cover request shape over real TLS, absence of ambient authentication and
 cookies, redirect/encoding/response-size failures, bounded retry headers, durable
 restart schedules, exponential backoff, concurrent leases, late completions,
 configuration filtering, and worker startup/shutdown. The main process test
-continues to start and stop with announcements disabled. No external relay was
-contacted during these tests; deployed relay interoperability remains pending.
+continues to start and stop with announcements disabled. No external relay is
+contacted during these tests.
+
+A deployed instance has since announced itself to the production Bluesky relay
+at `https://bsky.network`, which answered `200` and reports the host through
+`com.atproto.sync.getHostStatus`:
+
+```json
+{"hostname":"…","status":"active","accountCount":0,"seq":-1}
+```
+
+That establishes the announcement contract against a real relay. It does not
+establish federation: no repository event has crossed the link, so commit
+validation and AppView visibility remain unverified.
 
 Sources: [requestCrawl Lexicon](https://github.com/bluesky-social/atproto/blob/main/lexicons/com/atproto/sync/requestCrawl.json),
 [reference PDS crawler notifications](https://github.com/bluesky-social/atproto/blob/main/packages/pds/src/crawlers.ts),
