@@ -80,7 +80,7 @@ Restart=on-failure
 
 Put Caddy in front, bound to a high port when `/etc/caddy` is not writable:
 
-```caddyfile
+```text
 :8080 {
 	reverse_proxy 127.0.0.1:3000
 }
