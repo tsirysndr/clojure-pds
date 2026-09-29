@@ -73,6 +73,18 @@
         (is (= "no-store" (get-in response [:headers "Cache-Control"])))
         (is (str/includes? (get-in response [:headers "Access-Control-Expose-Headers"]) "Retry-After"))))))
 
+(deftest identity-documents-are-readable-cross-origin
+  ;; A browser application resolves a handle or DID by reading these directly,
+  ;; so they need the sharing headers even though they are not XRPC.
+  (let [env (token/env) handler (app/handler (settings env) fixture/*ds*)]
+    (doseq [path server/document-paths]
+      (let [response (handler {:request-method :get :uri path :remote-addr "127.0.0.1"
+                               :headers {"host" "pds.example.com" "origin" "https://bsky.app"}})]
+        (is (= "*" (get-in response [:headers "Access-Control-Allow-Origin"])) path)
+        (is (= "GET, HEAD, OPTIONS" (get-in response [:headers "Access-Control-Allow-Methods"])) path)
+        (is (not= "no-store" (get-in response [:headers "Cache-Control"]))
+            (str path " stays cacheable"))))))
+
 (defn upstream! [value]
   (let [path (Files/createTempFile "pds-oauth-" ".json" (make-array FileAttribute 0))]
     (try

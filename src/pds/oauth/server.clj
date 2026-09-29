@@ -12,6 +12,10 @@
 
 (def metadata-paths #{"/.well-known/oauth-authorization-server" "/.well-known/oauth-protected-resource"})
 (def protocol-paths #{"/oauth/par" "/oauth/token" "/oauth/revoke"})
+;; Identity documents a browser application reads cross-origin while resolving a
+;; handle or DID. They are cacheable, so they take the sharing headers without
+;; the no-store treatment the OAuth metadata needs.
+(def document-paths #{"/.well-known/did.json" "/.well-known/atproto-did"})
 (defn validate-origin! [settings]
   (let [value (:public-url settings) uri (try (URI/create value) (catch Exception _ nil))
         scheme (when uri (.getScheme uri)) host (when uri (.getHost uri)) port (when uri (.getPort uri))]
@@ -69,13 +73,16 @@
   (if-not ds handler
     (fn [request]
       (let [path (:uri request) protocol? (protocol-paths path) metadata? (metadata-paths path)
+            document? (document-paths path)
             xrpc? (str/starts-with? path "/xrpc/")
             oauth? (or (resource/dpop? request) (contains? (:headers request) "dpop"))
             response (handler request)
-            response (if (or protocol? metadata? xrpc?)
+            response (if (or protocol? metadata? xrpc? document?)
                        (update response :headers merge
                                {"Access-Control-Allow-Origin" "*"
-                                "Access-Control-Allow-Methods" (cond protocol? "POST, OPTIONS" metadata? "GET, HEAD, OPTIONS" :else "GET, HEAD, POST, OPTIONS")
+                                "Access-Control-Allow-Methods" (cond protocol? "POST, OPTIONS"
+                                                                     (or metadata? document?) "GET, HEAD, OPTIONS"
+                                                                     :else "GET, HEAD, POST, OPTIONS")
                                 "Access-Control-Allow-Headers" (resource/allow-headers request)
                                 "Access-Control-Expose-Headers" "DPoP-Nonce, WWW-Authenticate, Retry-After, Atproto-Repo-Rev, Atproto-Content-Labelers"
                                 "Access-Control-Max-Age" "600"
