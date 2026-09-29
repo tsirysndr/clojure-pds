@@ -70,7 +70,7 @@ export function LoginScreen({
       <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4" noValidate>
         <TextField
           label="Username or email address"
-          placeholder="alice.example.com"
+          placeholder={`alice.${session["user-domain"]}`}
           registration={form.register("identifier")}
           error={form.formState.errors.identifier}
           startContent={<IconAt size={18} stroke={1.75} className="text-default-400" aria-hidden />}

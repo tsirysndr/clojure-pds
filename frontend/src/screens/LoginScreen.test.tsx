@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient } from "@tanstack/react-query";
 import { App } from "../App";
 import { scenario } from "../mocks/handlers";
+import { loginSession } from "../test/fixtures";
 
 const client = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
@@ -14,6 +15,13 @@ describe("LoginScreen", () => {
     expect(await screen.findByLabelText(/username or email address/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^password/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /sign in$/i })).toBeInTheDocument();
+  });
+
+  it("offers an example handle on the server's own domain", async () => {
+    scenario.session = { ...loginSession, "user-domain": "rocksky.social" };
+    render(<App client={client()} />);
+
+    expect(await screen.findByPlaceholderText("alice.rocksky.social")).toBeInTheDocument();
   });
 
   it("signs in through the JSON action API and lands on settings", async () => {
