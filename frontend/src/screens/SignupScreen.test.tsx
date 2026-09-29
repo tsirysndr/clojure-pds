@@ -48,6 +48,18 @@ describe("SignupScreen", () => {
     expect(signup?.body).not.toHaveProperty("confirmPassword");
   });
 
+  it("shows the server's domain beside the field and previews the handle as you type", async () => {
+    const user = userEvent.setup();
+    await openSignup(user);
+
+    expect(screen.getByText(".example.com")).toBeInTheDocument();
+    expect(screen.getByText(/your handle will be username\.example\.com/i)).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/username/i), "Carol");
+
+    expect(screen.getByText(/your handle will be carol\.example\.com/i)).toBeInTheDocument();
+  });
+
   it("will not submit until the confirmation matches", async () => {
     const user = userEvent.setup();
     await openSignup(user);

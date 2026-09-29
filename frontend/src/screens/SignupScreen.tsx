@@ -32,6 +32,8 @@ export function SignupScreen({
     defaultValues: { username: "", email: "", password: "", confirmPassword: "", inviteCode: "" },
   });
 
+  const username = form.watch("username");
+
   const submit = form.handleSubmit((values) =>
     run("signup", async () => {
       const body: Record<string, unknown> = {
@@ -56,10 +58,17 @@ export function SignupScreen({
         <TextField
           label="Username"
           placeholder="alice"
-          description={domain ? `Your handle will be username.${domain}` : undefined}
+          description={domain ? `Your handle will be ${(username || "username").toLowerCase()}.${domain}` : undefined}
           registration={form.register("username")}
           error={form.formState.errors.username}
           startContent={<IconAt size={18} stroke={1.75} className="text-default-400" aria-hidden />}
+          endContent={
+            domain ? (
+              <span className="shrink-0 text-sm text-default-400" aria-hidden>
+                .{domain}
+              </span>
+            ) : undefined
+          }
           autoComplete="username"
           autoFocus
           maxLength={63}
