@@ -123,7 +123,11 @@
     (when (and pending (or (not= "handle" (:operation_kind pending)) (not= handle (:target_handle pending))))
       (errors/raise! 409 "IdentityUpdatePending" "Finish the pending handle update first"))
     (when-not (and (= handle (:handle account)) (nil? pending))
-      (when (and (nil? pending) (not (hosted? settings handle))) (verify-external! settings did handle))
+      (when (nil? pending)
+        (if (hosted? settings handle)
+          (when (identity/claimed-elsewhere? settings did handle)
+            (errors/raise! 400 "HandleNotAvailable" "Handle is already registered in this domain"))
+          (verify-external! settings did handle)))
       (let [plc? (str/starts-with? did "did:plc:")
             operation (when (and plc? (nil? pending)) (prepare-operation settings snapshot handle))]
         (db/transact! ds

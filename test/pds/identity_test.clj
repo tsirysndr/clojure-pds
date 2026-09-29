@@ -39,6 +39,30 @@
     (is (= 251 (count long-handle)))
     (is (= alice (identity/resolve-handle! r long-handle)))))
 
+(deftest shared-user-domain-treats-only-proven-names-as-taken
+  (let [settings {:shared-user-domain true
+                  :txt-lookup (fn [_] [(str "did=" alice)])
+                  :fetch (fn [_ _] (is false "DNS already answered"))}]
+    (is (identity/claimed-elsewhere? settings nil "alice.example.com"))
+    (is (not (identity/claimed-elsewhere? settings alice "alice.example.com"))
+        "A name this DID already owns is not a collision"))
+  (let [calls (atom [])
+        settings {:shared-user-domain false
+                  :txt-lookup (fn [_] (swap! calls conj :dns) [(str "did=" alice)])
+                  :fetch (fn [_ _] (swap! calls conj :http) (response alice))}]
+    (is (not (identity/claimed-elsewhere? settings nil "alice.example.com")))
+    (is (empty? @calls) "A domain this PDS owns alone must not be resolved"))
+  ;; A wildcard address record without a matching certificate fails the HTTPS
+  ;; fallback, which leaves the name unproven rather than taken.
+  (doseq [fetch [(fn [_ _] (throw (java.io.IOException. "no certificate")))
+                 (fn [_ _] {:status 404 :body (codec/utf8 "")})
+                 (fn [_ _] (response "not-a-did"))]]
+    (is (not (identity/claimed-elsewhere?
+               {:shared-user-domain true
+                :txt-lookup (fn [_] (throw (java.io.IOException. "NXDOMAIN")))
+                :fetch fetch}
+               nil "free.example.com")))))
+
 (deftest identity-input-policies-and-sanitized-failures
   (let [r (identity/resolver {:fetch (fn [_ _] (is false "No outbound fetch expected"))
                               :txt-lookup (fn [_] (is false "No DNS lookup expected"))})]

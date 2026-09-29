@@ -81,6 +81,18 @@
                     (when-not (supported-did? did) (errors/raise! 400 "HandleNotFound" "Handle has no supported DID"))
                     did))))))))))
 
+(defn claimed-elsewhere?
+  "True when a handle in a user domain shared with other PDSes already resolves
+  to a different DID. Only a successful resolution proves a name is taken: a
+  lookup that fails leaves it unproven, so an unreachable peer or a wildcard
+  record without a certificate cannot block signups."
+  [settings did handle]
+  (boolean
+    (when (:shared-user-domain settings)
+      (let [lookup (resolver (select-keys settings [:http-client :txt-lookup :fetch]))]
+        (try (when-let [owner (resolve-handle! lookup handle)] (not= owner did))
+             (catch Exception _ false))))))
+
 (defn resolve-did! [resolver did]
   (when-not (syntax/did? did) (errors/invalid! "Invalid DID"))
   (or ((:local-document resolver) did)

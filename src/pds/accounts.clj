@@ -27,10 +27,12 @@
         url (get env "PDS_PUBLIC_URL" "http://localhost:3000")
         uri (try (URI/create url) (catch Exception _ nil))
         signup (get env "PDS_ENABLE_SIGNUP" "false")
+        shared (get env "PDS_USER_DOMAIN_SHARED" "false")
         method (get env "PDS_DID_METHOD" "web")]
     (when-not (#{"web" "plc"} method) (throw (ex-info "PDS_DID_METHOD must be web or plc" {})))
     (when-not (syntax/handle? domain) (throw (ex-info "PDS_USER_DOMAIN must be a DNS domain" {})))
     (when-not (#{"true" "false"} signup) (throw (ex-info "PDS_ENABLE_SIGNUP must be true or false" {})))
+    (when-not (#{"true" "false"} shared) (throw (ex-info "PDS_USER_DOMAIN_SHARED must be true or false" {})))
     (when-not (and uri (.getHost uri) (nil? (.getUserInfo uri)) (nil? (.getQuery uri)) (nil? (.getFragment uri))
                    (#{"" "/"} (.getPath uri))
                    (or (= "https" (.getScheme uri))
@@ -39,7 +41,8 @@
     (when (and (= "plc" method) (or (not= "https" (.getScheme uri)) (not (identity/resolvable-handle? domain))))
       (throw (ex-info "PLC signup requires an HTTPS public URL and a resolvable user domain" {})))
     {:user-domain (str/lower-case domain) :public-url (str/replace url #"/$" "")
-     :signup-enabled (= "true" signup) :did-method (keyword method)}))
+     :signup-enabled (= "true" signup) :shared-user-domain (= "true" shared)
+     :did-method (keyword method)}))
 
 (defn public-account [account]
   (cond-> {:did (:did account) :handle (:handle account) :email (:email account)
@@ -152,6 +155,8 @@
     (when-not (and (str/ends-with? handle suffix)
                    (not (str/includes? (subs handle 0 (- (count handle) (count suffix))) ".")))
       (errors/raise! 400 "UnsupportedDomain" "Handle must be a direct child of the configured user domain"))
+    (when (identity/claimed-elsewhere? settings nil handle)
+      (errors/raise! 400 "HandleNotAvailable" "Handle is already registered in this domain"))
     (when-not (email/address? address) (errors/invalid! "Invalid email address"))
     (let [hash (password! (get body "password")) did (str "did:web:" handle)]
       (if (= :plc (:did-method settings))

@@ -75,6 +75,32 @@ Inspect `handle_updates.status` and `last_error` for sanitized status.
 `getRecommendedDidCredentials` returns the account's public repository key, PDS
 endpoint, handle and available rotation keys.
 
+## Sharing a handle domain with another PDS
+
+Several PDSes can issue handles in one domain, the way `*.bsky.social` spans a
+fleet: an account is bound to its server by the `serviceEndpoint` in its own DID
+document, not by the handle suffix. What the suffix cannot do is allocate names,
+because a hosted handle is normally accepted on the strength of owning the
+domain, and two servers applying that rule independently can issue the same one.
+
+`PDS_USER_DOMAIN_SHARED=true` replaces that assumption with a lookup. Creating an
+account or moving to a hosted handle first resolves the name, and a handle that
+already resolves to another DID is refused with `HandleNotAvailable`. Only a
+successful resolution counts as proof: a lookup that fails leaves the name
+unproven and the request proceeds, so an unreachable peer cannot stop signups.
+This makes the shared zone itself the registry, which is where the binding has to
+be published anyway — resolution reads `_atproto.<handle>` first and falls back to
+`https://<handle>/.well-known/atproto-did`, and this server answers that path for
+its own handles from the request's `Host`.
+
+Two consequences are worth planning for. A wildcard record pointing at one PDS
+makes every unclaimed name in the domain answer from that server, so handles
+hosted elsewhere need their own more specific `_atproto` TXT record to resolve —
+a record that also makes them visible to this check. And the check is advisory
+rather than a lock: it closes the window for servers that perform it, so a peer
+with open registration and no equivalent check can still take a name after it was
+issued here.
+
 ## Owner-signed PLC operations
 
 For outgoing PLC migration, call `com.atproto.identity.requestPlcOperationSignature`
