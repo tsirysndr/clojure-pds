@@ -60,6 +60,7 @@ namespaces=(
   pds.proxy-api-test
   pds.proxy-stream-test
   pds.relay-integration-test
+  pds.reserved-handles-integration-test
   pds.repo-api-test
   pds.repo-export-test
   pds.repo-import-test

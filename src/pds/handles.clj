@@ -11,6 +11,7 @@
             [pds.plc-directory :as directory]
             [pds.plc-keys :as keys]
             [pds.plc-recovery-keys :as recovery-keys]
+            [pds.reserved-handles :as reserved]
             [pds.signing-keys :as signing-keys]
             [pds.protocol.codec :as codec]
             [pds.protocol.syntax :as syntax])
@@ -116,7 +117,7 @@
                             (long (min 3600 (* 5 (Math/pow 2 (min 10 (dec (:attempts job))))))) (:did job) (:lease job)))
             :pending)))))
 
-(defn- update-with! [ds settings account-fn body]
+(defn- update-with! [ds settings account-fn body self-service?]
   (let [handle (normalize! settings (get body "handle"))
         snapshot (db/transact! ds #(snapshot! % account-fn))
         {:keys [account pending]} snapshot did (:did account)]
@@ -125,8 +126,11 @@
     (when-not (and (= handle (:handle account)) (nil? pending))
       (when (nil? pending)
         (if (hosted? settings handle)
-          (when (identity/claimed-elsewhere? settings did handle)
-            (errors/raise! 400 "HandleNotAvailable" "Handle is already registered in this domain"))
+          (do
+            (when (and self-service? (reserved/blocked? settings handle (:handle account)))
+              (errors/raise! 400 "HandleNotAvailable" "Handle is reserved"))
+            (when (identity/claimed-elsewhere? settings did handle)
+              (errors/raise! 400 "HandleNotAvailable" "Handle is already registered in this domain")))
           (verify-external! settings did handle)))
       (let [plc? (str/starts-with? did "did:plc:")
             operation (when (and plc? (nil? pending)) (prepare-operation settings snapshot handle))]
@@ -155,11 +159,12 @@
     nil))
 
 (defn update! [ds settings request body]
-  (update-with! ds settings #(auth/authenticate! % settings request) body))
+  (update-with! ds settings #(auth/authenticate! % settings request) body true))
 
 (defn admin-update!
   "Operator handle change through the same reservation, verification and
-  durable directory flow as the owner endpoint."
+  durable directory flow as the owner endpoint. Reserved labels stay available
+  here so an operator can register them deliberately."
   [ds settings body]
   (let [did (get body "did")]
     (when-not (syntax/did? did) (errors/invalid! "Invalid DID"))
@@ -167,7 +172,7 @@
                   (fn [conn]
                     (or (first (db/query conn "SELECT * FROM accounts WHERE did = ? AND status IN ('active', 'deactivated', 'taken_down')" did))
                         (errors/raise! 400 "AccountNotFound" "Account was not found")))
-                  body)))
+                  body false)))
 
 (defn recommended [conn settings account]
   (let [repo (first (db/query conn "SELECT public_key FROM repositories WHERE did = ?" (:did account)))

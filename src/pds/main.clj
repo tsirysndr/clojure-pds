@@ -20,6 +20,7 @@
             [pds.redis :as redis]
             [pds.relay :as relay]
             [pds.repo-export :as repo-export]
+            [pds.reserved-handles :as reserved]
             [pds.s3 :as s3]))
 
 (defn- run-server! [ds lease]
@@ -33,6 +34,7 @@
                         (proxy/settings (System/getenv))
                         (relay/settings (System/getenv))
                         (repo-export/settings (System/getenv))
+                        (reserved/settings (System/getenv))
                         (blob-cleanup/settings (System/getenv))
                         (auth/settings (System/getenv)) {:email-enabled (boolean email-config)})
         blob-store (s3/open-store blob-config)

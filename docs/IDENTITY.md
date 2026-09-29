@@ -75,6 +75,28 @@ Inspect `handle_updates.status` and `last_error` for sanitized status.
 `getRecommendedDidCredentials` returns the account's public repository key, PDS
 endpoint, handle and available rotation keys.
 
+## Reserved handles
+
+`PDS_RESERVED_HANDLES` lists first labels beneath the hosted user domain that
+self-service callers may not take — `www`, `admin`, `security`, `support` and
+similar names that read as official, plus anything else an operator wants held
+back. It defaults to a built-in list, and an empty value disables reservation
+entirely. Labels are trimmed, lowercased and deduplicated; anything that is not
+a DNS label is rejected at startup rather than silently ignored.
+
+Only the first label counts, so reserving `www` withholds `www.example.com`
+while leaving `alice.www.example.com` alone, and `administrator` is unaffected
+by reserving `admin`. `createAccount` and `updateHandle` answer
+`HandleNotAvailable`. Two exemptions keep the list from being a trap: an account
+that already holds a reserved handle keeps it and can re-submit it, and the
+operator endpoint `com.atproto.admin.updateAccountHandle` is not restricted, so
+reserved names can still be assigned deliberately.
+
+This matters most with open registration. Without a list, anyone who can reach
+the server can register an official-looking name in the operator's own domain,
+and under `did:plc` each registration writes a public record that cannot be
+withdrawn.
+
 ## Sharing a handle domain with another PDS
 
 Several PDSes can issue handles in one domain, the way `*.bsky.social` spans a

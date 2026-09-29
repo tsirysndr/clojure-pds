@@ -16,6 +16,7 @@ template. Topic-specific settings are documented with their features:
 | `PDS_PUBLIC_URL` | `http://localhost:3000` | Public PDS origin; HTTPS outside loopback |
 | `PDS_USER_DOMAIN` | `PDS_HOSTNAME`, or `pds.localhost` if unset | Hosted handle suffix |
 | `PDS_USER_DOMAIN_SHARED` | `false` | Resolve hosted handles before allocating them; set when another PDS issues handles in the same domain |
+| `PDS_RESERVED_HANDLES` | a built-in list | Comma-separated first labels self-service signup may not claim; empty disables reservation |
 | `PDS_IDENTITY_CACHE_TTL_SECONDS` | `300` | Public remote identity cache TTL; 0–3,600; `0` disables; [freshness policy](IDENTITY-CACHE.md) |
 | `PDS_IDENTITY_CACHE_MAX_ENTRIES` | `1024` | Maximum cached/in-flight identity entries; 1–10,000 |
 | `PDS_ENABLE_SIGNUP` | `false` | Enable account creation |

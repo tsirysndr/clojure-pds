@@ -18,6 +18,7 @@
             [pds.protocol.syntax :as syntax]
             [pds.repo :as repo]
             [pds.request :as request]
+            [pds.reserved-handles :as reserved]
             [pds.security.factors :as factors])
   (:import [java.net URI]
            [java.time Instant]))
@@ -155,6 +156,8 @@
     (when-not (and (str/ends-with? handle suffix)
                    (not (str/includes? (subs handle 0 (- (count handle) (count suffix))) ".")))
       (errors/raise! 400 "UnsupportedDomain" "Handle must be a direct child of the configured user domain"))
+    (when (reserved/blocked? settings handle)
+      (errors/raise! 400 "HandleNotAvailable" "Handle is reserved"))
     (when (identity/claimed-elsewhere? settings nil handle)
       (errors/raise! 400 "HandleNotAvailable" "Handle is already registered in this domain"))
     (when-not (email/address? address) (errors/invalid! "Invalid email address"))
