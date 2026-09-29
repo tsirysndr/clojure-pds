@@ -7,6 +7,7 @@ disabled by default; no public relay is contacted automatically.
 PDS_PUBLIC_URL=https://pds.example.com
 PDS_RELAY_URLS=https://relay.example.com,https://other-relay.example.com
 PDS_RELAY_INTERVAL_SECONDS=1200
+PDS_RELAY_TIMEOUT_MS=5000
 ```
 
 `PDS_RELAY_URLS` accepts up to 16 HTTPS origins. Paths, credentials, queries and
@@ -14,6 +15,14 @@ fragments are rejected. Duplicate origins are normalized. An empty/unset value
 disables the worker. The success interval accepts 60–86,400 seconds and defaults
 to 20 minutes. Restart the PDS after changing configuration; all instances sharing
 the database should use the same configuration.
+
+`PDS_RELAY_TIMEOUT_MS` bounds one announcement request and defaults to five
+seconds. Raise it when the route to a relay is slow enough that connecting alone
+approaches that budget — a host whose requests always time out never re-announces,
+even though its first announcement may have succeeded. The ceiling is 30,000
+because a request must not outlive the 30-second claim on an announcement:
+past that the lease can expire mid-flight and another worker announces the same
+host again. Failures are transport errors, which back off and retry.
 
 The public PDS URL must be an HTTPS origin on port 443. Its hostname is announced,
 independently of the local bind address or port. Nonstandard public ports are not

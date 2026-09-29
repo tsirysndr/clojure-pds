@@ -20,15 +20,25 @@
       (str "https://" (str/lower-case (.getHost uri))
            (when-not (#{-1 443} (.getPort uri)) (str ":" (.getPort uri)))))
     (catch Exception _ (invalid! "PDS_RELAY_URLS must contain HTTPS origins without credentials, query, fragment or path"))))
+(def default-timeout-ms 5000)
+;; A request must not outlive the 30-second claim, or the lease can expire while
+;; it is still in flight and another worker announces the same host again.
+(def max-timeout-ms 30000)
+
 (defn settings [env]
-  (let [urls (get env "PDS_RELAY_URLS" "") interval (get env "PDS_RELAY_INTERVAL_SECONDS" "1200")]
+  (let [urls (get env "PDS_RELAY_URLS" "") interval (get env "PDS_RELAY_INTERVAL_SECONDS" "1200")
+        timeout (get env "PDS_RELAY_TIMEOUT_MS" (str default-timeout-ms))]
     (when-not (and (string? urls) (<= (count urls) 8192)) (invalid! "PDS_RELAY_URLS is too long"))
     (when-not (and (string? interval) (re-matches #"[0-9]{1,5}" interval) (<= 60 (Long/parseLong interval) 86400))
       (invalid! "PDS_RELAY_INTERVAL_SECONDS must be 60 to 86400"))
+    (when-not (and (string? timeout) (re-matches #"[0-9]{1,6}" timeout)
+                   (<= 1000 (Long/parseLong timeout) max-timeout-ms))
+      (invalid! (str "PDS_RELAY_TIMEOUT_MS must be 1000 to " max-timeout-ms)))
     (let [values (if (str/blank? urls) [] (str/split urls #"," -1))]
       (when (> (count values) 16) (invalid! "PDS_RELAY_URLS supports at most 16 relays"))
       {:relay-urls (vec (distinct (map #(origin (str/trim %)) values)))
-       :relay-interval-seconds (Long/parseLong interval)})))
+       :relay-interval-seconds (Long/parseLong interval)
+       :relay-timeout-ms (Long/parseLong timeout)})))
 (defn hostname! [settings]
   (let [uri (try (URI/create (:public-url settings)) (catch Exception _ nil))]
     ;; requestCrawl names a hostname, not a full endpoint. Do not announce an
@@ -77,7 +87,7 @@
     (let [post (or (:relay-post settings) #(net/post-json! (:http-client settings) %1 %2 %3))
           result (post (str (:relay_url job) "/xrpc/com.atproto.sync.requestCrawl")
                        (codec/utf8 (json/write-str {"hostname" (:hostname job)}))
-                       {:maximum 65536 :timeout-ms 5000})
+                       {:maximum 65536 :timeout-ms (:relay-timeout-ms settings default-timeout-ms)})
           status (:status result)]
       {:success? (and (integer? status) (<= 200 status 299)) :status status
        :error "http-error"

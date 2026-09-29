@@ -11,7 +11,7 @@
            [org.eclipse.jetty.util.ssl SslContextFactory$Client]))
 
 (deftest opt-in-configuration-and-origins
-  (is (= {:relay-urls [] :relay-interval-seconds 1200} (relay/settings {})))
+  (is (= {:relay-urls [] :relay-interval-seconds 1200 :relay-timeout-ms 5000} (relay/settings {})))
   (is (= ["https://relay.example.com" "https://other.example.com:8443"]
          (:relay-urls (relay/settings {"PDS_RELAY_URLS" " https://Relay.example.com/,https://relay.example.com:443,https://other.example.com:8443"}))))
   (doseq [value ["http://relay.example.com" "https://user:secret@relay.example.com" "https://relay.example.com/api"
@@ -20,10 +20,26 @@
     (is (thrown? clojure.lang.ExceptionInfo (relay/settings {"PDS_RELAY_URLS" value}))))
   (doseq [value ["0" "59" "86401" "false"]]
     (is (thrown? clojure.lang.ExceptionInfo (relay/settings {"PDS_RELAY_INTERVAL_SECONDS" value}))))
+  (is (= 20000 (:relay-timeout-ms (relay/settings {"PDS_RELAY_TIMEOUT_MS" "20000"}))))
+  ;; A request may not outlive the 30-second claim on an announcement.
+  (doseq [value ["0" "999" "30001" "5 000" "" "false"]]
+    (is (thrown? clojure.lang.ExceptionInfo (relay/settings {"PDS_RELAY_TIMEOUT_MS" value})) value))
   (is (= "pds.example.com" (relay/hostname! {:public-url "https://pds.example.com:443/"})))
   (doseq [url ["http://localhost:3000" "https://pds.example.com:8443" "https://pds.example.com/path" nil]]
     (is (thrown? clojure.lang.ExceptionInfo (relay/hostname! {:public-url url}))))
   (is (nil? ((relay/start! nil {})))))
+
+(deftest configured-timeout-reaches-the-request
+  (let [seen (atom nil)
+        post (fn [_ _ options] (reset! seen options) {:status 200})
+        job {:relay_url "https://relay.example.com" :hostname "pds.example.com"}]
+    (is (:success? (relay/deliver! (assoc (relay/settings {"PDS_RELAY_TIMEOUT_MS" "20000"})
+                                          :relay-post post)
+                                   job)))
+    (is (= 20000 (:timeout-ms @seen)))
+    (relay/deliver! {:relay-post post} job)
+    (is (= relay/default-timeout-ms (:timeout-ms @seen))
+        "Settings without the key keep the default")))
 
 (deftest bounded-retry-after
   (let [now (Instant/parse "2026-09-27T00:00:00Z")]

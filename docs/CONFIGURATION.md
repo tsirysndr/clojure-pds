@@ -34,6 +34,7 @@ template. Topic-specific settings are documented with their features:
 | `PDS_RATE_LIMIT_WINDOW_SECONDS` | `60` | Fixed window duration |
 | `PDS_RELAY_URLS` | unset | Comma-separated relay HTTPS origins; [durable announcements](RELAY.md) |
 | `PDS_RELAY_INTERVAL_SECONDS` | `1200` | Interval between successful relay announcements |
+| `PDS_RELAY_TIMEOUT_MS` | `5000` | Per-announcement request timeout; 1,000–30,000 |
 | `PDS_EMAIL_WORKER_URL` | unset | Email Worker HTTPS endpoint |
 | `PDS_EMAIL_WORKER_TOKEN` | unset | Worker shared secret |
 | `PDS_EMAIL_FROM` | unset | Verified sending address |
