@@ -36,6 +36,68 @@ PDS_DATABASE_PASSWORD=<secret>
 Every variable is described in [the configuration reference](CONFIGURATION.md).
 Startup runs checksummed migrations under an advisory lock before binding HTTP.
 
+## Single host with systemd
+
+A small always-on machine can run the server from a checkout with the
+[SQLite backend](SQLITE.md), no root, and no database service. Install the
+Clojure CLI and a JDK 21+, prefetch dependencies with `clojure -P -M:run`,
+create the schema with `clojure -M:migrate`, then keep configuration in a
+`0600` environment file:
+
+```sh
+install -d -m 700 ~/.config/clojure-pds ~/.local/share/clojure-pds
+umask 077
+cat > ~/.config/clojure-pds/clojure-pds.env <<'EOF'
+PDS_HOST=127.0.0.1
+PDS_PORT=3000
+PDS_HOSTNAME=pds.example.com
+PDS_PUBLIC_URL=https://pds.example.com
+PDS_USER_DOMAIN=example.com
+PDS_DID_METHOD=plc
+PDS_SQLITE_PATH=/home/you/.local/share/clojure-pds/clojure-pds.sqlite3
+PDS_ENABLE_SIGNUP=true
+PDS_REQUIRE_INVITE_CODE=true
+PDS_APPVIEW_SERVICE=did:web:api.bsky.app#bsky_appview
+JAVA_OPTS=-Xmx768m
+EOF
+printf 'PDS_MASTER_KEY=%s\n' "$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=')" \
+  >> ~/.config/clojure-pds/clojure-pds.env
+```
+
+Leaving `PDS_DATABASE_URL`, `PDS_DATABASE_USER` and `PDS_DATABASE_PASSWORD`
+unset is what selects SQLite. `PDS_APPVIEW_SERVICE` is a DID service
+reference, not a URL. A user unit needs no root, and `loginctl enable-linger`
+keeps it running while nobody is logged in:
+
+```ini
+[Service]
+WorkingDirectory=/home/you/clojure-pds
+EnvironmentFile=/home/you/.config/clojure-pds/clojure-pds.env
+Environment=PATH=/home/you/.local/share/mise/shims:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/you/.local/share/mise/shims/clojure -M:run
+Restart=on-failure
+```
+
+Put Caddy in front, bound to a high port when `/etc/caddy` is not writable:
+
+```caddyfile
+:8080 {
+	reverse_proxy 127.0.0.1:3000
+}
+```
+
+Do not rewrite `Host`. The server resolves `/.well-known/did.json` from it, so
+a `header_up Host` directive makes the service DID document answer
+`AccountNotFound`. Terminating TLS at Caddy instead needs `pds.example.com`
+in place of `:8080` and nothing else. Behind a Cloudflare Tunnel, point the
+ingress at `http://localhost:8080`; WebSocket upgrades reach
+`subscribeRepos` over HTTP/1.1, and an HTTP/2 request answers `426` by design.
+
+Back up the SQLite file and the master key separately, and read logs with
+`journalctl --user -u clojure-pds` — or `journalctl
+_SYSTEMD_USER_UNIT=clojure-pds.service` on hosts whose per-user journal is
+not written.
+
 ## Docker
 
 `Dockerfile` builds a multi-architecture image that runs the server from

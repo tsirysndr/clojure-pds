@@ -49,7 +49,7 @@ static site; see [docs/README.md](docs/README.md)).
 
 - [Get started](docs/get-started.md) — install, run, master key, account UI
 - [Installation](docs/installation.md) — toolchain, source, Docker image, Nix flake
-- [Deployment](docs/DEPLOYMENT.md) — VPS checklist, Docker image, Nix flake
+- [Deployment](docs/DEPLOYMENT.md) — VPS checklist, systemd unit, Docker image, Nix flake
 - [Configuration](docs/CONFIGURATION.md) — environment variables and migrations
 - [Development](docs/DEVELOPMENT.md) — test suites, CI, REPL
 - [Database pool](docs/DATABASE.md) — connection pool lifecycle and limits
