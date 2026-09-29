@@ -3,7 +3,7 @@
 ```sh
 mise exec -- clojure -M:test        # unit, conformance-fixture, HTTP adapter tests
 bash scripts/test-postgres.sh      # all tests, isolated PostgreSQL 18 cluster
-bash scripts/test-conformance.sh   # plus pinned upstream repository/proof verifier (Node 22+)
+bash scripts/test-conformance.sh   # plus pinned upstream verifiers and client/firehose interop (Node 22+)
 node --test examples/email-worker/handler.test.mjs
 npm run --prefix frontend test     # React account/OAuth pages (vitest + Testing Library)
 bash scripts/test-sqlite.sh        # SQLite-backend portion of the matrix, no database service

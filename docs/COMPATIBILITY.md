@@ -402,6 +402,24 @@ OAuth discovery, browser authorization and DPoP resources are mounted; see
   signed writes, sequence advancement and real WebSocket replay with the upstream
   verifier. It also tests corrupt archives and refusal to overwrite existing data.
   S3 coverage verifies retained object locators, not provider disaster recovery.
+- The official AT Protocol client (`@atproto/api` 0.21.0) drives a running
+  server over HTTP through a full account lifecycle: discovery, account
+  creation, session issue/login, record create/get/list with cursor
+  pagination, blob upload plus a profile record referencing it, blob download,
+  `listMissingBlobs`, repository description, `getLatestCommit`, full CAR
+  export, `listRepos`, deletion with its error shape, and handle resolution.
+  The client validates every response with its own bundled Lexicons and
+  follows the PDS endpoint advertised in the DID document, so a mis-shaped
+  response or a wrong `serviceEndpoint` fails the test.
+- The official firehose consumer (`@atproto/sync` 0.4.11) subscribes to
+  `subscribeRepos` from cursor zero and verifies the stream the way a relay
+  does: `verifyProofs` checks each commit's MST inclusion proofs and signature
+  against the `#atproto` key published in our DID document (the test also
+  asserts that published key matches the repository signing key), and identity
+  events are resolved for a bidirectional handle binding. Observed event kinds
+  are `identity`, `account`, `create` and `delete`. This is interoperability
+  with the deployed implementations on a local server; it does not establish
+  live-network federation with a hosted relay or AppView.
 - Rate limiting defaults to bounded in-memory counters. Optional Redis uses atomic
   expiring counters; real Redis 8.2.3 tests cover concurrent budgets shared by two
   clients, expiry, reopen, isolation and failures. Forwarding headers remain ignored.

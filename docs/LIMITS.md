@@ -64,5 +64,6 @@
   [Optional Redis](REDIS.md) shares counters across instances. Untrusted
   forwarding headers are ignored; reverse proxies need an appropriate limit policy.
 - OAuth, external service/relay interoperability, and production
-  operations remain on the roadmap. A reference Bluesky client/relay has not yet
-  been used for end-to-end conformance testing.
+  operations remain on the roadmap. The official client SDK and firehose
+  consumer are exercised against a local server; a hosted relay or AppView on
+  the live network has not yet consumed this PDS.

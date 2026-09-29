@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@atproto/api": "0.21.0",
     "@atproto/crypto": "0.5.5",
     "@atproto/lex-cbor": "0.1.6",
     "@atproto/lex-data": "0.1.7",
@@ -10,6 +11,7 @@
     "@atproto/oauth-client-node": "0.5.7",
     "@atproto/oauth-scopes": "0.5.12",
     "@atproto/repo": "0.10.14",
+    "@atproto/sync": "0.4.11",
     "@atproto/xrpc-server": "0.13.2",
     "@did-plc/lib": "0.0.4"
   }
