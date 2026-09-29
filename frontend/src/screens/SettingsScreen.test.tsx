@@ -27,6 +27,12 @@ describe("SettingsScreen", () => {
     await user.click(await screen.findByRole("button", { name: /add an authenticator/i }));
     expect(await screen.findByText("JBSWY3DPEHPK3PXP")).toBeInTheDocument();
 
+    // The scannable code and the typed secret are both offered: a camera is not
+    // always available, and the QR carries the same enrollment either way.
+    const qr = await screen.findByTitle(/authenticator setup code/i);
+    expect(qr).toBeInTheDocument();
+    expect(qr.closest("svg")).toBeInTheDocument();
+
     await user.type(screen.getByLabelText(/code from your app/i), "123456");
     await user.click(screen.getByRole("button", { name: /confirm/i }));
 

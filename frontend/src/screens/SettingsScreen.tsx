@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button, Chip, Snippet } from "@heroui/react";
+import { QRCodeSVG } from "qrcode.react";
 import { useAtom } from "jotai";
 import { usePending } from "../pending";
 import {
@@ -307,7 +308,19 @@ export function SettingsScreen({ session }: { session: Session }) {
         ) : enrollment ? (
           <div className="flex flex-col gap-3">
             <p className="text-sm text-default-600">
-              Add this secret to Google Authenticator or a compatible app, then confirm with a code.
+              Scan this with Google Authenticator or a compatible app, then confirm with a code.
+            </p>
+            <figure className="flex flex-col items-center gap-2 self-start rounded-md bg-white p-3">
+              <QRCodeSVG
+                value={enrollment.uri}
+                size={176}
+                level="M"
+                marginSize={0}
+                title="Authenticator setup code"
+              />
+            </figure>
+            <p className="text-sm text-default-600">
+              Cannot scan it? Enter this secret by hand instead.
             </p>
             <Snippet symbol="" radius="sm" className="font-mono text-sm" codeString={enrollment.secret}>
               {enrollment.secret}

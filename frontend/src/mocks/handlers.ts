@@ -64,7 +64,7 @@ export const handlers = [
         scenario.session = loginSession;
         return HttpResponse.json({ stage: "login" });
       case "totp/begin":
-        return success({ secret: "JBSWY3DPEHPK3PXP", uri: "otpauth://totp/demo", "expires-in": 600 });
+        return success({ secret: "JBSWY3DPEHPK3PXP", uri: "otpauth://totp/pds.example.com:alice.example.com?secret=JBSWY3DPEHPK3PXP&issuer=pds.example.com", "expires-in": 600 });
       case "totp/confirm":
         scenario.session = { ...scenario.session, factor: "totp" };
         return success({ "recovery-codes": ["AAAA-BBBB", "CCCC-DDDD"] });
