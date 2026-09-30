@@ -138,7 +138,15 @@
                        (catch Exception error
                          (if (:proxy-storage (ex-data error))
                            (errors/raise! 503 "ProxyUnavailable" "Proxy temporary storage is unavailable")
-                           (errors/raise! 502 "UpstreamFailure" "Upstream service request failed"))))
+                           (do
+                             ;; The client is told only that the upstream failed.
+                             ;; Without this the operator is told nothing at all,
+                             ;; and every upstream fault looks identical.
+                             (binding [*out* *err*]
+                               (println "Proxy upstream request failed:"
+                                        (.getName (class error)) (.getMessage error)
+                                        (some-> (.getCause error) class .getName)))
+                             (errors/raise! 502 "UpstreamFailure" "Upstream service request failed")))))
             status (:status upstream) length (.size channel)]
         (if (and (<= 200 status 299) (not= method :head) (not= status 204))
           (let [input (proxy [FilterInputStream] [(tempfile/input channel)] (close [] (close!)))
