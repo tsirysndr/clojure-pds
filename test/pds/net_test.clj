@@ -96,6 +96,30 @@
           (.load store input (.toCharArray "test-password"))) store)
       (finally (Files/deleteIfExists path) (Files/deleteIfExists directory)))))
 
+(deftest upstream-authentication-challenges-are-not-interpreted
+  ;; A 401 or 407 carrying no challenge header is an ordinary refusal to relay,
+  ;; not a transport fault: the client must not retry it or reject it outright.
+  (let [store (test-keystore)
+        manager (doto (KeyManagerFactory/getInstance (KeyManagerFactory/getDefaultAlgorithm)) (.init store (.toCharArray "test-password")))
+        ssl (doto (SSLContext/getInstance "TLS") (.init (.getKeyManagers manager) nil nil))
+        server (HttpsServer/create (InetSocketAddress. "127.0.0.1" 0) 0)
+        trust (doto (SslContextFactory$Client.) (.setTrustStore store))
+        status (atom 401)]
+    (.setHttpsConfigurator server (HttpsConfigurator. ssl))
+    (.createContext server "/" (reify HttpHandler
+                                 (handle [_ exchange]
+                                   (try (.sendResponseHeaders exchange @status 2)
+                                        (.write (.getResponseBody exchange) (.getBytes "no" "UTF-8"))
+                                        (finally (.close exchange))))))
+    (.start server)
+    (try
+      (with-open [client (net/open-client {:resolver (resolver "127.0.0.1") :address-policy (constantly true) :ssl-context trust})]
+        (let [url (str "https://good.example.com:" (.getPort (.getAddress server)) "/")]
+          (is (= 401 (:status (net/fetch! client url))))
+          (reset! status 407)
+          (is (= 407 (:status (net/fetch! client url))))))
+      (finally (.stop server 0)))))
+
 (deftest pinned-dns-preserves-tls-hostname-verification
   (let [store (test-keystore)
         manager (doto (KeyManagerFactory/getInstance (KeyManagerFactory/getDefaultAlgorithm)) (.init store (.toCharArray "test-password")))

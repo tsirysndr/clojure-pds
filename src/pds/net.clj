@@ -83,6 +83,13 @@
        ;; Never enable transparent compression: callers bound the actual bytes
        ;; received, and reject encoded payloads instead of decompressing bombs.
        (.clear (.getContentDecoderFactories client))
+       ;; Never interpret an upstream authentication challenge. Starting the
+       ;; client installs these, and they retry the request with credentials we
+       ;; do not have and reject a 401 or 407 carrying no challenge header as a
+       ;; protocol violation, turning an ordinary refusal into a transport
+       ;; error. A caller relaying a response needs the status actually sent.
+       (doseq [name ["www-authenticate" "proxy-authenticate"]]
+         (.remove (.getProtocolHandlers client) ^String name))
        (->Client client uri-validator)
        (catch Throwable e (.stop client) (throw e))))))
 
