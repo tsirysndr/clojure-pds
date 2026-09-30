@@ -82,6 +82,19 @@ describe("SignupScreen", () => {
     expect(await screen.findByRole("heading", { name: "erin.example.com" })).toBeInTheDocument();
   });
 
+  it("spins the create button while the request is in flight", async () => {
+    scenario.latency = 200;
+    const user = userEvent.setup();
+    await openSignup(user);
+
+    await fill(user, { username: "Frank", email: "frank@example.com" });
+    const button = screen.getByRole("button", { name: /create account/i });
+    await user.click(button);
+
+    expect(button).toHaveAttribute("data-loading", "true");
+    expect(await screen.findByRole("heading", { name: "frank.example.com" })).toBeInTheDocument();
+  });
+
   it("hides the invite code field when the server does not require one", async () => {
     const user = userEvent.setup();
     await openSignup(user);
