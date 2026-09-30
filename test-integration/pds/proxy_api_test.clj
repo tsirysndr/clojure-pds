@@ -65,7 +65,9 @@
               (is (= method (get claims "lxm")))
               (is (= 60 (- (get claims "exp") (get claims "iat"))))
               (is (crypto/verify "ES256" key message signature))
-              (jwt/upstream! [{:token token :issuer did :audience upstream/audience :method method
+              (jwt/upstream! [{:token token :issuer did
+                                 :audience (first (clojure.string/split upstream/audience #"#" 2))
+                                 :method method
                                :didKey (str "did:key:" (crypto/multikey "ES256" key))}])
               (doseq [header ["cookie" "x-forwarded-for" "atproto-proxy"]]
                 (is (nil? (get-in request [:headers header]))))
