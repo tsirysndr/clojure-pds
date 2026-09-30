@@ -45,7 +45,9 @@
               (is (= 200 (:status response)))
               (is (= (if (= session (:accessJwt bob)) (:did bob) (:did alice)) did))
               (is (crypto/verify "ES256" (:public_key repo) message signature))
-              (is (= aud (get claims "aud")))
+              ;; A service reference names where to deliver; the token is
+              ;; addressed to the service itself, so the fragment is not signed.
+              (is (= (first (clojure.string/split aud #"#" 2)) (get claims "aud")))
               (is (= 401 (:status (call "GET" "com.atproto.server.getSession" nil token))) "Service JWT is not a local session")
               (swap! fixtures conj {:token token :issuer did :audience aud :method method
                                     :didKey (plc/did-key {:algorithm "ES256" :public (:public_key repo)})})))

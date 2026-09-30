@@ -100,8 +100,9 @@
         (let [result (invoke (str service-path "&lxm=com.example.read"))
               claims (:claims (jwt/decode (get-in result [:json "token"])))]
           (is (= 200 (:status result)))
-          (is (= upstream/audience (get claims "aud")))
+          (is (= (first (clojure.string/split upstream/audience #"#" 2)) (get claims "aud")))
           (is (= "com.example.read" (get claims "lxm"))))
         (is (= 200 (:status (invoke "/xrpc/com.example.read"))))
         (is (= 1 (count @calls)))
-        (is (= upstream/audience (get-in (jwt/decode (subs (get-in (first @calls) [:headers "authorization"]) 7)) [:claims "aud"])))))))
+        (is (= (first (clojure.string/split upstream/audience #"#" 2))
+               (get-in (jwt/decode (subs (get-in (first @calls) [:headers "authorization"]) 7)) [:claims "aud"])))))))

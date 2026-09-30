@@ -89,13 +89,17 @@
     (str unsigned "." (crypto/b64 (crypto/sign (:algorithm key) (:private key) (codec/utf8 unsigned))))))
 
 (defn issue! [conn settings account params]
-  (let [now (auth/now) {:keys [audience method expires]} (parameters! params now)]
+  (let [now (auth/now) {:keys [audience method expires]} (parameters! params now)
+        ;; A service reference names the endpoint to deliver to; the token is
+        ;; addressed to the service itself. Signing the fragment makes the
+        ;; receiver reject the audience as not its own DID.
+        recipient (first (str/split audience #"#" 2))]
     (authorize! account method audience)
     (signing-state/ready! conn (:did account))
     (let [repo (first (db/query conn "SELECT signing_key FROM repositories WHERE did = ?" (:did account)))]
       (when-not repo (errors/raise! 400 "RepoNotFound" "Repository was not found"))
       {:token (sign {:algorithm "ES256" :private (crypto/unseal (:master-key settings) (:did account) (:signing_key repo))}
-                    (:did account) audience method now expires)})))
+                    (:did account) recipient method now expires)})))
 
 (defn- invalid! [error message] (errors/raise! 401 error message))
 (defn- decode-segment! [value]

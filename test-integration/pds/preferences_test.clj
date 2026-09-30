@@ -129,7 +129,7 @@
                                          {"atproto-proxy" upstream/audience} nil))))
             (let [claims (:claims (jwt/decode (subs (get-in (last @calls) [:headers "authorization"]) 7)))]
               (is (= get-id (get claims "lxm")))
-              (is (= upstream/audience (get claims "aud"))))
+              (is (= (first (clojure.string/split upstream/audience #"#" 2)) (get claims "aud"))))
             (is (= [future-pref] (get-in (api/xrpc client (:port server) "GET" get-id nil (:accessJwt account)) [:body "preferences"])))
             (is (= 1 (count @calls))))
           (finally ((:stop! server))))))))

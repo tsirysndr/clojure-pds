@@ -60,7 +60,8 @@
               (is (= "GET" (:method request)))
               (is (not= access token))
               (is (= did (get claims "iss")))
-              (is (= upstream/audience (get claims "aud")))
+              (is (= (first (clojure.string/split upstream/audience #"#" 2)) (get claims "aud"))
+                  "The audience is the service DID, not the endpoint reference")
               (is (= method (get claims "lxm")))
               (is (= 60 (- (get claims "exp") (get claims "iat"))))
               (is (crypto/verify "ES256" key message signature))
@@ -85,7 +86,7 @@
               (is (= (vec bytes) (:body (last @calls))))
               (is (= "application/octet-stream" (get-in (last @calls) [:headers "content-type"]))))
             (is (= 200 (:status (call client port "POST" "/xrpc/com.atproto.moderation.createReport" access {} (byte-array 0)))))
-            (is (= (str upstream/service-did "#labeler") (get-in (jwt/decode (subs (get-in (last @calls) [:headers "authorization"]) 7)) [:claims "aud"])))
+            (is (= upstream/service-did (get-in (jwt/decode (subs (get-in (last @calls) [:headers "authorization"]) 7)) [:claims "aud"])))
             (is (= (count @calls) (count (set (map #(get-in (jwt/decode (subs (get-in % [:headers "authorization"]) 7)) [:claims "jti"]) @calls)))))
             (let [before (count @calls)]
               (is (= 200 (:status (call client port "GET" "/xrpc/com.atproto.server.getSession" access {"atproto-proxy" "invalid"} nil))))
