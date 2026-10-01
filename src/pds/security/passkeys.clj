@@ -56,18 +56,47 @@
     (lookupAll [_ id]
       (set (map registered (db/query conn (str credential-sql " WHERE credential_id = ?") (.getBytes ^ByteArray id)))))))
 
+(defn- relying-party-id
+  "The relying party a credential is bound to.
+
+  A credential is bound to its RP ID for life, and a browser only uses one whose
+  RP ID equals the page's own domain or is a parent of it. Left at this host, a
+  credential registered here can never be used from a shared sign-in page in
+  front of several nodes. Configuring the common parent makes one credential
+  work from both. A configured value must still be this host or a parent of it:
+  anything else would claim credentials for a domain this server does not
+  answer for."
+  [settings host]
+  (if-let [configured (some-> (:webauthn-rp-id settings) str/lower-case not-empty)]
+    (if (or (= configured host)
+            (and (str/includes? configured ".") (str/ends-with? host (str "." configured))))
+      configured
+      (throw (ex-info "webauthn-rp-id must be this host or a parent of it"
+                      {:rp-id configured :host host})))
+    host))
+
+(defn- allowed-origins
+  "Origins allowed to run a ceremony, this server's own always among them.
+
+  The page driving the ceremony need not be this node: a console in front of the
+  fleet is a different origin, and clientDataJSON carries the page's origin."
+  [settings own]
+  (into #{own} (keep #(some-> % str/trim not-empty) (:webauthn-origins settings))))
+
 (defn rp-origin [settings]
   (let [url (:public-url settings) uri (try (URI/create url) (catch Exception _ nil))]
     (when-not (and uri (.getHost uri) (nil? (.getUserInfo uri)) (nil? (.getQuery uri)) (nil? (.getFragment uri))
                    (= "" (.getPath uri))
                    (or (= "https" (.getScheme uri)) (and (= "http" (.getScheme uri)) (= "localhost" (.getHost uri)))))
       (throw (ex-info "Passkeys require an HTTPS public origin (localhost HTTP allowed)" {})))
-    {:origin url :rp-id (.getHost uri)}))
+    {:origin url
+     :rp-id (relying-party-id settings (.getHost uri))
+     :origins (allowed-origins settings url)}))
 (defn- relying-party [conn settings]
-  (let [{:keys [origin rp-id]} (rp-origin settings)]
+  (let [{:keys [rp-id origins]} (rp-origin settings)]
     (-> (RelyingParty/builder)
         (.identity (-> (RelyingPartyIdentity/builder) (.id rp-id) (.name "AT Protocol PDS") .build))
-        (.credentialRepository (repository conn)) (.origins #{origin})
+        (.credentialRepository (repository conn)) (.origins origins)
         (.allowOriginPort false) (.allowOriginSubdomain false)
         (.attestationConveyancePreference AttestationConveyancePreference/NONE)
         (.preferredPubkeyParams [PublicKeyCredentialParameters/ES256 PublicKeyCredentialParameters/EdDSA PublicKeyCredentialParameters/RS256])

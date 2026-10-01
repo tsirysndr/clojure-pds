@@ -43,7 +43,15 @@
       (throw (ex-info "PLC signup requires an HTTPS public URL and a resolvable user domain" {})))
     {:user-domain (str/lower-case domain) :public-url (str/replace url #"/$" "")
      :signup-enabled (= "true" signup) :shared-user-domain (= "true" shared)
-     :did-method (keyword method)}))
+     :did-method (keyword method)
+     ;; A credential is bound to its relying party for life, and a browser only
+     ;; uses one whose RP ID is the page's own domain or a parent of it. Set
+     ;; PDS_WEBAUTHN_RP_ID to the domain shared with any sign-in page in front
+     ;; of this node so one credential works from both; PDS_WEBAUTHN_ORIGINS
+     ;; lets that page's origin drive the ceremony.
+     :webauthn-rp-id (some-> (get env "PDS_WEBAUTHN_RP_ID") str/trim not-empty)
+     :webauthn-origins (->> (str/split (get env "PDS_WEBAUTHN_ORIGINS" "") #",")
+                            (keep #(some-> % str/trim not-empty)))}))
 
 (defn public-account [account]
   (cond-> {:did (:did account) :handle (:handle account) :email (:email account)
