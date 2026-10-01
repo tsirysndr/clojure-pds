@@ -11,8 +11,11 @@
   proves the session, not the owner, and a stolen session must not be able to
   take the second factor off or register a credential of its own."
   (:require [clojure.string :as str]
+            [pds.accounts :as accounts]
             [pds.api.server :as server]
+            [pds.auth :as auth]
             [pds.crypto :as crypto]
+            [pds.db :as db]
             [pds.errors :as errors]
             [pds.request :as request]
             [pds.security.factors :as factors]
@@ -65,6 +68,27 @@
     (:name credential) (assoc "name" (:name credential))
     (:created-at credential) (assoc "createdAt" (:created-at credential))
     (:last-used-at credential) (assoc "lastUsedAt" (:last-used-at credential))))
+
+(defn- account-for!
+  "The account a sign-in names. A passkey challenge is offered per account here,
+  so the identifier is required rather than optional."
+  [conn identifier]
+  (when-not (string? identifier)
+    (errors/raise! 400 "InvalidRequest" "identifier is required to sign in with a passkey"))
+  (or (first (db/query conn "SELECT * FROM accounts WHERE did = ? OR handle = ?"
+                       (str/lower-case identifier) (str/lower-case identifier)))
+      ;; Same answer whether the account is absent or has no passkey: a sign-in
+      ;; endpoint must not say who exists.
+      (errors/raise! 401 "AccountNotFound" "No passkey is registered for that account")))
+
+(defn- second-factor!
+  "A passkey replaces the password, not a factor on top of it."
+  [conn settings did body]
+  (when (factors/enabled? conn did)
+    (let [supplied (or (get body "totpCode") (get body "authFactorToken"))]
+      (when-not supplied
+        (errors/raise! 401 "AuthFactorTokenRequired" "A two-factor code is required"))
+      (raise-result! (factors/verify! conn settings did supplied)))))
 
 (defn routes [ds settings]
   (let [authed (fn [options f] (server/authenticated ds settings options f))
@@ -149,6 +173,36 @@
                         (errors/raise! (or (:status result) 401) error "Passkey was not accepted"))
                       {"passkey" (passkey-view {:id (:credential-id result)
                                                 :name (:label result)})}))))
+
+     ;; Signing in with a passkey. Unauthenticated: this is how a session begins.
+     "/xrpc/social.rocksky.auth.beginPasskeyLogin"
+     (server/json-route :post
+       (fn [r]
+         (db/transact! ds
+           (fn [conn]
+             (let [body (or (request/json-body r) {})
+                   account (account-for! conn (get body "identifier"))
+                   browser (crypto/token)
+                   ceremony (passkeys/begin-authentication! conn settings (:did account) browser)]
+               {"requestId" (request-id {:id (:id ceremony) :browser browser})
+                "publicKey" (:options ceremony)})))))
+
+     "/xrpc/social.rocksky.auth.finishPasskeyLogin"
+     (server/json-route :post
+       (fn [r]
+         (db/transact! ds
+           (fn [conn]
+             (let [body (or (request/json-body r) {})
+                   [id browser] (split-request-id (get body "requestId"))
+                   result (passkeys/finish-authentication! conn settings id browser
+                                                           (get body "credential"))]
+               (when-let [error (:error result)]
+                 (errors/raise! (or (:status result) 401) error "That passkey was not accepted"))
+               (let [did (:did result)
+                     account (first (db/query conn "SELECT * FROM accounts WHERE did = ? FOR UPDATE" did))]
+                 (second-factor! conn settings did body)
+                 (merge (accounts/public-account account)
+                        (auth/issue! conn settings did nil))))))))
 
      "/xrpc/social.rocksky.auth.deletePasskey"
      (server/empty-route

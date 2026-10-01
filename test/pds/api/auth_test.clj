@@ -13,12 +13,14 @@
              ["listPasskeys" :get]
              ["beginPasskeyRegistration" :post]
              ["finishPasskeyRegistration" :post]
-             ["deletePasskey" :post]]]
+             ["deletePasskey" :post]
+             ["beginPasskeyLogin" :post]
+             ["finishPasskeyLogin" :post]]]
       (let [route (get routes (str "/xrpc/social.rocksky.auth." nsid))]
         (is (some? route) (str nsid " is not routed"))
         (is (= method (:method route)) (str nsid " has the wrong method"))
         (is (fn? (:handler route)))))
-    (is (= 9 (count routes)) "the contract has nine methods")))
+    (is (= 11 (count routes)) "the contract has eleven methods")))
 
 (deftest a_request_id_carries_both_halves_of_the_ceremony
   (let [encode #'auth/request-id
