@@ -75,7 +75,11 @@
         added (act settings started "passkeys/finish" payload)
         credential (get fixture "credential")]
     (is (= "Laptop" (get-in added [:view :passkeys 0 :name])))
-    (is (not= (:token authenticated) (:token added)))
+    ;; Adding a passkey keeps the owner signed in: the browser session that just
+    ;; proved the password is not rotated away, matching the other
+    ;; implementations behind the shared console. Login-stage transitions still
+    ;; rotate tokens; this is not one.
+    (is (= (:token authenticated) (:token added)))
     (let [begin (act settings (open) "login/passkey/begin" {"identifier" owner/did})
           response (authenticator/authenticator (get-in begin [:result :options]) :mode "authenticate" :credential credential)
           signed-in (act settings begin "login/passkey/finish" {"id" (get-in begin [:result :id]) "response" (json/write-str (get response "response"))})]

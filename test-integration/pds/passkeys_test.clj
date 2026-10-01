@@ -46,8 +46,11 @@
       (is (= 3 (count credentials)))
       (is (every? :last-used-at credentials))
       (is (every? #(= "My device" (:name %)) credentials))
-      (is (= 3 (rows/scalar "SELECT oauth_epoch AS n FROM accounts"))))
-    (is (= 0 (rows/scalar "SELECT count(*) AS n FROM sessions WHERE NOT revoked")))
+      ;; Adding a way in must not throw the owner out: the epoch stays where it
+      ;; was and the session that did the registering survives, as on the other
+      ;; implementations behind the shared console.
+      (is (= 0 (rows/scalar "SELECT oauth_epoch AS n FROM accounts"))))
+    (is (= 1 (rows/scalar "SELECT count(*) AS n FROM sessions WHERE NOT revoked")))
     (is (= 1 (rows/scalar "SELECT count(*) AS n FROM account_webauthn_users")))
     (is (= 3 (rows/scalar "SELECT count(*) AS n FROM account_passkeys WHERE signature_count = 1")))))
 
@@ -115,7 +118,11 @@
     (let [started (start-authentication settings browser)
           response (get (authenticator (:options started) :mode "authenticate" :credential credential) "response")]
       (is (= {:removed true} (tx #(passkeys/remove! % browser/did (get credential "id")))))
-      (is (= "InvalidPasskey" (browser/error #(finish-authentication settings started browser response))))
+      ;; Removal no longer bumps the epoch (the owner keeps their sessions), so
+      ;; the pending ceremony is refused one step later: the credential is gone
+      ;; from the repository, and the verifier reports that as data rather than
+      ;; raising at the claim.
+      (is (= "InvalidPasskey" (:error (finish-authentication settings started browser response))))
       (is (= [] (tx #(passkeys/list-credentials % browser/did)))))))
 
 (deftest concurrent-finish-and-rollback
