@@ -110,7 +110,12 @@
                      (passkeys/finish-registration! conn settings (:id ceremony) browser (as-json credential))))]
         (is (= (b64url cred-id) (:credential-id result))
             (str "registration refused: " (pr-str result)))
-        (is (= "Macbook Air" (:label result)))))
+        (is (= "Macbook Air" (:label result)))
+        ;; Adding a way in must not throw the owner out: the epoch that sessions,
+        ;; grants and outstanding challenges hang off stays where it was, as on
+        ;; the other implementations.
+        (is (= 0 (db/transact! ds (fn [conn]
+                   (:oauth_epoch (first (db/query conn "SELECT oauth_epoch FROM accounts WHERE did = ?" did)))))))))
 
     (testing "signing in with that credential, same origin"
       (let [browser (crypto/token)

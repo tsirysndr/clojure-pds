@@ -172,10 +172,6 @@
         (when-not (and (map? data) (or (not (contains? data "crossOrigin")) (false? (get data "crossOrigin")))
                        (not (contains? data "topOrigin"))) (invalid!)))))
   value)
-(defn- invalidate! [conn did]
-  (db/execute! conn "UPDATE accounts SET oauth_epoch = oauth_epoch + 1 WHERE did = ?" did)
-  (db/execute! conn "UPDATE sessions SET revoked = true WHERE did = ?" did)
-  (db/execute! conn "DELETE FROM app_passwords WHERE did = ?" did))
 (defn- verified [f]
   ;; Untrusted ceremony responses may fail JSON, CBOR, key or signature validation.
   ;; Do not include their payloads in errors returned to the browser.
@@ -209,8 +205,11 @@
                                   id did (:label row) key (.getSignatureCount registration) (.isBackupEligible registration) (.isBackedUp registration)
                                   (json/write-str (mapv #(.getId %) (.orElse (.getTransports (.getKeyId registration)) #{})))))
             {:error "InvalidPasskey" :status 401}
-            (do (invalidate! conn did)
-                {:credential-id (crypto/b64 id) :label (:label row)})))))))
+            ;; Adding a way in must not throw the owner out. The caller just
+            ;; proved the password on a full session, and the other
+            ;; implementations keep sessions, app passwords and grants intact,
+            ;; so revoking them here only breaks the shared console.
+            {:credential-id (crypto/b64 id) :label (:label row)}))))))
 
 (defn finish-authentication!
   "Return a user-verified principal for the caller to consume in this transaction.
@@ -242,5 +241,4 @@
   (let [id (try (when (and (string? credential-id) (<= 1 (count credential-id) 1364)) (crypto/unb64 credential-id)) (catch Exception _ nil))]
     (when-not (and id (pos? (db/execute! conn "DELETE FROM account_passkeys WHERE did = ? AND credential_id = ?" did id)))
       (errors/raise! 400 "PasskeyNotFound" "Passkey was not found"))
-    (invalidate! conn did)
     {:removed true}))
