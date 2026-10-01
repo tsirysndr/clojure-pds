@@ -1,0 +1,35 @@
+{
+  "lexicon": 1,
+  "id": "social.rocksky.auth.defs",
+  "defs": {
+    "twoFactorState": {
+      "type": "string",
+      "description": "disabled: no secret enrolled. pending: a secret exists but has not been confirmed. enabled: in force.",
+      "knownValues": ["disabled", "pending", "enabled"]
+    },
+    "twoFactorStatus": {
+      "type": "object",
+      "required": ["state"],
+      "properties": {
+        "state": { "type": "ref", "ref": "#twoFactorState" },
+        "recoveryRemaining": {
+          "type": "integer",
+          "description": "Unused recovery codes left."
+        }
+      }
+    },
+    "passkey": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The credential id, base64url, as WebAuthn reports it."
+        },
+        "name": { "type": "string" },
+        "createdAt": { "type": "string", "format": "datetime" },
+        "lastUsedAt": { "type": "string", "format": "datetime" }
+      }
+    }
+  }
+}

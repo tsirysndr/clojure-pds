@@ -5,6 +5,7 @@
             [pds.api.admin :as admin-api]
             [pds.api.identity :as identity-api]
             [pds.api.repo :as repo-api]
+            [pds.api.auth :as auth-api]
             [pds.api.preferences :as preferences-api]
             [pds.api.blob :as blob-api]
             [pds.api.sync :as sync-api]
@@ -29,6 +30,7 @@
          fallback (if ds (proxy/handler ds config)
                       (fn [_] (xrpc/error-response 404 "MethodNotImplemented" "Endpoint is not implemented")))
          routes (merge (when ds (server-api/routes ds config))
+                       (when ds (auth-api/routes ds config))
                        (when ds (preferences-api/routes ds config fallback))
                        (when ds (identity-api/routes ds config))
                        (when ds (admin-api/routes ds config))

@@ -20,6 +20,14 @@
 (defn enabled? [conn did]
   (boolean (seq (db/query conn "SELECT 1 FROM account_totp WHERE did = ? AND confirmed" did))))
 (defn- row [conn did] (first (db/query conn "SELECT * FROM account_totp WHERE did = ?" did)))
+(defn status
+  "The factor's state, for presentation. An unconfirmed enrollment counts as
+  pending: the account still authenticates with its password alone until the
+  owner proves possession of the secret."
+  [conn did]
+  (let [factor (row conn did)]
+    {:state (cond (nil? factor) "disabled" (:confirmed factor) "enabled" :else "pending")
+     :recovery-remaining (:n (first (db/query conn "SELECT count(*) AS n FROM account_recovery_codes WHERE did = ?" did)))}))
 (defn- invalidate! [conn did]
   (db/execute! conn "UPDATE accounts SET oauth_epoch = oauth_epoch + 1 WHERE did = ?" did)
   (db/execute! conn "UPDATE sessions SET revoked = true WHERE did = ?" did)
@@ -90,6 +98,15 @@
             (invalidate! conn did)
             {:recovery-codes (recovery-codes! conn did)})
         result))))
+
+(defn regenerate!
+  "Replace the recovery codes. Requires a current proof for the same reason
+  disabling does: the codes are themselves a way past the factor."
+  [conn settings did supplied]
+  (let [result (verify! conn settings did supplied)]
+    (if (:valid? result)
+      {:recovery-codes (recovery-codes! conn did)}
+      result)))
 
 (defn disable!
   "Management must separately require recent primary authentication. A current
