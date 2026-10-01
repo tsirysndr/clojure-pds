@@ -1,3 +1,4 @@
+import { AuthBackdrop } from "./AuthBackdrop";
 import type { ReactNode } from "react";
 import { Card, CardBody } from "@heroui/react";
 import { IconCloudLock } from "@tabler/icons-react";
@@ -19,7 +20,10 @@ export type AuthCardProps = {
 
 export function AuthCard({ title, subtitle, service, width = "narrow", children, footer }: AuthCardProps) {
   return (
-    <div className="flex min-h-svh flex-col items-center justify-center gap-4 px-4 py-8 sm:py-12">
+    <>
+      <AuthBackdrop />
+      {/* Above the backdrop, which is fixed at z-0. */}
+      <div className="relative z-10 flex min-h-svh flex-col items-center justify-center gap-4 px-4 py-8 sm:py-12">
       <Card
         className={`w-full ${widths[width]} border border-default-200/60 bg-content1 shadow-sm`}
         shadow="none"
@@ -47,5 +51,6 @@ export function AuthCard({ title, subtitle, service, width = "narrow", children,
 
       {footer ? <div className="flex w-full max-w-[26rem] flex-col items-center gap-3">{footer}</div> : null}
     </div>
+    </>
   );
 }
