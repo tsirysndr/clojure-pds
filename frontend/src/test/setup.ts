@@ -1,3 +1,8 @@
+import { setupI18n } from "../i18n";
+
+// Tests assert user-visible English text, so the fixture language is pinned.
+setupI18n("en");
+
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, vi } from "vitest";

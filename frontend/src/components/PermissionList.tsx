@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { IconShieldCheck } from "@tabler/icons-react";
 import type { PermissionSet } from "../api";
 
@@ -8,10 +9,11 @@ export function PermissionList({
   permissions: string[];
   permissionSets: PermissionSet[];
 }) {
+  const { t } = useTranslation();
   const entries = permissions.filter(Boolean);
 
   return (
-    <section aria-label="Requested permissions" className="flex flex-col gap-3">
+    <section aria-label={t("authorize.requestedPermissions")} className="flex flex-col gap-3">
       {entries.length > 0 ? (
         <ul className="flex flex-col gap-2">
           {entries.map((entry) => (
@@ -29,7 +31,7 @@ export function PermissionList({
           className="rounded-xl border border-default-200 bg-default-50/60 p-3"
         >
           <summary className="cursor-pointer text-sm font-medium">
-            {set.title ?? set.nsid ?? "Permission set"}
+            {set.title ?? set.nsid ?? t("authorize.permissionSet")}
           </summary>
           <ul className="mt-2 flex flex-col gap-1.5 border-t border-default-200 pt-2">
             {set.permissions.map((entry) => (
@@ -44,7 +46,7 @@ export function PermissionList({
 
       {entries.length === 0 && permissionSets.length === 0 ? (
         <p className="text-sm text-default-500">
-          This application only confirms your account identity.
+          {t("authorize.identityOnly")}
         </p>
       ) : null}
     </section>

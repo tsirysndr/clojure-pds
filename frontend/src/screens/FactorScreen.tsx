@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@heroui/react";
@@ -17,12 +18,13 @@ export function FactorScreen({
   session: Session;
   onAuthenticated: () => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const action = useAction();
   const { run, buttonProps, notice } = usePending();
   const email = session.factor === "email";
 
   const form = useForm<FactorValues>({
-    resolver: zodResolver(factorSchema),
+    resolver: zodResolver(factorSchema(t)),
     defaultValues: { code: "" },
   });
 
@@ -35,20 +37,20 @@ export function FactorScreen({
 
   return (
     <AuthCard
-      title="Confirm it's you"
+      title={t("factor.title")}
       service={session.origin}
       subtitle={
         email
-          ? `We emailed a one-time code for ${session.handle ?? "your account"}.`
-          : "Enter the code from your authenticator app or a recovery code."
+          ? t("factor.emailSubtitle", { handle: session.handle ?? t("factor.yourAccount") })
+          : t("factor.totpSubtitle")
       }
     >
       {notice ? <Alert tone={notice.tone}>{notice.text}</Alert> : null}
 
       <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4" noValidate>
         <TextField
-          label={email ? "Email code" : "Authenticator code"}
-          placeholder={email ? "Code from your email" : "123456"}
+          label={email ? t("factor.emailCode") : t("factor.totpCode")}
+          placeholder={email ? t("factor.emailPlaceholder") : "123456"}
           registration={form.register("code")}
           error={form.formState.errors.code}
           startContent={<IconShieldLock size={18} stroke={1.75} className="text-default-400" aria-hidden />}
@@ -59,7 +61,7 @@ export function FactorScreen({
         />
 
         <Button type="submit" color="primary" size="lg" radius="sm" {...buttonProps("factor")} className="font-medium">
-          Continue
+          {t("common.continue")}
         </Button>
       </form>
     </AuthCard>

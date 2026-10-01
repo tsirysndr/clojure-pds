@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Button } from "@heroui/react";
 import type { Flow, Session } from "../api";
 import { useFlowAction } from "../api";
@@ -9,6 +10,7 @@ import { PermissionList } from "../components/PermissionList";
 import { usePending } from "../pending";
 
 export function AuthorizeScreen({ flow, session }: { flow: Flow; session: Session }) {
+  const { t } = useTranslation();
   const flowAction = useFlowAction();
   const { run, buttonProps, notice } = usePending();
 
@@ -19,7 +21,7 @@ export function AuthorizeScreen({ flow, session }: { flow: Flow; session: Sessio
     });
 
   return (
-    <AuthCard title="Authorize access" service={session.origin} width="wide">
+    <AuthCard title={t("authorize.title")} service={session.origin} width="wide">
       <ClientPanel clientId={flow["client-id"]} handle={session.handle ?? flow.did} />
 
       {notice ? <Alert tone={notice.tone}>{notice.text}</Alert> : null}
@@ -35,7 +37,7 @@ export function AuthorizeScreen({ flow, session }: { flow: Flow; session: Sessio
           {...buttonProps("approve")}
           onPress={() => void decide(true)}
         >
-          Allow access
+          {t("authorize.allow")}
         </Button>
         <Button
           variant="bordered"
@@ -45,12 +47,12 @@ export function AuthorizeScreen({ flow, session }: { flow: Flow; session: Sessio
           {...buttonProps("deny")}
           onPress={() => void decide(false)}
         >
-          Deny
+          {t("authorize.deny")}
         </Button>
       </div>
 
       <p className="text-center text-xs text-default-400">
-        You can revoke this application later from your account page.
+        {t("authorize.revokeNote")}
       </p>
     </AuthCard>
   );
@@ -67,17 +69,18 @@ export function ContinueScreen({
   onContinue: () => Promise<void>;
   onSwitchAccount: () => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const { run, buttonProps, notice } = usePending();
   const freshLogin = flow.parameters.prompt === "login";
 
   return (
-    <AuthCard title="Continue to the application" service={session.origin}>
+    <AuthCard title={t("authorize.continueTitle")} service={session.origin}>
       <ClientPanel clientId={flow["client-id"]} handle={session.handle} />
 
       {notice ? <Alert tone={notice.tone}>{notice.text}</Alert> : null}
 
       {freshLogin ? (
-        <Alert tone="info">This application asks you to sign in again to continue.</Alert>
+        <Alert tone="info">{t("authorize.signInAgainNote")}</Alert>
       ) : null}
 
       <div className="flex flex-col gap-2">
@@ -89,10 +92,10 @@ export function ContinueScreen({
           {...buttonProps("continue")}
           onPress={() => void run("continue", freshLogin ? onSwitchAccount : onContinue)}
         >
-          {freshLogin ? "Sign in again" : `Continue as ${session.handle ?? "this account"}`}
+          {freshLogin ? t("authorize.signInAgain") : t("authorize.continueAs", { handle: session.handle ?? t("authorize.thisAccount") })}
         </Button>
         <Button variant="bordered" size="lg" radius="sm" {...buttonProps("switch")} onPress={() => void run("switch", onSwitchAccount)}>
-          Use another account
+          {t("authorize.useAnother")}
         </Button>
       </div>
     </AuthCard>

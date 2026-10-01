@@ -1,9 +1,11 @@
+import { useTranslation } from "react-i18next";
 import { IconApps, IconUserCircle } from "@tabler/icons-react";
 
 export function ClientPanel({ clientId, handle }: { clientId: string; handle?: string | null }) {
+  const { t } = useTranslation();
   return (
     <section
-      aria-label="Application"
+      aria-label={t("authorize.application")}
       className="flex flex-col gap-3 rounded-xl border border-default-200 bg-default-50/60 p-4"
     >
       <div className="flex items-start gap-3">
@@ -12,7 +14,7 @@ export function ClientPanel({ clientId, handle }: { clientId: string; handle?: s
         </span>
         <div className="min-w-0">
           <p className="text-sm font-semibold wrap-anywhere">{clientId}</p>
-          <p className="text-xs text-default-500">wants to access your account</p>
+          <p className="text-xs text-default-500">{t("authorize.wantsAccess")}</p>
         </div>
       </div>
 

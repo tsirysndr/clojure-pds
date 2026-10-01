@@ -2,6 +2,17 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 import { App } from "./App";
+import { detectLanguage, setupI18n } from "./i18n";
+
+const storedLanguage = (() => {
+  try {
+    return JSON.parse(localStorage.getItem("clojure-pds.language") ?? '""') as string;
+  } catch {
+    return null;
+  }
+})();
+
+setupI18n(detectLanguage(storedLanguage || null, navigator.languages ?? [navigator.language]));
 
 // HeroUI's dark theme keys off a .dark class; follow the system preference.
 const scheme = window.matchMedia("(prefers-color-scheme: dark)");

@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -53,6 +54,7 @@ function timestamp(value: string | null | undefined): string {
 }
 
 export function SettingsScreen({ session }: { session: Session }) {
+  const { t } = useTranslation();
   const action = useAction();
   const { busy, pending: pendingAction, run, buttonProps, notice, show } = usePending();
   const pendingIs = (label: string) => pendingAction === label;
@@ -61,13 +63,13 @@ export function SettingsScreen({ session }: { session: Session }) {
   const [sessions, setSessions] = useState<SessionList | null>(null);
 
   const passkeyForm = useForm<PasskeyNameValues>({
-    resolver: zodResolver(passkeyNameSchema),
+    resolver: zodResolver(passkeyNameSchema(t)),
     defaultValues: { name: "" },
   });
-  const totpForm = useForm<TotpCodeValues>({ resolver: zodResolver(totpCodeSchema), defaultValues: { code: "" } });
-  const disableForm = useForm<TotpCodeValues>({ resolver: zodResolver(totpCodeSchema), defaultValues: { code: "" } });
+  const totpForm = useForm<TotpCodeValues>({ resolver: zodResolver(totpCodeSchema(t)), defaultValues: { code: "" } });
+  const disableForm = useForm<TotpCodeValues>({ resolver: zodResolver(totpCodeSchema(t)), defaultValues: { code: "" } });
   const recoveryForm = useForm<RecoveryKeysValues>({
-    resolver: zodResolver(recoveryKeysSchema),
+    resolver: zodResolver(recoveryKeysSchema(t)),
     defaultValues: { keys: "", code: "" },
   });
 
@@ -83,7 +85,7 @@ export function SettingsScreen({ session }: { session: Session }) {
         body: { id: started.id, response: credentialJSON(credential) },
       });
       passkeyForm.reset();
-      show("Passkey added. You can use it the next time you sign in.");
+      show(t("settings.passkeyAdded"));
     }),
   );
 
@@ -99,16 +101,16 @@ export function SettingsScreen({ session }: { session: Session }) {
       setEnrollment(null);
       totpForm.reset();
       setRecoveryCodes((result["recovery-codes"] as string[]) ?? []);
-      show("Authenticator enabled. Save your recovery codes before leaving.");
+      show(t("settings.totpEnabled"));
     }),
   );
 
   const disableTotp = disableForm.handleSubmit((values) =>
     run("totp-disable", async () => {
-      if (!window.confirm("Remove your authenticator and invalidate its recovery codes?")) return;
+      if (!window.confirm(t("settings.totpOffConfirm"))) return;
       await action.mutateAsync({ action: "totp/disable", body: values });
       disableForm.reset();
-      show("Authenticator removed.");
+      show(t("settings.totpRemoved"));
     }),
   );
 
@@ -129,8 +131,8 @@ export function SettingsScreen({ session }: { session: Session }) {
         .map((key) => key.trim())
         .filter(Boolean);
       const question = keys.length
-        ? "Replace your identity recovery keys with this ordered list?"
-        : "Remove all independent identity recovery keys? The server keeps its control key.";
+        ? t("settings.replaceConfirm")
+        : t("settings.removeConfirm");
       if (!window.confirm(question)) return;
       const result = await action.mutateAsync({
         action: "identity/recovery/change",
@@ -139,10 +141,10 @@ export function SettingsScreen({ session }: { session: Session }) {
       recoveryForm.reset();
       show(
         result.state === "completed"
-          ? "Recovery keys updated."
+          ? t("settings.keysUpdated")
           : result.state === "unchanged"
-            ? "These recovery keys are already configured."
-            : "Your change is saved. Refresh its status or retry the saved change.",
+            ? t("settings.keysAlready")
+            : t("settings.changeSaved"),
       );
     }),
   );
@@ -177,7 +179,7 @@ export function SettingsScreen({ session }: { session: Session }) {
             })
           }
         >
-          Sign out
+          {t("common.signOut")}
         </Button>
       </header>
 
@@ -185,9 +187,9 @@ export function SettingsScreen({ session }: { session: Session }) {
 
       {recoveryCodes ? (
         <section className="flex flex-col gap-3 rounded-xl border border-primary-300 bg-brand-soft/60 p-5 dark:bg-primary-500/10">
-          <h2 className="text-sm font-semibold">Recovery codes</h2>
+          <h2 className="text-sm font-semibold">{t("settings.recoveryCodes")}</h2>
           <p className="text-sm text-default-600">
-            Save these one-time codes somewhere safe. Each unlocks your account once if you lose the authenticator.
+            {t("settings.recoveryCodesBody")}
           </p>
           <Snippet symbol="" radius="sm" className="font-mono text-sm" codeString={recoveryCodes.join("\n")}>
             <div className="flex flex-col">
@@ -197,15 +199,15 @@ export function SettingsScreen({ session }: { session: Session }) {
             </div>
           </Snippet>
           <Button size="sm" variant="bordered" radius="sm" className="self-start" onPress={() => setRecoveryCodes(null)}>
-            I saved them
+            {t("settings.savedThem")}
           </Button>
         </section>
       ) : null}
 
       {session["passkeys-available"] ? (
-        <Section icon={<IconFingerprint size={18} stroke={1.75} aria-hidden />} title="Passkeys">
+        <Section icon={<IconFingerprint size={18} stroke={1.75} aria-hidden />} title={t("settings.passkeys")}>
           {(session.passkeys ?? []).length === 0 ? (
-            <p className="text-sm text-default-500">No passkeys yet. Add one to sign in without a password.</p>
+            <p className="text-sm text-default-500">{t("settings.noPasskeys")}</p>
           ) : (
             <ul className="flex flex-col divide-y divide-default-100">
               {(session.passkeys ?? []).map((passkey) => (
@@ -213,7 +215,7 @@ export function SettingsScreen({ session }: { session: Session }) {
                   <div className="min-w-0">
                     <p className="text-sm font-medium wrap-anywhere">{passkey.name}</p>
                     <p className="text-xs text-default-500">
-                      Added {timestamp(passkey["created-at"])} · Last used {timestamp(passkey["last-used-at"])}
+                      {t("settings.addedUsed", { added: timestamp(passkey["created-at"]), used: timestamp(passkey["last-used-at"]) })}
                     </p>
                   </div>
                   <Button
@@ -222,13 +224,13 @@ export function SettingsScreen({ session }: { session: Session }) {
                     variant="light"
                     color="danger"
                     radius="full"
-                    aria-label={`Remove passkey ${passkey.name}`}
+                    aria-label={t("settings.removePasskeyAria", { name: passkey.name })}
                     {...buttonProps(`passkey-remove-${passkey.id}`)}
                     onPress={() =>
                       void run(`passkey-remove-${passkey.id}`, async () => {
-                        if (!window.confirm(`Remove the passkey "${passkey.name}"?`)) return;
+                        if (!window.confirm(t("settings.removePasskeyConfirm", { name: passkey.name }))) return;
                         await action.mutateAsync({ action: "passkeys/remove", body: { id: passkey.id } });
-                        show("Passkey removed.");
+                        show(t("settings.passkeyRemoved"));
                       })
                     }
                   >
@@ -242,33 +244,33 @@ export function SettingsScreen({ session }: { session: Session }) {
           <form onSubmit={(event) => void addPasskey(event)} className="flex items-end gap-2" noValidate>
             <div className="flex-1">
               <TextField
-                label="New passkey name"
-                placeholder="This device"
+                label={t("settings.newPasskeyName")}
+                placeholder={t("settings.newPasskeyPlaceholder")}
                 registration={passkeyForm.register("name")}
                 error={passkeyForm.formState.errors.name}
                 maxLength={64}
               />
             </div>
             <Button type="submit" color="primary" radius="sm" className="h-12" {...buttonProps("passkey-add")}>
-              Add passkey
+              {t("settings.addPasskey")}
             </Button>
           </form>
         </Section>
       ) : null}
 
-      <Section icon={<IconShieldLock size={18} stroke={1.75} aria-hidden />} title="Two-factor authentication">
+      <Section icon={<IconShieldLock size={18} stroke={1.75} aria-hidden />} title={t("settings.twoFactor")}>
         {session.factor === "totp" ? (
           <>
             <div className="flex items-center gap-2 text-sm text-default-600">
               <Chip size="sm" color="success" variant="flat">
-                Enabled
+                {t("settings.enabled")}
               </Chip>
-              An authenticator app protects your sign-in.
+              {t("settings.totpProtects")}
             </div>
             <form onSubmit={(event) => void disableTotp(event)} className="flex items-end gap-2" noValidate>
               <div className="flex-1">
                 <TextField
-                  label="Current code"
+                  label={t("settings.currentCode")}
                   placeholder="123456"
                   registration={disableForm.register("code")}
                   error={disableForm.formState.errors.code}
@@ -278,7 +280,7 @@ export function SettingsScreen({ session }: { session: Session }) {
                 />
               </div>
               <Button type="submit" color="danger" variant="flat" radius="sm" className="h-12" {...buttonProps("totp-disable")}>
-                Remove
+                {t("common.remove")}
               </Button>
             </form>
           </>
@@ -286,7 +288,7 @@ export function SettingsScreen({ session }: { session: Session }) {
           <>
             <p className="flex items-center gap-2 text-sm text-default-600">
               <IconMail size={16} stroke={1.75} aria-hidden />
-              Email verification codes protect your sign-in.
+              {t("settings.emailProtects")}
             </p>
             <Button
               color="danger"
@@ -296,19 +298,19 @@ export function SettingsScreen({ session }: { session: Session }) {
               {...buttonProps("email-off")}
               onPress={() =>
                 void run("email-off", async () => {
-                  if (!window.confirm("Turn off email verification for sign-in?")) return;
+                  if (!window.confirm(t("settings.emailOffConfirm"))) return;
                   await action.mutateAsync({ action: "email/disable" });
-                  show("Email verification turned off. You can now add an authenticator.");
+                  show(t("settings.emailOffDone"));
                 })
               }
             >
-              Turn off email verification
+              {t("settings.turnOffEmail")}
             </Button>
           </>
         ) : enrollment ? (
           <div className="flex flex-col gap-3">
             <p className="text-sm text-default-600">
-              Scan this with Google Authenticator or a compatible app, then confirm with a code.
+              {t("settings.scanThis")}
             </p>
             <figure className="flex flex-col items-center gap-2 self-start rounded-md bg-white p-3">
               <QRCodeSVG
@@ -316,11 +318,11 @@ export function SettingsScreen({ session }: { session: Session }) {
                 size={176}
                 level="M"
                 marginSize={0}
-                title="Authenticator setup code"
+                title={t("settings.qrTitle")}
               />
             </figure>
             <p className="text-sm text-default-600">
-              Cannot scan it? Enter this secret by hand instead.
+              {t("settings.cannotScan")}
             </p>
             <Snippet symbol="" radius="sm" className="font-mono text-sm" codeString={enrollment.secret}>
               {enrollment.secret}
@@ -328,7 +330,7 @@ export function SettingsScreen({ session }: { session: Session }) {
             <form onSubmit={(event) => void confirmTotp(event)} className="flex items-end gap-2" noValidate>
               <div className="flex-1">
                 <TextField
-                  label="Code from your app"
+                  label={t("settings.codeFromApp")}
                   placeholder="123456"
                   registration={totpForm.register("code")}
                   error={totpForm.formState.errors.code}
@@ -338,14 +340,14 @@ export function SettingsScreen({ session }: { session: Session }) {
                 />
               </div>
               <Button type="submit" color="primary" radius="sm" className="h-12" {...buttonProps("totp-confirm")}>
-                Confirm
+                {t("common.confirm")}
               </Button>
             </form>
           </div>
         ) : (
           <>
             <p className="text-sm text-default-500">
-              Protect sign-in with one-time codes from an authenticator app.
+              {t("settings.protectHint")}
             </p>
             <Button
               color="primary"
@@ -356,22 +358,22 @@ export function SettingsScreen({ session }: { session: Session }) {
               startContent={<IconDeviceMobile size={16} stroke={1.75} />}
               onPress={() => void beginTotp()}
             >
-              Add an authenticator
+              {t("settings.addAuthenticator")}
             </Button>
           </>
         )}
       </Section>
 
-      <Section icon={<IconPlugConnected size={18} stroke={1.75} aria-hidden />} title="Connected applications">
+      <Section icon={<IconPlugConnected size={18} stroke={1.75} aria-hidden />} title={t("settings.connectedApps")}>
         {!shown || shown.items.length === 0 ? (
-          <p className="text-sm text-default-500">No applications are connected through OAuth.</p>
+          <p className="text-sm text-default-500">{t("settings.noApps")}</p>
         ) : (
           <ul className="flex flex-col divide-y divide-default-100">
             {shown.items.map((entry) => (
               <li key={entry.id} className="flex items-center justify-between gap-3 py-2.5">
                 <div className="min-w-0">
                   <p className="text-sm font-medium wrap-anywhere">{entry["client-id"]}</p>
-                  <p className="text-xs text-default-500">Expires {timestamp(entry["expires-at"])}</p>
+                  <p className="text-xs text-default-500">{t("settings.expires", { when: timestamp(entry["expires-at"]) })}</p>
                 </div>
                 <Button
                   size="sm"
@@ -385,11 +387,11 @@ export function SettingsScreen({ session }: { session: Session }) {
                       setSessions((current) =>
                         current ? { ...current, items: current.items.filter((item) => item.id !== entry.id) } : current,
                       );
-                      show("Application access revoked.");
+                      show(t("settings.revoked"));
                     })
                   }
                 >
-                  Revoke
+                  {t("settings.revoke")}
                 </Button>
               </li>
             ))}
@@ -404,21 +406,20 @@ export function SettingsScreen({ session }: { session: Session }) {
             startContent={<IconRefresh size={14} stroke={1.75} />}
             onPress={() => void listSessions()}
           >
-            Refresh
+            {t("common.refresh")}
           </Button>
           {shown?.cursor ? (
             <Button size="sm" variant="bordered" radius="sm" {...buttonProps("sessions-more")} onPress={() => void listSessions(shown.cursor)}>
-              Load more
+              {t("settings.loadMore")}
             </Button>
           ) : null}
         </div>
       </Section>
 
       {recoveryState ? (
-        <Section icon={<IconKey size={18} stroke={1.75} aria-hidden />} title="Identity recovery keys">
+        <Section icon={<IconKey size={18} stroke={1.75} aria-hidden />} title={t("settings.recoveryKeys")}>
           <p className="text-sm text-default-500">
-            Independent public keys that can recover your did:plc identity if this server disappears. The server
-            always keeps its own control key.
+            {t("settings.recoveryKeysBody")}
           </p>
 
           {recoveryState.recoveryKeys.length > 0 ? (
@@ -430,13 +431,13 @@ export function SettingsScreen({ session }: { session: Session }) {
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-default-500">No independent recovery keys are configured.</p>
+            <p className="text-sm text-default-500">{t("settings.noRecoveryKeys")}</p>
           )}
 
           {pending ? (
             <Alert tone="info">
-              A {pending.kind} identity change is {pending.state}.{" "}
-              {retryable(pending) ? "You can retry the saved change." : "Finish it before making another change."}
+              {t("settings.pendingChange", { kind: pending.kind, state: pending.state })}{" "}
+              {retryable(pending) ? t("settings.retryHint") : t("settings.finishHint")}
             </Alert>
           ) : null}
 
@@ -449,7 +450,7 @@ export function SettingsScreen({ session }: { session: Session }) {
               startContent={<IconRefresh size={14} stroke={1.75} />}
               onPress={() => void run("recovery-status", async () => void (await action.mutateAsync({ action: "identity/recovery/status" })))}
             >
-              Refresh status
+              {t("settings.refreshStatus")}
             </Button>
             <Button
               size="sm"
@@ -461,11 +462,11 @@ export function SettingsScreen({ session }: { session: Session }) {
               onPress={() =>
                 void run("recovery-email", async () => {
                   await action.mutateAsync({ action: "identity/recovery/email" });
-                  show("Verification email requested. Use the latest identity-operation code from your inbox.");
+                  show(t("settings.emailRequested"));
                 })
               }
             >
-              Email me a code
+              {t("settings.emailMe")}
             </Button>
             {retryable(pending) ? (
               <Button
@@ -482,20 +483,20 @@ export function SettingsScreen({ session }: { session: Session }) {
                     });
                     show(
                       result.state === "completed"
-                        ? "Recovery keys updated."
-                        : "Your change is saved. Refresh its status or retry the saved change.",
+                        ? t("settings.keysUpdated")
+                        : t("settings.changeSaved"),
                     );
                   })
                 }
               >
-                Retry saved change
+                {t("settings.retrySaved")}
               </Button>
             ) : null}
           </div>
 
           <form onSubmit={(event) => void changeRecovery(event)} className="flex flex-col gap-3" noValidate>
             <TextAreaField
-              label="Replacement keys (one did:key per line, empty to remove all)"
+              label={t("settings.replacementKeys")}
               placeholder="did:key:zQ3sh..."
               registration={recoveryForm.register("keys")}
               error={recoveryForm.formState.errors.keys}
@@ -503,8 +504,8 @@ export function SettingsScreen({ session }: { session: Session }) {
             <div className="flex items-end gap-2">
               <div className="flex-1">
                 <TextField
-                  label="Emailed identity code"
-                  placeholder="Code from your email"
+                  label={t("settings.emailedCode")}
+                  placeholder={t("settings.emailedCodePlaceholder")}
                   registration={recoveryForm.register("code")}
                   error={recoveryForm.formState.errors.code}
                   autoComplete="one-time-code"
@@ -512,7 +513,7 @@ export function SettingsScreen({ session }: { session: Session }) {
                 />
               </div>
               <Button type="submit" color="primary" radius="sm" className="h-12" {...buttonProps("recovery-save")}>
-                Save keys
+                {t("settings.saveKeys")}
               </Button>
             </div>
           </form>

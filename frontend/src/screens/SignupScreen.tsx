@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@heroui/react";
@@ -22,13 +23,14 @@ export function SignupScreen({
   clientId?: string;
   onAuthenticated: () => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const action = useAction();
   const setSignup = useSetAtom(signupModeAtom);
   const { run, buttonProps, notice, pending } = usePending();
   const domain = session["user-domain"];
 
   const form = useForm<SignupValues>({
-    resolver: zodResolver(signupSchema),
+    resolver: zodResolver(signupSchema(t)),
     defaultValues: { username: "", email: "", password: "", confirmPassword: "", inviteCode: "" },
   });
 
@@ -49,16 +51,16 @@ export function SignupScreen({
   );
 
   return (
-    <AuthCard title="Create your account" service={session.origin}>
+    <AuthCard title={t("signup.title")} service={session.origin}>
       {clientId ? <ClientPanel clientId={clientId} /> : null}
 
       {notice ? <Alert tone={notice.tone}>{notice.text}</Alert> : null}
 
       <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4" noValidate>
         <TextField
-          label="Username"
+          label={t("signup.username")}
           placeholder="alice"
-          description={domain ? `Your handle will be ${(username || "username").toLowerCase()}.${domain}` : undefined}
+          description={domain ? t("signup.usernameDescription", { handle: (username || t("signup.usernameFallback")).toLowerCase(), domain }) : undefined}
           registration={form.register("username")}
           error={form.formState.errors.username}
           startContent={<IconAt size={18} stroke={1.75} className="text-default-400" aria-hidden />}
@@ -75,8 +77,8 @@ export function SignupScreen({
         />
 
         <TextField
-          label="Email address"
-          placeholder="you@example.com"
+          label={t("signup.email")}
+          placeholder={t("signup.emailPlaceholder")}
           registration={form.register("email")}
           error={form.formState.errors.email}
           startContent={<IconMail size={18} stroke={1.75} className="text-default-400" aria-hidden />}
@@ -87,8 +89,8 @@ export function SignupScreen({
         />
 
         <PasswordField
-          label="Password"
-          placeholder="At least 8 characters"
+          label={t("common.password")}
+          placeholder={t("signup.passwordPlaceholder")}
           registration={form.register("password")}
           error={form.formState.errors.password}
           autoComplete="new-password"
@@ -96,8 +98,8 @@ export function SignupScreen({
         />
 
         <PasswordField
-          label="Confirm password"
-          placeholder="Re-enter your password"
+          label={t("signup.confirmPassword")}
+          placeholder={t("signup.confirmPlaceholder")}
           registration={form.register("confirmPassword")}
           error={form.formState.errors.confirmPassword}
           autoComplete="new-password"
@@ -106,8 +108,8 @@ export function SignupScreen({
 
         {session["invite-required"] ? (
           <TextField
-            label="Invite code"
-            placeholder="Invite code"
+            label={t("signup.inviteCode")}
+            placeholder={t("signup.inviteCode")}
             registration={form.register("inviteCode")}
             error={form.formState.errors.inviteCode}
             startContent={<IconTicket size={18} stroke={1.75} className="text-default-400" aria-hidden />}
@@ -128,14 +130,14 @@ export function SignupScreen({
           isLoading={form.formState.isSubmitting || pending === "signup"}
           className="mt-1 font-medium"
         >
-          Create account
+          {t("signup.create")}
         </Button>
       </form>
 
       <p className="text-center text-sm text-default-500">
-        Already have an account?{" "}
+        {t("signup.haveAccount")}{" "}
         <button type="button" onClick={() => setSignup(false)} className="font-medium text-primary hover:underline">
-          Sign in
+          {t("common.signIn")}
         </button>
       </p>
     </AuthCard>

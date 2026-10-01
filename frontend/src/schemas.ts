@@ -1,74 +1,83 @@
 import { z } from "zod";
 
-const password = z
-  .string()
-  .min(8, "Passwords need at least 8 characters")
-  .max(1024, "That password is too long");
+type T = (key: string) => string;
 
-export const loginSchema = z.object({
+const password = (t: T) =>
+  z
+    .string()
+  .min(8, t("schema.passwordMin"))
+  .max(1024, t("schema.passwordLong"));
+
+export const loginSchema = (t: T) =>
+  z.object({
   identifier: z
     .string()
     .trim()
-    .min(1, "Enter your username, email address, or DID")
-    .max(2048, "That identifier is too long"),
-  password: z.string().min(1, "Enter your password").max(1024, "That password is too long"),
+    .min(1, t("schema.identifierRequired"))
+    .max(2048, t("schema.identifierLong")),
+  password: z.string().min(1, t("schema.passwordRequired")).max(1024, t("schema.passwordLong")),
 });
 
-export type LoginValues = z.infer<typeof loginSchema>;
+export type LoginValues = z.infer<ReturnType<typeof loginSchema>>;
 
-export const factorSchema = z.object({
+export const factorSchema = (t: T) =>
+  z.object({
   code: z
     .string()
     .trim()
-    .min(6, "Enter the code you received")
-    .max(64, "That code is too long"),
+    .min(6, t("schema.codeRequired"))
+    .max(64, t("schema.codeLong")),
 });
 
-export type FactorValues = z.infer<typeof factorSchema>;
+export type FactorValues = z.infer<ReturnType<typeof factorSchema>>;
 
-export const signupSchema = z
+export const signupSchema = (t: T) =>
+  z
   .object({
     username: z
       .string()
       .trim()
-      .min(1, "Choose a username")
-      .max(63, "That username is too long")
-      .regex(/^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/, "Use letters, numbers, and inner hyphens"),
-    email: z.email("Enter a valid email address").max(320, "That email address is too long"),
-    password,
-    confirmPassword: z.string().max(1024, "That password is too long"),
-    inviteCode: z.string().trim().max(256, "That invite code is too long").or(z.literal("")),
+      .min(1, t("schema.usernameRequired"))
+      .max(63, t("schema.usernameLong"))
+      .regex(/^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/, t("schema.usernameShape")),
+    email: z.email(t("schema.emailValid")).max(320, t("schema.emailLong")),
+    password: password(t),
+    confirmPassword: z.string().max(1024, t("schema.passwordLong")),
+    inviteCode: z.string().trim().max(256, t("schema.inviteLong")).or(z.literal("")),
   })
   .superRefine((value, context) => {
     if (value.confirmPassword !== value.password)
       context.addIssue({
         code: "custom",
         path: ["confirmPassword"],
-        message: "Those passwords do not match",
+        message: t("schema.noMatch"),
       });
   });
 
-export type SignupValues = z.infer<typeof signupSchema>;
+export type SignupValues = z.infer<ReturnType<typeof signupSchema>>;
 
-export const totpCodeSchema = z.object({
+export const totpCodeSchema = (t: T) =>
+  z.object({
   code: z
     .string()
     .trim()
-    .regex(/^(?:[0-9]{6}|[A-Z2-7]{26})$/, "Enter a 6-digit code or a recovery code"),
+    .regex(/^(?:[0-9]{6}|[A-Z2-7]{26})$/, t("schema.totpShape")),
 });
 
-export type TotpCodeValues = z.infer<typeof totpCodeSchema>;
+export type TotpCodeValues = z.infer<ReturnType<typeof totpCodeSchema>>;
 
-export const passkeyNameSchema = z.object({
-  name: z.string().trim().min(1, "Name this passkey").max(64, "That name is too long"),
+export const passkeyNameSchema = (t: T) =>
+  z.object({
+  name: z.string().trim().min(1, t("schema.passkeyName")).max(64, t("schema.passkeyNameLong")),
 });
 
-export type PasskeyNameValues = z.infer<typeof passkeyNameSchema>;
+export type PasskeyNameValues = z.infer<ReturnType<typeof passkeyNameSchema>>;
 
-export const recoveryKeysSchema = z
+export const recoveryKeysSchema = (t: T) =>
+  z
   .object({
-    keys: z.string().max(4096, "That key list is too long"),
-    code: z.string().trim().min(1, "Enter the emailed identity code").max(64),
+    keys: z.string().max(4096, t("schema.keysLong")),
+    code: z.string().trim().min(1, t("schema.identityCode")).max(64),
   })
   .superRefine((value, context) => {
     const keys = value.keys
@@ -79,8 +88,8 @@ export const recoveryKeysSchema = z
       context.addIssue({
         code: "custom",
         path: ["keys"],
-        message: "Enter up to four distinct public did:key values, one per line",
+        message: t("schema.keysShape"),
       });
   });
 
-export type RecoveryKeysValues = z.infer<typeof recoveryKeysSchema>;
+export type RecoveryKeysValues = z.infer<ReturnType<typeof recoveryKeysSchema>>;
