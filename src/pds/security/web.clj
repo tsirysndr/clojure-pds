@@ -52,7 +52,11 @@
               (when (seq (:query-string request)) (errors/invalid! "Query parameters are not supported"))
               (cond
                 (and (#{:get :head} (:request-method request)) (contains? assets (:uri request)))
-                (let [[mime content] (get assets (:uri request))] {:status 200 :headers {"Content-Type" mime} :body content})
+                ;; The bundle is served under a fixed name, so a CDN in front
+                ;; must revalidate on every fetch or a deploy leaves stale
+                ;; JavaScript at the edge until its default TTL runs out.
+                (let [[mime content] (get assets (:uri request))]
+                  {:status 200 :headers {"Content-Type" mime "Cache-Control" "no-cache"} :body content})
                 (and (= :get (:request-method request)) (= "/account/session" (:uri request)))
                 (let [result (browser/open! ds (token settings request))]
                   (response settings (update result :view assoc :passkeys-available passkeys? :origin (:public-url settings)
