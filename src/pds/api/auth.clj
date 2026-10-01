@@ -77,8 +77,8 @@
     (errors/raise! 400 "InvalidRequest" "identifier is required to sign in with a passkey"))
   (or (first (db/query conn "SELECT * FROM accounts WHERE did = ? OR handle = ?"
                        (str/lower-case identifier) (str/lower-case identifier)))
-      ;; Same answer whether the account is absent or has no passkey: a sign-in
-      ;; endpoint must not say who exists.
+      ;; Saying the account is unknown discloses nothing: in atproto a handle is
+      ;; public, and resolveHandle already answers that for anyone who asks.
       (errors/raise! 401 "AccountNotFound" "No passkey is registered for that account")))
 
 (defn- second-factor!
