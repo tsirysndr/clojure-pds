@@ -10,7 +10,8 @@
   A password is required to add or remove any way of signing in. An access token
   proves the session, not the owner, and a stolen session must not be able to
   take the second factor off or register a credential of its own."
-  (:require [clojure.string :as str]
+  (:require [clojure.data.json :as json]
+            [clojure.string :as str]
             [pds.accounts :as accounts]
             [pds.api.server :as server]
             [pds.auth :as auth]
@@ -72,6 +73,19 @@
   [conn settings did code]
   (when (factors/enabled? conn did)
     (raise-result! (factors/verify! conn settings did code))))
+
+(defn- credential-json
+  "The credential as JSON text.
+
+  The lexicon carries it as an object, and the body arrives parsed, but the
+  WebAuthn library reads a credential from JSON text and the ceremony checks run
+  on that text. Without this the response is refused before any signature is
+  looked at, as `InvalidPasskey`."
+  [value]
+  (cond
+    (string? value) value
+    (map? value) (json/write-str value)
+    :else (errors/raise! 400 "InvalidRequest" "credential is required")))
 
 (defn- passkey-view [credential]
   (cond-> {"id" (:id credential)}
@@ -178,7 +192,7 @@
                     (let [p (body r)
                           [id browser] (split-request-id (get p "requestId"))
                           result (passkeys/finish-registration! conn settings id browser
-                                                               (get p "credential"))]
+                                                               (credential-json (get p "credential")))]
                       (when-let [error (:error result)]
                         (errors/raise! (or (:status result) 401) error "Passkey was not accepted"))
                       {"passkey" (passkey-view {:id (:credential-id result)
@@ -205,7 +219,7 @@
              (let [body (or (request/json-body r) {})
                    [id browser] (split-request-id (get body "requestId"))
                    result (passkeys/finish-authentication! conn settings id browser
-                                                           (get body "credential"))]
+                                                           (credential-json (get body "credential")))]
                (when-let [error (:error result)]
                  (errors/raise! (or (:status result) 401) error "That passkey was not accepted"))
                (let [did (:did result)

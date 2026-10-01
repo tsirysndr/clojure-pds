@@ -1,5 +1,6 @@
 (ns pds.api.auth-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.data.json :as json]
+            [clojure.test :refer [deftest is testing]]
             [pds.api.auth :as auth]))
 
 (deftest every-method-in-the-contract-is-routed
@@ -61,3 +62,23 @@
            (view {:id "abc" :name "MacBook" :created-at "2026-01-01"})))
     ;; Internal fields the contract does not describe stay internal.
     (is (= {"id" "abc"} (view {:id "abc" :backup-eligible true :backed-up false})))))
+
+(deftest credential-is-handed-to-webauthn-as-json-text
+  (let [as-json #'pds.api.auth/credential-json
+        credential {"id" "cred-1" "type" "public-key"
+                    "response" {"clientDataJSON" "e30" "attestationObject" "o2M"}}]
+    (testing "an object body is serialised, not passed through"
+      ;; The lexicon carries the credential as an object and the body arrives
+      ;; parsed, but the WebAuthn library reads it from JSON text. Passing the
+      ;; map straight through refused every ceremony as InvalidPasskey before a
+      ;; signature was ever looked at.
+      (let [text (as-json credential)]
+        (is (string? text))
+        (is (= credential (json/read-str text)))))
+
+    (testing "text already in that shape is left alone"
+      (is (= "{\"id\":\"cred-1\"}" (as-json "{\"id\":\"cred-1\"}"))))
+
+    (testing "a missing credential is a bad request, not a ceremony failure"
+      (doseq [bad [nil 7 []]]
+        (is (thrown? clojure.lang.ExceptionInfo (as-json bad)))))))
