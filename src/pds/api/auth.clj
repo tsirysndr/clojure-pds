@@ -80,11 +80,15 @@
   The lexicon carries it as an object, and the body arrives parsed, but the
   WebAuthn library reads a credential from JSON text and the ceremony checks run
   on that text. Without this the response is refused before any signature is
-  looked at, as `InvalidPasskey`."
+  looked at, as `InvalidPasskey`.
+
+  An absent `clientExtensionResults` is filled in as empty: the library's
+  credential model refuses to construct without it, yet a client that requested
+  no extensions reasonably leaves it out."
   [value]
   (cond
     (string? value) value
-    (map? value) (json/write-str value)
+    (map? value) (json/write-str (merge {"clientExtensionResults" {}} value))
     :else (errors/raise! 400 "InvalidRequest" "credential is required")))
 
 (defn- passkey-view [credential]

@@ -72,9 +72,16 @@
       ;; parsed, but the WebAuthn library reads it from JSON text. Passing the
       ;; map straight through refused every ceremony as InvalidPasskey before a
       ;; signature was ever looked at.
+      ;; An absent clientExtensionResults is filled in as empty: the WebAuthn
+      ;; library's credential model refuses to construct without it, yet a
+      ;; client that requested no extensions reasonably leaves it out.
       (let [text (as-json credential)]
         (is (string? text))
-        (is (= credential (json/read-str text)))))
+        (is (= (assoc credential "clientExtensionResults" {}) (json/read-str text)))))
+
+    (testing "extension results a client did send are kept"
+      (let [sent (assoc credential "clientExtensionResults" {"credProps" {"rk" true}})]
+        (is (= sent (json/read-str (as-json sent))))))
 
     (testing "text already in that shape is left alone"
       (is (= "{\"id\":\"cred-1\"}" (as-json "{\"id\":\"cred-1\"}"))))
