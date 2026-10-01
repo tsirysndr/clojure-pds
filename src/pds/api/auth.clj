@@ -48,6 +48,16 @@
 ;; inside the opaque requestId and the pair is what authorises the claim.
 (defn- request-id [{:keys [id browser]}] (str id "." browser))
 
+(defn- credential-options
+  "The WebAuthn options themselves.
+
+  `toCredentialsCreateJson` and `toCredentialsGetJson` already wrap their result
+  in `publicKey`, ready to hand to `navigator.credentials`. The contract carries
+  the options alone, so wrapping again would nest it twice and a client reading
+  `publicKey.challenge` would find nothing."
+  [options]
+  (or (get options "publicKey") options))
+
 (defn- split-request-id [value]
   (let [[id browser] (when (string? value) (str/split value #"\." 2))]
     ;; An empty half is not a missing half in Clojure, so check for content:
@@ -159,7 +169,7 @@
                                        conn settings did browser
                                        (or (get p "name") "passkey"))]
                         {"requestId" (request-id {:id (:id ceremony) :browser browser})
-                         "publicKey" (:options ceremony)})))))
+                         "publicKey" (credential-options (:options ceremony))})))))
 
      "/xrpc/social.rocksky.auth.finishPasskeyRegistration"
      (server/json-route :post
@@ -185,7 +195,7 @@
                    browser (crypto/token)
                    ceremony (passkeys/begin-authentication! conn settings (:did account) browser)]
                {"requestId" (request-id {:id (:id ceremony) :browser browser})
-                "publicKey" (:options ceremony)})))))
+                "publicKey" (credential-options (:options ceremony))})))))
 
      "/xrpc/social.rocksky.auth.finishPasskeyLogin"
      (server/json-route :post
