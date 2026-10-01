@@ -117,6 +117,14 @@
         (is (= 0 (db/transact! ds (fn [conn]
                    (:oauth_epoch (first (db/query conn "SELECT oauth_epoch FROM accounts WHERE did = ?" did)))))))))
 
+    (testing "the listing carries timestamps a browser can parse"
+      (let [listed (db/transact! ds (fn [conn] (passkeys/list-credentials conn did)))
+            stamp (:created-at (first listed))]
+        ;; ISO 8601 UTC, not java.sql.Timestamp's "2026-10-01 18:23:20.014",
+        ;; which new Date() refuses in strict engines and shows as Invalid Date.
+        (is (re-matches #"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z" (str stamp))
+            (str "not ISO 8601 UTC: " (pr-str stamp)))))
+
     (testing "signing in with that credential, same origin"
       (let [browser (crypto/token)
             ceremony (db/transact! ds (fn [conn] (passkeys/begin-authentication! conn settings did browser)))

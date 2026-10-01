@@ -229,9 +229,15 @@
             {:did (:did account) :account-epoch (:oauth_epoch account) :authentication :passkey
              :credential-id (.getBase64Url (.getCredentialId assertion))}))))))
 
+(defn- iso [value]
+  ;; `str` on a java.sql.Timestamp is "2026-10-01 18:23:20.014", which strict
+  ;; Date parsers refuse and lenient ones read in the wrong zone. The instant
+  ;; prints as ISO 8601 UTC, like every other timestamp this server returns.
+  (some-> value (as-> v (if (instance? java.sql.Timestamp v) (.toInstant ^java.sql.Timestamp v) v)) str))
+
 (defn list-credentials [conn did]
   (mapv (fn [row] {:id (crypto/b64 (:credential_id row)) :name (:label row)
-                  :created-at (str (:created_at row)) :last-used-at (some-> (:last_used_at row) str)
+                  :created-at (iso (:created_at row)) :last-used-at (iso (:last_used_at row))
                   :backup-eligible (:backup_eligible row) :backed-up (:backed_up row)})
         (db/query conn "SELECT credential_id, label, created_at, last_used_at, backup_eligible, backed_up FROM account_passkeys WHERE did = ? ORDER BY created_at, credential_id" did)))
 (defn remove!
