@@ -31,7 +31,7 @@
    :pushed_authorization_request_endpoint (str public-url "/oauth/par")
    :token_endpoint (str public-url "/oauth/token")
    :revocation_endpoint (str public-url "/oauth/revoke")
-   :response_types_supported ["code"] :response_modes_supported ["query"]
+   :response_types_supported ["code"] :response_modes_supported ["query" "fragment"]
    :grant_types_supported ["authorization_code" "refresh_token"]
    :code_challenge_methods_supported ["S256"]
    :scopes_supported (vec (sort par/supported-scopes))

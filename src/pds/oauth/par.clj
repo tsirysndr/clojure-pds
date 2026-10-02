@@ -21,7 +21,9 @@
   (when-not (= "code" (get params "response_type")) (http/fail! "unsupported_response_type" "Only authorization code responses are supported"))
   (when (some #(contains? params %) ["request" "request_uri" "code_verifier"])
     (http/fail! "invalid_request" "Nested requests and verifiers are not accepted at PAR"))
-  (when-not (= "query" (get params "response_mode" "query")) (http/fail! "invalid_request" "Unsupported response mode"))
+  ;; The atproto profile delivers the code over the query or the fragment, at
+  ;; the client's choice; some apps can only read the fragment.
+  (when-not (#{"query" "fragment"} (get params "response_mode" "query")) (http/fail! "invalid_request" "Unsupported response mode"))
   (when (contains? params "prompt")
     (when-not (#{"login" "consent" "select_account" "create"} (get params "prompt")) (http/fail! "invalid_request" "Unsupported prompt")))
   (doseq [[key maximum required?] [["state" 1024 true] ["login_hint" 2048 false]]]
@@ -39,7 +41,7 @@
   (grants/validate-scope! (get params "scope"))
   ;; Persist only authorization parameters, never client assertions or arbitrary
   ;; extension fields. Future permissions support must extend validation first.
-  (select-keys params ["response_type" "redirect_uri" "scope" "state" "code_challenge" "code_challenge_method"
+  (select-keys params ["response_type" "response_mode" "redirect_uri" "scope" "state" "code_challenge" "code_challenge_method"
                       "response_mode" "login_hint" "prompt"]))
 
 (defn- store! [conn client-id params {:keys [client-binding dpop-jkt]} permission-sets]

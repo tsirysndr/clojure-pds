@@ -36,6 +36,22 @@
 (defn error [f] (try (f) nil (catch clojure.lang.ExceptionInfo e (or (:error (ex-data e)) (:oauth-error (ex-data e))))))
 (defn mutate [sql & args] (db/transact! fixture/*ds* #(apply db/execute! % sql args)))
 
+(deftest a-fragment-mode-code-lands-in-the-fragment
+  ;; The client chose where the response lands at PAR time: some apps can only
+  ;; read location.hash.
+  (let [settings (api/settings) _ (account! settings)
+        state (start (assoc (params/params) "response_mode" "fragment"))
+        authenticated (merge state (login settings state credentials))
+        location (:location (decide settings authenticated true))
+        uri (URI/create location)
+        fragment (parameters/parse! (.getRawFragment uri))]
+    ;; The registered redirect URI keeps its own query; only the response
+    ;; parameters move into the fragment.
+    (is (nil? (some-> (.getRawQuery uri) (parameters/parse!) (get "code"))))
+    (is (string? (get fragment "code")))
+    (is (= (get-in state [:parameters "state"]) (get fragment "state")))
+    (is (= (:public-url settings) (get fragment "iss")))))
+
 (deftest independent-browser-secrets-csrf-rotation-and-durable-approval
   (let [settings (api/settings) _ (account! settings) state (start) other (start)]
     (is (= metadata/client-id (:client-id state)))

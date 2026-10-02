@@ -41,8 +41,11 @@
     (doseq [[field value] [["state" ""] ["state" (apply str (repeat 1025 "x"))]
                            ["redirect_uri" "https://evil.example.com/"] ["code_challenge_method" "plain"]
                            ["request" "nested"] ["request_uri" "nested"] ["code_verifier" verifier]
-                           ["response_mode" "fragment"] ["prompt" "none"] ["login_hint" 7]]]
+                           ["response_mode" "form_post"] ["prompt" "none"] ["login_hint" 7]]]
       (is (= "invalid_request" (proof/error #(par/parameters! resolved (assoc input field value))))))
+    ;; The atproto profile delivers the code over the query or the fragment,
+    ;; at the client's choice.
+    (is (= "fragment" (get (par/parameters! resolved (assoc input "response_mode" "fragment")) "response_mode")))
     (is (= "unsupported_response_type" (proof/error #(par/parameters! resolved (assoc input "response_type" "token")))))
     (doseq [scope [nil "" "transition:generic" "atproto transition:email" "atproto repo:app.bsky.feed.post"]]
       (is (= "invalid_scope" (proof/error #(par/parameters! resolved (assoc input "scope" scope))))))

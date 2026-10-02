@@ -140,9 +140,13 @@
 (defn- callback [settings request result]
   ;; Append to the original registered URI without reserializing its path/query.
   (let [uri (get-in request [:parameters "redirect_uri"])
-        fields (merge {"state" (get-in request [:parameters "state"]) "iss" (:public-url settings)} result)]
-    (str uri (if (str/includes? uri "?") (if (or (str/ends-with? uri "?") (str/ends-with? uri "&")) "" "&") "?")
-         (str/join "&" (map (fn [[k v]] (str (URLEncoder/encode k "UTF-8") "=" (URLEncoder/encode v "UTF-8"))) fields)))))
+        fields (merge {"state" (get-in request [:parameters "state"]) "iss" (:public-url settings)} result)
+        encoded (str/join "&" (map (fn [[k v]] (str (URLEncoder/encode k "UTF-8") "=" (URLEncoder/encode v "UTF-8"))) fields))]
+    ;; The client chose where the response lands at PAR time: the fragment is
+    ;; for apps that can only read location.hash, the query for everyone else.
+    (if (= "fragment" (get-in request [:parameters "response_mode"]))
+      (str uri "#" encoded)
+      (str uri (if (str/includes? uri "?") (if (or (str/ends-with? uri "?") (str/ends-with? uri "&")) "" "&") "?") encoded))))
 
 (defn decide!
   "Approve or deny once. Refresh metadata outside the transaction, then lock and

@@ -10,14 +10,24 @@
 (defn fail! [code message] (throw (ex-info message {:oauth-error code})))
 (defn response [status body] {:status status :headers {"Content-Type" "application/json"} :body (json/write-str body)})
 (defn form! [request]
-  (when-not (and (= "application/x-www-form-urlencoded"
-                    (some-> (get-in request [:headers "content-type"]) (str/split #";" 2) first str/trim str/lower-case))
-                 (or (nil? (get-in request [:headers "content-encoding"]))
-                     (= "identity" (str/lower-case (get-in request [:headers "content-encoding"])))))
-    (fail! "invalid_request" "Expected an unencoded form body"))
-  (try (parameters/parse! (codec/text (request/body-bytes request 16384)))
-       (catch Exception e
-         (if (= 413 (:status (ex-data e))) (throw e) (fail! "invalid_request" "Invalid form body")))))
+  (let [media (some-> (get-in request [:headers "content-type"]) (str/split #";" 2) first str/trim str/lower-case)]
+    (when-not (and (#{"application/x-www-form-urlencoded" "application/json"} media)
+                   (or (nil? (get-in request [:headers "content-encoding"]))
+                       (= "identity" (str/lower-case (get-in request [:headers "content-encoding"])))))
+      (fail! "invalid_request" "Expected an unencoded form or JSON body"))
+    (try
+      (if (= media "application/json")
+        ;; Several OAuth clients send PAR as JSON rather than a form. The shape
+        ;; is the same flat map of strings, so it is accepted with equal bounds.
+        (let [value (json/read-str (codec/text (request/body-bytes request 16384)))]
+          (when-not (and (map? value) (<= (count value) 131)
+                         (every? (fn [[k v]] (and (string? k) (string? v))) value))
+            (fail! "invalid_request" "Expected a JSON object of strings"))
+          value)
+        (parameters/parse! (codec/text (request/body-bytes request 16384))))
+      (catch Exception e
+        (if (or (= 413 (:status (ex-data e))) (:oauth-error (ex-data e))) (throw e)
+          (fail! "invalid_request" "Invalid form body"))))))
 
 (def descriptions
   {"invalid_request" "Invalid OAuth request" "invalid_request_uri" "Invalid or expired request URI"
