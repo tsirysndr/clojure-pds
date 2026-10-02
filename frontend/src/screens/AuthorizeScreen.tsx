@@ -18,6 +18,9 @@ export function AuthorizeScreen({ flow, session }: { flow: Flow; session: Sessio
     run(approve ? "approve" : "deny", async () => {
       const result = await flowAction.mutateAsync({ action: "decide", body: { approve } });
       navigate(result.location as string);
+      // The page is on its way out: keep the spinner up until the browser
+      // actually leaves, instead of settling back into a clickable button.
+      await new Promise<never>(() => {});
     });
 
   return (

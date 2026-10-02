@@ -1,5 +1,6 @@
 (ns pds.totp-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is use-fixtures]]
             [pds.accounts :as accounts]
             [pds.app :as app]
             [pds.http :as http]
@@ -115,7 +116,12 @@
 (deftest factor-survives-password-reset-and-is-erased-on-deletion
   (let [settings (api/settings) _ (browser/account! settings) codes (:recovery-codes (enroll settings))]
     (accounts/request-reset! fixture/*ds* settings {"email" "alice@example.com"})
-    (accounts/reset-password! fixture/*ds* {"password" "replacement-password" "token" (api/email-token "Reset your PDS password")})
+    ;; A reset begins signed out, so the mail links to the page that takes a new
+    ;; password, with the token in the path.
+    (let [token (api/email-token "Reset your PDS password")
+          text (:text (api/last-email "Reset your PDS password"))]
+      (is (str/includes? text (str (:public-url settings) "/account/reset/" token)))
+      (accounts/reset-password! fixture/*ds* {"password" "replacement-password" "token" token}))
     (let [credentials (assoc browser/credentials "password" "replacement-password")]
       (is (= "AuthFactorTokenRequired" (browser/error #(accounts/login! fixture/*ds* settings credentials))))
       (let [session (accounts/login! fixture/*ds* settings (assoc credentials "authFactorToken" (first codes)))]

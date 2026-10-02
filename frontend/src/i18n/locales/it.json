@@ -20,7 +20,8 @@
     "passkey": "Accedi con una passkey",
     "passkeyFirst": "Scrivi prima il tuo nome utente o la tua e-mail",
     "noAccount": "Ancora nessun account?",
-    "createOne": "Creane uno"
+    "createOne": "Creane uno",
+    "forgot": "Password dimenticata?"
   },
   "factor": {
     "title": "Conferma la tua identità",
@@ -157,5 +158,26 @@
   },
   "errors": {
     "generic": "Qualcosa è andato storto. Riprova."
+  },
+  "forgot": {
+    "link": "Password dimenticata?",
+    "email": "E-mail dell'account",
+    "emailPlaceholder": "tu@example.com",
+    "submit": "Inviami un link di reimpostazione",
+    "sent": "Se quell'indirizzo ha un account qui, un link di reimpostazione è in arrivo.",
+    "failed": "La richiesta non è stata inviata. Riprova."
+  },
+  "reset": {
+    "title": "Reimposta la password",
+    "subtitle": "Scegli una nuova password per il tuo account.",
+    "code": "Codice di reimpostazione",
+    "codePlaceholder": "Codice dall'e-mail",
+    "newPassword": "Nuova password",
+    "passwordPlaceholder": "Almeno 8 caratteri",
+    "confirmPassword": "Conferma la nuova password",
+    "confirmPlaceholder": "Scrivi di nuovo la tua nuova password",
+    "submit": "Imposta la nuova password",
+    "done": "La tua password è cambiata. Accedi con quella nuova.",
+    "failed": "Quel link non è valido o è scaduto. Richiedine uno nuovo dalla pagina di accesso."
   }
 }

@@ -32,6 +32,13 @@
      :body (when (and (pos? (alength raw)) (.startsWith type "application/json")) (json/read-str (String. raw "UTF-8")))}))
 (defn xrpc [client port method name body token]
   (call client port method (str "/xrpc/" name) body token))
+(defn last-email
+  "The text of the newest outbox message with this subject."
+  [subject]
+  (with-open [c (db/connection fixture/*ds*)]
+    (let [row (last (db/query c "SELECT payload::text FROM email_outbox WHERE payload->>'subject' = ? ORDER BY created_at" subject))]
+      {:text (get (json/read-str (:payload row)) "text")})))
+
 (defn email-token [subject]
   (with-open [c (db/connection fixture/*ds*)]
     (let [row (last (db/query c "SELECT payload::text FROM email_outbox WHERE payload->>'subject' = ? ORDER BY created_at" subject))

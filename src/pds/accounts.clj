@@ -85,7 +85,7 @@
     (errors/raise! 400 "InvalidPassword" "Password must contain 8 to 1024 characters"))
   (crypto/password-hash value))
 
-(defn issue-email! [conn account purpose]
+(defn issue-email! [conn account purpose & [settings]]
   ;; Serialize callers on the account before issuing a token.
   (db/query conn "SELECT did FROM accounts WHERE did = ? FOR UPDATE" (:did account))
   (when (empty? (db/query conn "SELECT 1 FROM account_tokens WHERE did = ? AND purpose = ? AND created_at > now() - interval '60 seconds'"
@@ -102,7 +102,13 @@
                            :text (str subject ".\n\n"
                                       (when (= purpose "plc-operation")
                                         "This code authorizes signing an identity change, including moving your account or replacing its control keys. Only enter it in a migration or identity-change flow you initiated. Do not share it.\n\n")
-                                      "Your token is: " token "\n\nIt expires in " minutes " minutes. If you did not request this, ignore this email.")}))))
+                                      "Your token is: " token "\n\nIt expires in " minutes " minutes. If you did not request this, ignore this email."
+                                      ;; A reset is begun signed out, so the mail
+                                      ;; carries the way back in: a link to the
+                                      ;; page that takes a new password.
+                                      (when (and settings (= purpose "reset-password"))
+                                        (str "\n\nOr open this link to set a new password:\n"
+                                             (:public-url settings) "/account/reset/" token)))}))))
 
 (defn provision-one! [ds settings did]
   (provision/process-one! ds settings did
@@ -246,7 +252,7 @@
     (db/transact! ds
       (fn [conn]
         (when-let [account (first (db/query conn "SELECT * FROM accounts WHERE email = ? AND status IN ('active', 'deactivated') FOR UPDATE" address))]
-          (issue-email! conn account "reset-password")))))
+          (issue-email! conn account "reset-password" settings)))))
   ;; Same result for known and unknown email addresses.
   nil)
 (defn consume-token! [conn purpose token did email]

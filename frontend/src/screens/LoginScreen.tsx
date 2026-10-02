@@ -11,6 +11,7 @@ import { signupModeAtom } from "../atoms";
 import { AuthCard } from "../components/AuthCard";
 import { Alert } from "../components/Alert";
 import { ClientPanel } from "../components/ClientPanel";
+import { ForgotPassword } from "../components/ForgotPassword";
 import { TextField, PasswordField } from "../components/Field";
 import { ceremonyOptions, credentialJSON, type ServerOptions } from "../webauthn";
 import { usePending } from "../pending";
@@ -123,6 +124,8 @@ export function LoginScreen({
           </Button>
         </>
       ) : null}
+
+      <ForgotPassword />
 
       {session["signup-enabled"] ? (
         <p className="text-center text-sm text-default-500">

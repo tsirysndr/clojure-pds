@@ -10,6 +10,7 @@ import { SignupScreen } from "./screens/SignupScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 import { AuthorizeScreen, ContinueScreen } from "./screens/AuthorizeScreen";
 import { MessageScreen } from "./screens/MessageScreen";
+import { ResetScreen } from "./screens/ResetScreen";
 
 function Flows({ session, flow }: { session: Session; flow: Flow | null }) {
   const [signupMode, setSignupMode] = useAtom(signupModeAtom);
@@ -55,6 +56,12 @@ function Flows({ session, flow }: { session: Session; flow: Flow | null }) {
 
 export function Root() {
   const session = useSession();
+
+  // The reset link from the email: its token is in the path, and the page
+  // needs no session at all, so it renders before anything else loads.
+  const resetPath = window.location.pathname.match(/^\/account\/reset(?:\/(.*))?$/);
+  if (resetPath) return <ResetScreen token={decodeURIComponent(resetPath[1] ?? "")} />;
+
   const flow = useFlow();
   const flowId = currentFlowId();
 

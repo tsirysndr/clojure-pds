@@ -20,7 +20,8 @@
     "passkey": "Sign in with a passkey",
     "passkeyFirst": "Enter your username or email address first",
     "noAccount": "No account yet?",
-    "createOne": "Create one"
+    "createOne": "Create one",
+    "forgot": "Forgot password?"
   },
   "factor": {
     "title": "Confirm it's you",
@@ -157,5 +158,26 @@
   },
   "errors": {
     "generic": "Something went wrong. Try again."
+  },
+  "forgot": {
+    "link": "Forgot password?",
+    "email": "Account email",
+    "emailPlaceholder": "you@example.com",
+    "submit": "Email me a reset link",
+    "sent": "If that address has an account here, a reset link is on its way.",
+    "failed": "The reset request could not be sent. Try again."
+  },
+  "reset": {
+    "title": "Reset password",
+    "subtitle": "Choose a new password for your account.",
+    "code": "Reset code",
+    "codePlaceholder": "Code from the email",
+    "newPassword": "New password",
+    "passwordPlaceholder": "At least 8 characters",
+    "confirmPassword": "Confirm new password",
+    "confirmPlaceholder": "Re-enter your new password",
+    "submit": "Set the new password",
+    "done": "Your password is changed. Sign in with the new one.",
+    "failed": "That link is invalid or has expired. Request a new one from the sign-in page."
   }
 }

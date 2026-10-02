@@ -51,6 +51,14 @@
             (try
               (when (seq (:query-string request)) (errors/invalid! "Query parameters are not supported"))
               (cond
+                ;; The reset link from the email lands here with the token in
+                ;; the path; the page is the same bundle, which reads it back
+                ;; out of location.pathname.
+                (and (#{:get :head} (:request-method request))
+                     (re-matches #"/account/reset(?:/[A-Za-z0-9_-]{1,256})?" (:uri request)))
+                (let [[mime content] (get assets "/account")]
+                  {:status 200 :headers {"Content-Type" mime "Cache-Control" "no-cache"} :body content})
+
                 (and (#{:get :head} (:request-method request)) (contains? assets (:uri request)))
                 ;; The bundle is served under a fixed name, so a CDN in front
                 ;; must revalidate on every fetch or a deploy leaves stale

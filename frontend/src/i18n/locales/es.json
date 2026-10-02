@@ -20,7 +20,8 @@
     "passkey": "Iniciar sesión con una llave de acceso",
     "passkeyFirst": "Escribe primero tu nombre de usuario o correo",
     "noAccount": "¿Aún sin cuenta?",
-    "createOne": "Crea una"
+    "createOne": "Crea una",
+    "forgot": "¿Olvidaste tu contraseña?"
   },
   "factor": {
     "title": "Confirma que eres tú",
@@ -157,5 +158,26 @@
   },
   "errors": {
     "generic": "Algo salió mal. Inténtalo de nuevo."
+  },
+  "forgot": {
+    "link": "¿Olvidaste tu contraseña?",
+    "email": "Correo de la cuenta",
+    "emailPlaceholder": "tu@example.com",
+    "submit": "Enviarme un enlace de restablecimiento",
+    "sent": "Si esa dirección tiene una cuenta aquí, un enlace de restablecimiento está en camino.",
+    "failed": "No se pudo enviar la solicitud. Inténtalo de nuevo."
+  },
+  "reset": {
+    "title": "Restablecer la contraseña",
+    "subtitle": "Elige una nueva contraseña para tu cuenta.",
+    "code": "Código de restablecimiento",
+    "codePlaceholder": "Código del correo",
+    "newPassword": "Nueva contraseña",
+    "passwordPlaceholder": "Al menos 8 caracteres",
+    "confirmPassword": "Confirmar la nueva contraseña",
+    "confirmPlaceholder": "Vuelve a escribir tu nueva contraseña",
+    "submit": "Establecer la nueva contraseña",
+    "done": "Tu contraseña ha cambiado. Inicia sesión con la nueva.",
+    "failed": "Ese enlace es inválido o ha caducado. Pide uno nuevo desde la página de inicio de sesión."
   }
 }
