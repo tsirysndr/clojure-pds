@@ -73,7 +73,10 @@
   (let [identifier (.toLowerCase ^String identifier Locale/ROOT)]
     (first (db/query conn "SELECT * FROM accounts WHERE did = ? OR handle = ? OR email = ? FOR UPDATE" identifier identifier identifier))))
 (defn- primary! [conn settings row account method]
-  (let [factor (factor-type conn account)]
+  ;; A user-verified passkey is already two factors: the device, and the
+  ;; PIN or biometric that unlocked it. Asking for a code on top adds a step
+  ;; without adding a factor, so only a password sign-in meets the wall.
+  (let [factor (when-not (= method "passkey") (factor-type conn account))]
     (when (= "email" factor) (accounts/require-email! settings) (accounts/issue-email! conn account "sign-in"))
     (output conn (rotate! conn row account method (nil? factor)))))
 (defn- login-stage! [row] (when (:did row) (errors/raise! 400 "AlreadySignedIn" "Sign out before choosing another account")))

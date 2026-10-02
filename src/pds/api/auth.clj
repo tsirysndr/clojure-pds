@@ -109,15 +109,6 @@
       ;; public, and resolveHandle already answers that for anyone who asks.
       (errors/raise! 401 "AccountNotFound" "No passkey is registered for that account")))
 
-(defn- second-factor!
-  "A passkey replaces the password, not a factor on top of it."
-  [conn settings did body]
-  (when (factors/enabled? conn did)
-    (let [supplied (or (get body "totpCode") (get body "authFactorToken"))]
-      (when-not supplied
-        (errors/raise! 401 "AuthFactorTokenRequired" "A two-factor code is required"))
-      (raise-result! (factors/verify! conn settings did supplied)))))
-
 (defn routes [ds settings]
   (let [authed (fn [options f] (server/authenticated ds settings options f))
         body (fn [r] (or (request/json-body r) {}))]
@@ -228,7 +219,6 @@
                  (errors/raise! (or (:status result) 401) error "That passkey was not accepted"))
                (let [did (:did result)
                      account (first (db/query conn "SELECT * FROM accounts WHERE did = ? FOR UPDATE" did))]
-                 (second-factor! conn settings did body)
                  (merge (accounts/public-account account)
                         (auth/issue! conn settings did nil))))))))
 

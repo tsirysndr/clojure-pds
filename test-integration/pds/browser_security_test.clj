@@ -39,7 +39,7 @@
     (owner/mutate "UPDATE accounts SET password_hash = 'changed'")
     (is (= "BrowserSessionRequired" (owner/error #(act settings authenticated "totp/begin" {}))))))
 
-(deftest totp-enrollment-carries-only-owner-session-with-original-expiry
+(deftest totp-enrollment-keeps-every-session-signed-in
   (let [settings (api/settings) _ (owner/account! settings) authenticated (login settings) other (login settings)
         expires (:expires_at (first (query "SELECT * FROM browser_sessions WHERE token_hash = ?" (crypto/digest-token (:token authenticated)))))
         started (act settings authenticated "totp/begin" {})
@@ -48,9 +48,11 @@
     (is (= "authenticated" (get-in confirmed [:view :stage])))
     (is (= "totp" (get-in confirmed [:view :factor])))
     (is (= 10 (count recovery)))
-    (is (not= (:token started) (:token confirmed)))
+    ;; Turning the factor on keeps the owner signed in, here and in every other
+    ;; browser: the other implementations behind the shared console do the same.
+    (is (= (:token started) (:token confirmed)))
     (is (= expires (:expires_at (first (query "SELECT * FROM browser_sessions WHERE token_hash = ?" (crypto/digest-token (:token confirmed)))))))
-    (is (= "BrowserSessionRequired" (owner/error #(act settings other "passkeys/begin" {"name" "Other browser"}))))
+    (is (some? (get-in (act settings other "passkeys/begin" {"name" "Other browser"}) [:result :id])))
     (let [pending (login settings)]
       (is (= "factor" (get-in pending [:view :stage])))
       (is (nil? (get-in pending [:view :passkeys])))
@@ -85,14 +87,15 @@
           signed-in (act settings begin "login/passkey/finish" {"id" (get-in begin [:result :id]) "response" (json/write-str (get response "response"))})]
       (is (= "authenticated" (get-in signed-in [:view :stage])))
       (is (= "passkey" (:auth_method (first (query "SELECT * FROM browser_sessions WHERE token_hash = ?" (crypto/digest-token (:token signed-in))))))))
-    (let [codes (:recovery-codes (totp/enroll settings))
+    (let [_ (totp/enroll settings)
           begin (act settings (open) "login/passkey/begin" {"identifier" owner/did})
           response (authenticator/authenticator (get-in begin [:result :options]) :mode "authenticate" :credential credential :counter 3)
-          pending (act settings begin "login/passkey/finish" {"id" (get-in begin [:result :id]) "response" (json/write-str (get response "response"))})
-          verified (act settings pending "login/factor" {"code" (first codes)})]
-      (is (= "factor" (get-in pending [:view :stage])))
-      (is (= "authenticated" (get-in verified [:view :stage])))
-      (is (= [] (get-in (act settings verified "passkeys/remove" {"id" (get credential "id")}) [:view :passkeys]))))))
+          signed-in (act settings begin "login/passkey/finish" {"id" (get-in begin [:result :id]) "response" (json/write-str (get response "response"))})]
+      ;; A user-verified passkey is already two factors — the device, and the
+      ;; PIN or biometric that unlocked it — so no code is asked on top even
+      ;; with an authenticator enrolled.
+      (is (= "authenticated" (get-in signed-in [:view :stage])))
+      (is (= [] (get-in (act settings signed-in "passkeys/remove" {"id" (get credential "id")}) [:view :passkeys]))))))
 
 (deftest email-factor-and-revocation
   (let [settings (api/settings) _ (owner/account! settings)]

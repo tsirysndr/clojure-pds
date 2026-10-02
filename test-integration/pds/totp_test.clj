@@ -39,9 +39,12 @@
           codes (:recovery-codes confirmed)]
       (is (= 10 (count (set codes))))
       (is (true? (tx #(factors/enabled? % browser/did))))
-      (is (= 1 (rows/scalar "SELECT oauth_epoch AS n FROM accounts")))
-      (is (= 0 (rows/scalar "SELECT count(*) AS n FROM sessions WHERE NOT revoked")))
-      (is (= "InvalidToken" (browser/error #(tx (fn [conn] (auth/authenticate! conn settings {:headers {"authorization" (str "Bearer " (:accessJwt account))}}))))))
+      ;; Turning the factor on keeps the owner signed in: the session that did
+      ;; it just proved the password and the new secret, matching the other
+      ;; implementations behind the shared console.
+      (is (= 0 (rows/scalar "SELECT oauth_epoch AS n FROM accounts")))
+      (is (= 2 (rows/scalar "SELECT count(*) AS n FROM sessions WHERE NOT revoked")))
+      (is (map? (tx (fn [conn] (auth/authenticate! conn settings {:headers {"authorization" (str "Bearer " (:accessJwt account))}})))))
       (is (= "TotpAlreadyEnabled" (browser/error #(tx (fn [conn] (factors/begin! conn settings browser/did))))))
       (is (= "InvalidEnrollment" (browser/error #(tx (fn [conn] (factors/confirm! conn settings browser/did (current-code settings)))))))
       (is (= 10 (rows/scalar "SELECT count(*) AS n FROM account_recovery_codes")))
@@ -110,7 +113,7 @@
     (is (= {:disabled true} (tx #(factors/disable! % settings browser/did (first codes)))))
     (is (= 0 (rows/scalar "SELECT count(*) AS n FROM account_recovery_codes")))
     (is (false? (tx #(factors/enabled? % browser/did))))
-    (is (= 2 (rows/scalar "SELECT oauth_epoch AS n FROM accounts")))
+    (is (= 0 (rows/scalar "SELECT oauth_epoch AS n FROM accounts")))
     (is (string? (:accessJwt (accounts/login! fixture/*ds* settings browser/credentials))))))
 
 (deftest factor-survives-password-reset-and-is-erased-on-deletion

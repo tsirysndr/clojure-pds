@@ -28,10 +28,6 @@
   (let [factor (row conn did)]
     {:state (cond (nil? factor) "disabled" (:confirmed factor) "enabled" :else "pending")
      :recovery-remaining (:n (first (db/query conn "SELECT count(*) AS n FROM account_recovery_codes WHERE did = ?" did)))}))
-(defn- invalidate! [conn did]
-  (db/execute! conn "UPDATE accounts SET oauth_epoch = oauth_epoch + 1 WHERE did = ?" did)
-  (db/execute! conn "UPDATE sessions SET revoked = true WHERE did = ?" did)
-  (db/execute! conn "DELETE FROM app_passwords WHERE did = ?" did))
 (defn- recovery-digest [did value] (crypto/digest-token (str "pds/recovery/v1/" did "/" value)))
 (defn- recovery-codes! [conn did]
   (let [codes (vec (repeatedly 10 #(str/join "-" (map (partial apply str) (partition 4 (totp/encoded-secret (crypto/random-bytes 20)))))))]
@@ -94,8 +90,12 @@
       (errors/raise! 400 "InvalidEnrollment" "Authenticator enrollment expired or account credentials changed"))
     (let [result (verify-row! conn settings account factor supplied false)]
       (if (:valid? result)
+        ;; Turning the factor on must not throw the owner out: the session
+        ;; doing it just proved the password and the new secret, and the other
+        ;; implementations behind the shared console keep sessions and app
+        ;; passwords intact. Without this, enabling two-factor read as
+        ;; InvalidToken on the very next request.
         (do (db/execute! conn "UPDATE account_totp SET confirmed = true WHERE did = ?" did)
-            (invalidate! conn did)
             {:recovery-codes (recovery-codes! conn did)})
         result))))
 
@@ -115,5 +115,5 @@
   (let [result (verify! conn settings did supplied)]
     (if (:valid? result)
       (do (db/execute! conn "DELETE FROM account_totp WHERE did = ?" did)
-          (invalidate! conn did) {:disabled true})
+          {:disabled true})
       result)))

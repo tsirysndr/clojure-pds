@@ -137,11 +137,14 @@
                                          {:headers {"origin" "https://elsewhere.example.com" "content-type" "application/json"}}))))
     (is (= 403 (:status (web-test/request browser :security :post "/account/action/oauth/revoke" (crypto/token) {"id" id}))))
     (totp/enroll (:settings env))
-    (let [anonymous (web-test/session browser)
-          pending (web-test/request browser :security :post "/account/action/login/password" (get anonymous "csrf") owner/credentials)]
+    ;; Enrolling keeps the signed-in browser signed in, so a *new* browser is
+    ;; what meets the factor wall on its way in.
+    (let [fresh (web-test/client (:settings env) (:resolver env))
+          anonymous (web-test/session fresh)
+          pending (web-test/request fresh :security :post "/account/action/login/password" (get anonymous "csrf") owner/credentials)]
       (is (= "factor" (get-in pending [:json "stage"])))
       (is (nil? (get-in pending [:json "oauth-sessions"])))
-      (is (= 401 (:status (web-test/request browser :security :post "/account/action/oauth/list" (get-in pending [:json "csrf"]) {})))))))
+      (is (= 401 (:status (web-test/request fresh :security :post "/account/action/oauth/list" (get-in pending [:json "csrf"]) {})))))))
 
 (deftest revocation-http-contract-and-nonce-retry
   (let [env (token/env) issued (issue env) handler (tokens/revocation-handler fixture/*ds* (:settings env) (:resolver env))
