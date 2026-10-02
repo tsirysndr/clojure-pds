@@ -47,10 +47,14 @@
               (is (crypto/verify "ES256" (:public_key repo) message signature))
               ;; A service reference names where to deliver; the token is
               ;; addressed to the service itself, so the fragment is not signed.
-              (is (= (first (clojure.string/split aud #"#" 2)) (get claims "aud")))
+              ;; Verbatim, fragment included: the reference verifier compares
+              ;; `aud` against the service reference the receiver knows itself
+              ;; by, so stripping the fragment made every real appview reject
+              ;; the token.
+              (is (= aud (get claims "aud")))
               (is (= 401 (:status (call "GET" "com.atproto.server.getSession" nil token))) "Service JWT is not a local session")
               (swap! fixtures conj {:token token :issuer did
-                                 :audience (first (clojure.string/split aud #"#" 2)) :method method
+                                 :audience aud :method method
                                     :didKey (plc/did-key {:algorithm "ES256" :public (:public_key repo)})})))
           (let [first (get-in (service "" (:accessJwt alice)) [:body "token"])
                 second (get-in (service "" (:accessJwt alice)) [:body "token"])]

@@ -90,16 +90,19 @@
 
 (defn issue! [conn settings account params]
   (let [now (auth/now) {:keys [audience method expires]} (parameters! params now)
-        ;; A service reference names the endpoint to deliver to; the token is
-        ;; addressed to the service itself. Signing the fragment makes the
-        ;; receiver reject the audience as not its own DID.
-        recipient (first (str/split audience #"#" 2))]
+        ;; A delegated token carries the audience exactly as the caller
+        ;; requested it, fragment and all: the reference verifier compares
+        ;; `aud` verbatim against the service reference the receiver knows
+        ;; itself by, so stripping the fragment made every such receiver
+        ;; reject the token. The proxy path overrides this with a bare DID,
+        ;; matching the upstream implementation's own outbound requests.
+        signed-audience (get params "token_aud" audience)]
     (authorize! account method audience)
     (signing-state/ready! conn (:did account))
     (let [repo (first (db/query conn "SELECT signing_key FROM repositories WHERE did = ?" (:did account)))]
       (when-not repo (errors/raise! 400 "RepoNotFound" "Repository was not found"))
       {:token (sign {:algorithm "ES256" :private (crypto/unseal (:master-key settings) (:did account) (:signing_key repo))}
-                    (:did account) recipient method now expires)})))
+                    (:did account) signed-audience method now expires)})))
 
 (defn- invalid! [error message] (errors/raise! 401 error message))
 (defn- decode-segment! [value]

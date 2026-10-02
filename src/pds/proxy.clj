@@ -201,7 +201,10 @@
                         ;; transaction spans DID fetches or the upstream request.
                         token (db/transact! ds (fn [conn]
                                                 (:token (service-auth/issue! conn config (auth/authenticate! conn config r)
-                                                                            {"aud" target "lxm" method}))))
+                                                                            {"aud" target "lxm" method
+                                                                             ;; Upstream services verify proxied
+                                                                             ;; requests against their bare DID.
+                                                                             "token_aud" (first (str/split target #"#" 2))}))))
                         headers (cond-> (assoc (request-headers r) "authorization" (str "Bearer " token))
                                   body (update "content-type" #(or % "application/octet-stream")))
                         options {:method (str/upper-case (name (:request-method r))) :headers headers
