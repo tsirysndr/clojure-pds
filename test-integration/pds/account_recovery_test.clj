@@ -123,7 +123,10 @@
         _ (totp/enroll settings) before (status did) hash (:password_hash (account did))]
     (doseq [[password error] [["short" "InvalidPassword"] ["correct-password" "InvalidRequest"]]]
       (is (= error (owner/error #(recover did (:securityVersion before) "case" password)))))
-    (is (= "SecurityVersionMismatch" (owner/error #(recover did (dec (:securityVersion before)) "case" "replacement-password"))))
+    ;; Enrolling a factor no longer bumps the version, so the fresh account sits
+    ;; at zero; a stale claim is made by overshooting instead of going negative,
+    ;; which input validation would refuse before the version is even compared.
+    (is (= "SecurityVersionMismatch" (owner/error #(recover did (inc (:securityVersion before)) "case" "replacement-password"))))
     (let [query db/query]
       (with-redefs [db/query (fn [conn sql & args]
                               (when (.startsWith ^String sql "INSERT INTO authenticator_recoveries") (throw (ex-info "Receipt storage failed" {})))
