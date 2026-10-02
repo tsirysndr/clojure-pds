@@ -1,5 +1,6 @@
 (ns pds.security.web
   (:require [clojure.data.json :as json]
+            [pds.accounts :as accounts]
             [clojure.java.io :as io]
             [clojure.string :as str]
             [pds.errors :as errors]
@@ -55,7 +56,7 @@
                 ;; the path; the page is the same bundle, which reads it back
                 ;; out of location.pathname.
                 (and (#{:get :head} (:request-method request))
-                     (re-matches #"/account/reset(?:/[A-Za-z0-9_-]{1,256})?" (:uri request)))
+                     (re-matches #"/account/(?:reset|confirm)(?:/[A-Za-z0-9_-]{1,256})?" (:uri request)))
                 (let [[mime content] (get assets "/account")]
                   {:status 200 :headers {"Content-Type" mime "Cache-Control" "no-cache"} :body content})
 
@@ -65,6 +66,12 @@
                 ;; JavaScript at the edge until its default TTL runs out.
                 (let [[mime content] (get assets (:uri request))]
                   {:status 200 :headers {"Content-Type" mime "Cache-Control" "no-cache"} :body content})
+                ;; The emailed confirmation link lands signed out; the token it
+                ;; carries is the whole proof.
+                (and (= :post (:request-method request)) (= "/account/confirm" (:uri request)))
+                (do (accounts/confirm-by-token! ds (body! settings request))
+                    (json-response 200 {"confirmed" true}))
+
                 (and (= :get (:request-method request)) (= "/account/session" (:uri request)))
                 (let [result (browser/open! ds (token settings request))]
                   (response settings (update result :view assoc :passkeys-available passkeys? :origin (:public-url settings)

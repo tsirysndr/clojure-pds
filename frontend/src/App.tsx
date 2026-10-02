@@ -11,6 +11,7 @@ import { SettingsScreen } from "./screens/SettingsScreen";
 import { AuthorizeScreen, ContinueScreen } from "./screens/AuthorizeScreen";
 import { MessageScreen } from "./screens/MessageScreen";
 import { ResetScreen } from "./screens/ResetScreen";
+import { ConfirmScreen } from "./screens/ConfirmScreen";
 
 function Flows({ session, flow }: { session: Session; flow: Flow | null }) {
   const [signupMode, setSignupMode] = useAtom(signupModeAtom);
@@ -61,6 +62,10 @@ export function Root() {
   // needs no session at all, so it renders before anything else loads.
   const resetPath = window.location.pathname.match(/^\/account\/reset(?:\/(.*))?$/);
   if (resetPath) return <ResetScreen token={decodeURIComponent(resetPath[1] ?? "")} />;
+
+  // The confirmation link works the same way: token in the path, no session.
+  const confirmPath = window.location.pathname.match(/^\/account\/confirm\/(.+)$/);
+  if (confirmPath) return <ConfirmScreen token={decodeURIComponent(confirmPath[1] ?? "")} />;
 
   const flow = useFlow();
   const flowId = currentFlowId();

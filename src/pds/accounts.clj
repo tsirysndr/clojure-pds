@@ -103,12 +103,15 @@
                                       (when (= purpose "plc-operation")
                                         "This code authorizes signing an identity change, including moving your account or replacing its control keys. Only enter it in a migration or identity-change flow you initiated. Do not share it.\n\n")
                                       "Your token is: " token "\n\nIt expires in " minutes " minutes. If you did not request this, ignore this email."
-                                      ;; A reset is begun signed out, so the mail
+                                      ;; These flows begin signed out, so the mail
                                       ;; carries the way back in: a link to the
-                                      ;; page that takes a new password.
+                                      ;; page that finishes the job.
                                       (when (and settings (= purpose "reset-password"))
                                         (str "\n\nOr open this link to set a new password:\n"
-                                             (:public-url settings) "/account/reset/" token)))}))))
+                                             (:public-url settings) "/account/reset/" token))
+                                      (when (and settings (= purpose "confirm-email"))
+                                        (str "\n\nOr open this link to confirm your email address:\n"
+                                             (:public-url settings) "/account/confirm/" token)))}))))
 
 (defn provision-one! [ds settings did]
   (provision/process-one! ds settings did
@@ -245,7 +248,7 @@
   (when-not (:email-enabled settings) (errors/raise! 503 "EmailUnavailable" "Email delivery is not configured")))
 (defn request-confirmation! [conn settings account]
   (permissions/account! account "email" "manage")
-  (require-email! settings) (issue-email! conn account "confirm-email"))
+  (require-email! settings) (issue-email! conn account "confirm-email" settings))
 (defn request-reset! [ds settings body]
   (require-email! settings)
   (let [address (str/lower-case (request/string! (get body "email") "email"))]
@@ -268,6 +271,18 @@
     (when-not (= address (:email account)) (errors/invalid! "Email does not match account"))
     (consume-token! conn "confirm-email" (get body "token") (:did account) address)
     (db/execute! conn "UPDATE accounts SET email_confirmed = true WHERE did = ?" (:did account))))
+(defn confirm-by-token!
+  "Confirms the address from the emailed link alone. The token was sent to that
+  address and is single-use, so holding it is the proof; no session exists yet
+  when the link is opened."
+  [ds body]
+  (db/transact! ds
+    (fn [conn]
+      (let [row (consume-token! conn "confirm-email" (get body "token") nil nil)]
+        (db/execute! conn "UPDATE accounts SET email_confirmed = true WHERE did = ? AND email = ?"
+                     (:did row) (:email row)))))
+  nil)
+
 (defn reset-password! [ds body]
   (let [hash (password! (get body "password"))]
     (db/transact!
