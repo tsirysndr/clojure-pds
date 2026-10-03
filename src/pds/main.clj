@@ -21,7 +21,8 @@
             [pds.relay :as relay]
             [pds.repo-export :as repo-export]
             [pds.reserved-handles :as reserved]
-            [pds.s3 :as s3]))
+            [pds.s3 :as s3])
+  (:gen-class))
 
 (defn- run-server! [ds lease]
   (let [email-config (email/settings)

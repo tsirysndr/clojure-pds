@@ -27,6 +27,10 @@
         redis.clients/jedis {:mvn/version "8.0.1"}}
  :aliases
  {:run {:main-opts ["-m" "pds.main"]}
+  ;; clojure -T:build uber  ->  target/clojure-pds.jar, AOT-compiled so a small
+  ;; board starts without compiling the sources on every boot.
+  :build {:deps {io.github.clojure/tools.build {:mvn/version "0.10.12"}}
+          :ns-default build}
   :repl {:extra-paths ["test"]
          :extra-deps {com.bhauman/rebel-readline {:mvn/version "0.1.11"}}
          :jvm-opts ["--enable-native-access=ALL-UNNAMED"]
