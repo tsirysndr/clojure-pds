@@ -10,6 +10,7 @@
             [pds.handles :as handles]
             [pds.plc-signing :as plc-signing]
             [pds.plc-submission :as plc-submission]
+            [pds.protocol.syntax :as syntax]
             [pds.request :as request]
             [pds.xrpc :as xrpc]))
 
@@ -36,6 +37,12 @@
           (:imported account) nil
           :else (walk/stringify-keys (accounts/did-document conn settings account (:public_key account))))))))
 
+(defn- delegate-hop?
+  "Set by a gateway or delegate fanning a handle question out to its nodes."
+  [request]
+  (let [headers (:headers request)]
+    (boolean (or (get headers "x-pdsgw-delegate-hop") (get headers "atoll-delegate-hop")))))
+
 (defn routes [ds settings]
   (let [resolver (identity/resolver (merge settings {:local-handle #(local-handle ds settings %)
                                                      :local-document #(local-document ds settings %)
@@ -59,7 +66,18 @@
      (route :get #(db/transact! ds (fn [conn]
                                     (handles/recommended conn settings (auth/authenticate! conn settings % {:allow-deactivated? true})))))
      "/xrpc/com.atproto.identity.resolveHandle"
-     (route :get #(hash-map :did (identity/resolve-handle! resolver (get (request/query-params %) "handle"))))
+     (route :get (fn [r]
+                   (let [handle (get (request/query-params r) "handle")]
+                     (if (delegate-hop? r)
+                       ;; A delegate asking only wants what this server hosts.
+                       ;; Resolving outward instead fetches the handle's HTTPS
+                       ;; host, which in a shared namespace is the gateway's TLS
+                       ;; ask, which asks this server again: a loop that only
+                       ;; each hop's timeout ends.
+                       (do (when-not (and (string? handle) (syntax/handle? handle)) (errors/invalid! "Invalid handle"))
+                           {:did (or ((:local-handle resolver) (str/lower-case handle))
+                                     (errors/raise! 400 "HandleNotFound" "Handle is not hosted here"))})
+                       {:did (identity/resolve-handle! resolver handle)}))))
      "/xrpc/com.atproto.identity.resolveDid"
      (route :get #(hash-map :didDoc (identity/resolve-did! resolver (get (request/query-params %) "did"))))
      "/xrpc/com.atproto.identity.resolveIdentity"
