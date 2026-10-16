@@ -33,6 +33,7 @@ const failure = (status: number, error: string) => HttpResponse.json({ ...view()
 const success = (result: Record<string, unknown> = {}) => HttpResponse.json({ ...view(), result });
 
 export const handlers = [
+  http.get("*/xrpc/com.atproto.repo.getRecord", () => HttpResponse.json({ error: "RecordNotFound" }, { status: 404 })),
   http.get("*/xrpc/social.rocksky.auth.searchHandles", ({ request }) => {
     const query = new URL(request.url).searchParams.get("q") ?? "";
     return HttpResponse.json({ handles: ["alice.example.com"].filter((handle) => query.length >= 2 && handle.startsWith(query)) });

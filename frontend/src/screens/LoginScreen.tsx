@@ -1,4 +1,4 @@
-import { HandleSuggestions } from "../components/HandleSuggestions";
+import { HandleAutocomplete } from "../components/HandleAutocomplete";
 import { useTranslation } from "react-i18next";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -13,7 +13,7 @@ import { AuthCard } from "../components/AuthCard";
 import { Alert } from "../components/Alert";
 import { ClientPanel } from "../components/ClientPanel";
 import { ForgotPassword } from "../components/ForgotPassword";
-import { TextField, PasswordField } from "../components/Field";
+import { PasswordField } from "../components/Field";
 import { ceremonyOptions, credentialJSON, type ServerOptions } from "../webauthn";
 import { usePending } from "../pending";
 
@@ -72,9 +72,9 @@ export function LoginScreen({
       {notice ? <Alert tone={notice.tone}>{notice.text}</Alert> : null}
 
       <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4" noValidate>
-        <HandleSuggestions id="login-handles" value={form.watch("identifier") ?? ""} />
-        <TextField
-          list="login-handles"
+        <HandleAutocomplete
+          value={form.watch("identifier") ?? ""}
+          onValueChange={(value) => form.setValue("identifier", value, { shouldDirty: true })}
           label={t("login.identifier")}
           placeholder={`alice.${session["user-domain"]}`}
           registration={form.register("identifier")}

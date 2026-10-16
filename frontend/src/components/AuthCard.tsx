@@ -9,8 +9,8 @@ import { detectLanguage, languages } from "../i18n";
 import { IconCloudLock } from "@tabler/icons-react";
 
 const widths = {
-  narrow: "max-w-[26rem]",
-  wide: "max-w-[34rem]",
+  narrow: "max-w-[34rem]",
+  wide: "max-w-[42rem]",
   full: "max-w-3xl",
 } as const;
 
@@ -62,7 +62,7 @@ export function AuthCard({ title, subtitle, service, width = "narrow", children,
         </CardBody>
       </Card>
 
-      <div className="flex w-full max-w-[26rem] flex-col items-center gap-3">
+      <div className="flex w-full max-w-[34rem] flex-col items-center gap-3">
         {footer}
         <Select
           aria-label={t("common.language")}
