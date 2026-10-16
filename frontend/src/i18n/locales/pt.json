@@ -36,7 +36,7 @@
     "title": "Crie a sua conta",
     "username": "Nome de utilizador",
     "usernamePlaceholder": "alice",
-    "usernameDescription": "O seu identificador será {{handle}}.{{domain}}",
+    "usernameDescription": "O seu identificador será {{handle}}",
     "email": "E-mail",
     "emailPlaceholder": "voce@example.com",
     "password": "Palavra-passe",

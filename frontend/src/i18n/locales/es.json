@@ -36,7 +36,7 @@
     "title": "Crea tu cuenta",
     "username": "Nombre de usuario",
     "usernamePlaceholder": "alice",
-    "usernameDescription": "Tu identificador será {{handle}}.{{domain}}",
+    "usernameDescription": "Tu identificador será {{handle}}",
     "email": "Correo electrónico",
     "emailPlaceholder": "tu@example.com",
     "password": "Contraseña",

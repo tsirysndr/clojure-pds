@@ -38,8 +38,8 @@ export const signupSchema = (t: T) =>
       .string()
       .trim()
       .min(1, t("schema.usernameRequired"))
-      .max(63, t("schema.usernameLong"))
-      .regex(/^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/, t("schema.usernameShape")),
+      .max(253, t("schema.usernameLong"))
+      .regex(/^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/, t("schema.usernameShape")),
     email: z.email(t("schema.emailValid")).max(320, t("schema.emailLong")),
     password: password(t),
     confirmPassword: z.string().max(1024, t("schema.passwordLong")),

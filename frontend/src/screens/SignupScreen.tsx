@@ -35,11 +35,17 @@ export function SignupScreen({
   });
 
   const username = form.watch("username");
+  const suffix = domain ? `.${domain.replace(/^\./, "")}` : "";
+  const expandHandle = (value: string) => {
+    const handle = value.trim().toLowerCase();
+    return handle.includes(".") ? handle : `${handle}${suffix}`;
+  };
+  const showSuffix = Boolean(suffix) && !username.trim().includes(".");
 
   const submit = form.handleSubmit((values) =>
     run("signup", async () => {
       const body: Record<string, unknown> = {
-        handle: `${values.username.toLowerCase()}.${domain}`,
+        handle: expandHandle(values.username),
         email: values.email,
         password: values.password,
       };
@@ -60,20 +66,20 @@ export function SignupScreen({
         <TextField
           label={t("signup.username")}
           placeholder="alice"
-          description={domain ? t("signup.usernameDescription", { handle: (username || t("signup.usernameFallback")).toLowerCase(), domain }) : undefined}
+          description={t("signup.usernameDescription", { handle: expandHandle(username || t("signup.usernameFallback")) })}
           registration={form.register("username")}
           error={form.formState.errors.username}
           startContent={<IconAt size={18} stroke={1.75} className="text-default-400" aria-hidden />}
           endContent={
-            domain ? (
+            showSuffix ? (
               <span className="shrink-0 text-sm text-default-400" aria-hidden>
-                .{domain}
+                {suffix}
               </span>
             ) : undefined
           }
           autoComplete="username"
           autoFocus
-          maxLength={63}
+          maxLength={253}
         />
 
         <TextField

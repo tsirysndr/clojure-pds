@@ -36,7 +36,7 @@
     "title": "Create your account",
     "username": "Username",
     "usernamePlaceholder": "alice",
-    "usernameDescription": "Your handle will be {{handle}}.{{domain}}",
+    "usernameDescription": "Your handle will be {{handle}}",
     "email": "Email address",
     "emailPlaceholder": "you@example.com",
     "password": "Password",

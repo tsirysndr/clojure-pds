@@ -32,18 +32,20 @@ async function fill(
 }
 
 describe("SignupScreen", () => {
-  it("derives the full handle from the hosted domain", async () => {
+  it.each(["Carol", "Carol.example.com", "Carol.other.test"])("accepts short and full handles: %s", async (username) => {
+    const expectedHandle = username.includes(".") ? username.toLowerCase() : "carol.example.com";
     const user = userEvent.setup();
     await openSignup(user);
 
     expect(screen.getByText(/username\.example\.com/i)).toBeInTheDocument();
 
-    await fill(user, { username: "Carol", email: "carol@example.com" });
+    await fill(user, { username, email: "carol@example.com" });
+    if (username.includes(".")) expect(screen.queryByText(".example.com")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /create account/i }));
 
-    expect(await screen.findByRole("heading", { name: "carol.example.com" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: expectedHandle })).toBeInTheDocument();
     const signup = scenario.requests.find((entry) => entry.action === "signup");
-    expect(signup?.body).toMatchObject({ handle: "carol.example.com", email: "carol@example.com" });
+    expect(signup?.body).toMatchObject({ handle: expectedHandle, email: "carol@example.com" });
     expect(signup?.body).not.toHaveProperty("inviteCode");
     expect(signup?.body).not.toHaveProperty("confirmPassword");
   });
