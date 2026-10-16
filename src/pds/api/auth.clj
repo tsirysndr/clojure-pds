@@ -112,7 +112,18 @@
 (defn routes [ds settings]
   (let [authed (fn [options f] (server/authenticated ds settings options f))
         body (fn [r] (or (request/json-body r) {}))]
-    {"/xrpc/social.rocksky.auth.getTwoFactor"
+    {"/xrpc/social.rocksky.auth.searchHandles"
+     (server/json-route :get
+       (fn [r]
+         (let [q (str/lower-case (str/trim (get (request/query-params r) "q" "")))]
+           {"handles" (if (re-matches #"[a-z0-9.-]{2,253}" q)
+                        (db/transact! ds
+                          (fn [conn]
+                            (mapv :handle (db/query conn
+                              "SELECT handle FROM accounts WHERE status = 'active' AND handle LIKE ? ORDER BY handle LIMIT 10"
+                              (str q "%")))))
+                        [])})))
+     "/xrpc/social.rocksky.auth.getTwoFactor"
      (server/json-route :get
        (authed {} (fn [conn account r]
                     (request/query-params r)

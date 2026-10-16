@@ -1,3 +1,4 @@
+import { HandleSuggestions } from "../components/HandleSuggestions";
 import { useTranslation } from "react-i18next";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -71,7 +72,9 @@ export function LoginScreen({
       {notice ? <Alert tone={notice.tone}>{notice.text}</Alert> : null}
 
       <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4" noValidate>
+        <HandleSuggestions id="login-handles" value={form.watch("identifier") ?? ""} />
         <TextField
+          list="login-handles"
           label={t("login.identifier")}
           placeholder={`alice.${session["user-domain"]}`}
           registration={form.register("identifier")}

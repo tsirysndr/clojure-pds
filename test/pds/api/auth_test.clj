@@ -1,12 +1,14 @@
 (ns pds.api.auth-test
   (:require [clojure.data.json :as json]
             [clojure.test :refer [deftest is testing]]
-            [pds.api.auth :as auth]))
+            [pds.api.auth :as auth]
+            [pds.db :as db]))
 
 (deftest every-method-in-the-contract-is-routed
   (let [routes (auth/routes nil {})]
     (doseq [[nsid method]
-            [["getTwoFactor" :get]
+            [["searchHandles" :get]
+             ["getTwoFactor" :get]
              ["beginTwoFactor" :post]
              ["confirmTwoFactor" :post]
              ["disableTwoFactor" :post]
@@ -21,7 +23,7 @@
         (is (some? route) (str nsid " is not routed"))
         (is (= method (:method route)) (str nsid " has the wrong method"))
         (is (fn? (:handler route)))))
-    (is (= 11 (count routes)) "the contract has eleven methods")))
+    (is (= 12 (count routes)) "the contract has twelve methods")))
 
 (deftest a_request_id_carries_both_halves_of_the_ceremony
   (let [encode #'auth/request-id
@@ -89,3 +91,16 @@
     (testing "a missing credential is a bad request, not a ceremony failure"
       (doseq [bad [nil 7 []]]
         (is (thrown? clojure.lang.ExceptionInfo (as-json bad)))))))
+
+(deftest handle-suggestions-are-local-and-bounded
+  (let [ds (db/datasource {:url "jdbc:sqlite::memory:"})]
+    (with-open [conn (.getConnection ds)]
+      (db/execute! conn "CREATE TABLE accounts (handle TEXT, status TEXT)")
+      (doseq [[handle status] [["alice.local.test" "active"] ["albert.local.test" "deactivated"] ["bob.local.test" "active"]]]
+        (db/execute! conn "INSERT INTO accounts VALUES (?, ?)" handle status))
+      (with-redefs [db/transact! (fn [_ f] (f conn))]
+        (let [handler (:handler (get (auth/routes ds {}) "/xrpc/social.rocksky.auth.searchHandles"))
+              search (fn [q] (json/read-str (:body (handler {:query-string (str "q=" q)}))))]
+          (is (= {"handles" ["alice.local.test"]} (search "AL")))
+          (doseq [q ["" "a" "a%25" "alice%40example.com"]]
+            (is (= {"handles" []} (search q)))))))))

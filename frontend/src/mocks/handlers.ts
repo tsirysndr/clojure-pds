@@ -33,6 +33,10 @@ const failure = (status: number, error: string) => HttpResponse.json({ ...view()
 const success = (result: Record<string, unknown> = {}) => HttpResponse.json({ ...view(), result });
 
 export const handlers = [
+  http.get("*/xrpc/social.rocksky.auth.searchHandles", ({ request }) => {
+    const query = new URL(request.url).searchParams.get("q") ?? "";
+    return HttpResponse.json({ handles: ["alice.example.com"].filter((handle) => query.length >= 2 && handle.startsWith(query)) });
+  }),
   http.get("/account/session", () => HttpResponse.json(view())),
 
   http.post("/account/action/*", async ({ request }) => {
