@@ -1,6 +1,6 @@
 # Dagger CI
 
-The pipeline lives in `.dagger/ci/src/dagger_main.clj` and uses the Clojure SDK vendored in `.dagger/sdk/`. GitHub Actions supplies the checkout and Dagger CLI; containers supply the build tools. No host language toolchain is required.
+The thin entrypoint `.dagger/ci/src/dagger_main.clj` starts the module. Pipeline registration lives in `src/ci/pipeline.clj`, with checks in `src/ci/` namespaces and shared container helpers kept separately. The Clojure SDK is vendored in `.dagger/sdk/`. GitHub Actions supplies the checkout and Dagger CLI; containers supply the build tools.
 
 Use Dagger **v1.0.0-beta.21** with a supported container engine:
 
@@ -24,7 +24,8 @@ For an engine-free module/schema check:
 
 ```sh
 cd .dagger/ci
-cp -R ../sdk/clojure dagger-sdk
+mkdir -p dagger-sdk
+cp -R ../sdk/clojure/. dagger-sdk/
 clojure -M:test
 ```
 
@@ -33,3 +34,5 @@ The SDK bootstrap uses JDK 21; the application tests use the existing Dockerfile
 The integration function provisions PostgreSQL 18, Redis, and Moto S3 as Dagger services, including backup and upstream conformance tests. Backup drills accept the exact host named by `PDS_TEST_DISPOSABLE_POSTGRES_HOST`, which the module sets to its disposable PostgreSQL service; without that explicit opt-in they still require loopback. The SQLite namespace list lives in `test/pds/sqlite_test_runner.clj`, shared with the local convenience command.
 
 Frontend checks compare the built bundle with committed assets. Existing native multi-architecture image publishing remains in the Docker workflow.
+
+Generated-file checks compare relative file paths and content-only hashes, ignoring filesystem ownership and permissions. Failures list the changed, added, or removed files. Engine-free regression tests cover these cases.
