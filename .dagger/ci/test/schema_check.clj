@@ -40,3 +40,20 @@
   (assert (= ["assets/style.css"] (compare-assets original (dissoc original "assets/style.css"))))
   (assert (= ["assets/new.css"] (compare-assets original (assoc original "assets/new.css" "new")))))
 (println "Content comparison detects changed, added, and removed files and ignores metadata.")
+
+(require '[ci.runtime :as ci-runtime])
+(let [tail "ACTUAL FAILURE AFTER THE LONG BUILD LOG"
+      extension {"_type" "EXEC_ERROR" "cmd" ["clojure" "-M:integration"] "exitCode" 1
+                 "stdout" "test output" "stderr" (str (apply str (repeat 25000 "x")) tail)}
+      failure (ex-info "exit code: 1" {:errors [{"extensions" extension} {"extensions" extension}]})
+      output (java.io.StringWriter.)
+      client (dag/with-transport (fn [_] (throw (Exception. "Unexpected request"))))]
+  (binding [*err* output]
+    (with-redefs [dag/connect (fn [_] client)
+                  modules/serve-with-client! (fn [& _] (throw failure))]
+      (assert (identical? failure
+                         (try (ci-runtime/serve! {}) nil (catch Exception error error))))))
+  (assert (.contains (str output) (get extension "stderr")))
+  (assert (= (.indexOf (str output) tail) (.lastIndexOf (str output) tail)))
+  (assert @(:closed? client)))
+(println "Runtime diagnostics preserve the complete failure tail and still fail the invocation.")
