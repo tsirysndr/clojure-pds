@@ -101,14 +101,6 @@ func (m *ClojureSdk) prepare(ctx context.Context, modSource *dagger.ModuleSource
 		return nil, "", fmt.Errorf("invalid module source path: %q", subpath)
 	}
 	workdir := path.Join("/src", subpath)
-	if introspectionJSON == nil {
-		return dag.Container().From("eclipse-temurin:21-jdk-jammy").
-			WithExec([]string{"sh", "-c", "apt-get update && apt-get install -y --no-install-recommends curl ca-certificates git && rm -rf /var/lib/apt/lists/*"}).
-			WithDirectory("/sdk", m.Source).
-			WithExec([]string{"sh", "/sdk/runtime/install-clojure.sh"}).
-			WithMountedCache("/root/.m2", dag.CacheVolume("clojure-sdk-maven")).
-			WithDirectory("/src", modSource.ContextDirectory()).WithWorkdir(workdir), subpath, nil
-	}
 	name, err := modSource.ModuleOriginalName(ctx)
 	if err != nil {
 		return nil, "", err
@@ -118,11 +110,25 @@ func (m *ClojureSdk) prepare(ctx context.Context, modSource *dagger.ModuleSource
 		WithDirectory("/sdk", m.Source).
 		WithExec([]string{"sh", "/sdk/runtime/install-clojure.sh"}).
 		WithMountedCache("/root/.m2", dag.CacheVolume("clojure-sdk-maven")).
-		WithFile("/schema.json", introspectionJSON).
-		WithWorkdir("/sdk").
-		WithExec([]string{"clojure", "-M:generate", "/schema.json"})
+		WithWorkdir("/sdk")
+	if introspectionJSON != nil {
+		ctr = ctr.WithFile("/schema.json", introspectionJSON).
+			WithExec([]string{"clojure", "-M:generate", "/schema.json"})
+	}
 	sdk := ctr.Directory("/sdk").WithoutDirectory("runtime").WithoutDirectory("examples").WithoutDirectory("test").
 		WithoutDirectory(".cpcache").WithoutDirectory("target").WithoutDirectory("schema")
+	// Runtime loading may omit introspection and generated files may be ignored.
+	// Keep generated dependency bindings when available; otherwise install the
+	// bundled core API so a clean checkout can register the module.
+	if introspectionJSON == nil {
+		exists, err := modSource.ContextDirectory().Exists(ctx, path.Join(subpath, "dagger-sdk", "deps.edn"))
+		if err != nil {
+			return nil, "", fmt.Errorf("check generated SDK: %w", err)
+		}
+		if exists {
+			sdk = modSource.ContextDirectory().Directory(path.Join(subpath, "dagger-sdk"))
+		}
+	}
 	source := modSource.ContextDirectory().WithoutDirectory(path.Join(subpath, "dagger-sdk")).
 		WithoutDirectory(path.Join(subpath, ".cpcache")).WithoutDirectory(path.Join(subpath, "target"))
 	ctr = ctr.WithDirectory("/src", source).
