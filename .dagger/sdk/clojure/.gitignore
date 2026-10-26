@@ -1,0 +1,8 @@
+/.cpcache/
+/.clj-kondo/.cache/
+/.lsp/.cache/
+/target/
+/.mise.local.toml
+/runtime/sdk/
+/runtime/.venv/
+**/__pycache__/

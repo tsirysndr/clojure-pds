@@ -1,0 +1,6 @@
+Original SDK implementation: MIT License.
+Copyright (c) 2026 Tsiry Sandratraina <tsiry.sndr@rocksky.app>
+
+The Dagger introspection query, schema, and schema-derived API documentation
+originate from Dagger (https://github.com/dagger/dagger) under Apache-2.0.
+See schema/LICENSE and schema/README.md for provenance.

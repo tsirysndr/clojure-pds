@@ -1,0 +1,10 @@
+name = "clojure-sdk"
+engineVersion = "v1.0.0-beta.21"
+include = ["src/**", "resources/**", "dev/**", "deps.edn", "LICENSE", "NOTICE"]
+source = "runtime"
+
+[runtime]
+  source = "go"
+
+[codegen]
+  automaticGitignore = false

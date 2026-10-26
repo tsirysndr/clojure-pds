@@ -1,0 +1,7 @@
+{:paths ["src" "resources"]
+ :deps {org.clojure/clojure {:mvn/version "1.12.6"}
+        org.clojure/data.json {:mvn/version "2.5.2"}}
+ :aliases
+ {:test {:extra-paths ["test" "dev"] :main-opts ["-m" "dagger.test-runner"]}
+  :generate {:extra-paths ["dev"] :main-opts ["-m" "dagger.codegen"]}
+  :integration {:extra-paths ["test"] :main-opts ["-m" "dagger.integration"]}}}
