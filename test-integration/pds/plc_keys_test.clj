@@ -49,7 +49,7 @@
         (finally (Files/deleteIfExists path))))))
 
 (defn child-status [did]
-  (let [builder (ProcessBuilder. ["mise" "exec" "--" "clojure" "-M:identity" "status" did]) env (.environment builder)]
+  (let [builder (ProcessBuilder. ["clojure" "-M:identity" "status" did]) env (.environment builder)]
     (.putAll env (fixture/database-env))
     (.remove env "PDS_MASTER_KEY")
     (let [process (.start builder) output (future (slurp (.getInputStream process))) errors (future (slurp (.getErrorStream process)))]

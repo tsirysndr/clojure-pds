@@ -7,36 +7,21 @@ permissions:
   contents: read
 
 concurrency:
-  group: nix-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: nix build
+  nix:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
-
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-
-      - uses: DeterminateSystems/nix-installer-action@v23
-
-      - name: Build the launcher
-        run: nix build .#clojure-pds --print-build-logs
-
-      - name: Check the launcher applies migrations to a temporary database
-        run: |
-          test -x result/bin/clojure-pds
-          # Migrating a throwaway SQLite file exercises the wrapper, the
-          # classpath, dependency resolution and the schema in one step, and
-          # proves data is written outside the read-only store.
-          PDS_SQLITE_PATH="$(mktemp -d)/pds.sqlite3"
-          export PDS_SQLITE_PATH
-          ./result/bin/clojure-pds migrate | tee migrate.log
-          grep -q "SQLite migrations applied" migrate.log
-          test -f "$PDS_SQLITE_PATH"
-
-      - name: Check the development shell
-        run: nix develop --command clojure --version
+      - name: Install Dagger
+        uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77
+        with:
+          version: v1.0.0-beta.21
+      - name: Run nix checks
+        working-directory: .dagger
+        run: dagger api call -m ci nix --source ..

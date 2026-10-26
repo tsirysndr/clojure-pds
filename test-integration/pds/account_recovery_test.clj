@@ -33,7 +33,7 @@
 (defn status [did] (tx #(admin/recovery-status! % did)))
 (defn recover [did version reference password] (tx #(admin/recover-authenticators! % did version reference password)))
 (defn child [args password]
-  (let [builder (ProcessBuilder. ^java.util.List (into ["mise" "exec" "--" "clojure" "-M:account-admin"] args)) env (.environment builder)]
+  (let [builder (ProcessBuilder. ^java.util.List (into ["clojure" "-M:account-admin"] args)) env (.environment builder)]
     (doseq [name ["PDS_MASTER_KEY" "PDS_ADMIN_PASSWORD" "PDS_RECOVERY_PASSWORD"]] (.remove env name))
     (.putAll env (fixture/database-env))
     (when password (.put env "PDS_RECOVERY_PASSWORD" password))

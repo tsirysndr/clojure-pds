@@ -34,8 +34,11 @@
 (defn with-databases [f]
   (let [url (or (System/getenv "PDS_TEST_DATABASE_URL") (throw (ex-info "Test database URL required" {})))
         uri (URI/create (subs url 5))
-        _ (when-not (#{"localhost" "127.0.0.1" "[::1]"} (.getHost uri))
-            (throw (ex-info "Backup drill requires a loopback disposable PostgreSQL server" {})))
+        _ (when-not (or (#{"localhost" "127.0.0.1" "[::1]"} (.getHost uri))
+                        ;; Dagger supplies this exact disposable service host.
+                        (and (some? (System/getenv "PDS_TEST_DISPOSABLE_POSTGRES_HOST"))
+                             (= (System/getenv "PDS_TEST_DISPOSABLE_POSTGRES_HOST") (.getHost uri))))
+            (throw (ex-info "Backup drill requires a loopback or explicitly designated disposable PostgreSQL server" {})))
         settings (assoc (db/settings) :url url)
         admin (db/datasource settings)
         prefix (str "backup_" (.replace (str (UUID/randomUUID)) "-" ""))

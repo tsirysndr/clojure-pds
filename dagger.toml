@@ -1,0 +1,9 @@
+[modules.clojure]
+source = ".dagger/sdk/clojure"
+
+[sdks.clojure]
+module = "clojure"
+
+[sdks.clojure.scopes.".dagger/ci"]
+is-module = true
+name = "project-ci"

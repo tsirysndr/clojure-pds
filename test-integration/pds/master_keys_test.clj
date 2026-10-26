@@ -42,7 +42,7 @@
 (defn register! [key] (with-open [_ (keys/open-lease! fixture/*ds* key)] (keys/status! fixture/*ds*)))
 (defn rewrap [old new] (keys/rewrap! fixture/*ds* old new (keys/fingerprint old)))
 (defn child [args overrides]
-  (let [builder (ProcessBuilder. ^java.util.List (into ["mise" "exec" "--" "clojure" "-M:master-key"] args))
+  (let [builder (ProcessBuilder. ^java.util.List (into ["clojure" "-M:master-key"] args))
         environment (.environment builder)]
     (.remove environment "PDS_MASTER_KEY") (.remove environment "PDS_NEW_MASTER_KEY")
     (.putAll environment (merge (env) overrides))

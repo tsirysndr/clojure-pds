@@ -95,3 +95,7 @@ static site; see [docs/README.md](docs/README.md)).
 
 [MIT](LICENSE). Vendored conformance fixtures retain their upstream CC0
 license; vendored Lexicons retain their upstream MIT/Apache notices.
+
+## Continuous integration
+
+Build and test checks run through the Clojure Dagger module. See [Dagger CI](.dagger/README.md) for commands, services, caching, and pipeline development.
