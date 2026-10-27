@@ -8,6 +8,7 @@ import logging
 import os
 from pathlib import Path
 import subprocess
+import shutil
 
 from moto.server import ThreadedMotoServer
 
@@ -20,7 +21,9 @@ try:
     root = Path(__file__).resolve().parents[1]
     # CI supplies a disposable PostgreSQL service. Local runs keep using the
     # isolated temporary cluster unless an explicit test database is provided.
-    command = (["mise", "exec", "--", "clojure", "-M:integration"]
+    # Containers already provide the pinned JDK and CLI; local runs use mise.
+    clojure = (["mise", "exec", "--"] if shutil.which("mise") else []) + ["clojure", "-M:integration"]
+    command = (clojure
                if env.get("PDS_TEST_DATABASE_URL") else ["bash", "scripts/test-postgres.sh"])
     raise SystemExit(subprocess.call(command, cwd=root, env=env))
 finally:

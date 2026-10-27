@@ -14,9 +14,10 @@
     (doseq [name ["frontend" "integration" "sqlite" "nix"]]
       (assert (string? (modules/invoke! module client "ProjectCi" name {} {"source" "test-source"})))))
   (let [values (mapcat (comp vals :variables) @requests)]
-    (assert (some #{["clojure" "-M:integration"]} values))
+    (assert (some #{["/opt/moto/bin/python" "scripts/test-s3.py"]} values))
     (assert (some #{"jdbc:postgresql://postgres:5432/pds_test"} values))
-    (assert (some #{"http://s3:5000"} values))
+    (assert (not-any? #{"http://s3:5000"} values))
+    (assert (some #{["/opt/moto/bin/pip" "install" "moto[server]==5.2.3"]} values))
     (assert (some #{"LOCKED"} values))
     (assert (some true? values) "content hashes must exclude metadata"))
   (println "All Clojure handlers and nested service queries validated against the SDK schema."))

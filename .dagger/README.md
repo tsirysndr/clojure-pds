@@ -31,7 +31,7 @@ clojure -M:test
 
 The SDK bootstrap uses JDK 21; the application tests use the existing Dockerfile's JDK 25 builder and Clojure CLI 1.12.4.1618.
 
-The integration function provisions PostgreSQL 18, Redis, and Moto S3 as Dagger services, including backup and upstream conformance tests. Backup drills accept the exact host named by `PDS_TEST_DISPOSABLE_POSTGRES_HOST`, which the module sets to its disposable PostgreSQL service; without that explicit opt-in they still require loopback. The SQLite namespace list lives in `test/pds/sqlite_test_runner.clj`, shared with the local convenience command.
+The integration function provisions PostgreSQL 18 and Redis as Dagger services, including backup and upstream conformance tests. The existing `scripts/test-s3.py` harness starts Moto on a random loopback port inside the test container and stops it afterward. This preserves the application’s HTTPS requirement for non-loopback S3 endpoints. Moto is installed in an isolated Python environment; the container uses its preinstalled JDK and Clojure CLI when mise is absent. Backup drills accept the exact host named by `PDS_TEST_DISPOSABLE_POSTGRES_HOST`, which the module sets to its disposable PostgreSQL service; without that explicit opt-in they still require loopback. The SQLite namespace list lives in `test/pds/sqlite_test_runner.clj`, shared with the local convenience command.
 
 Frontend checks compare the built bundle with committed assets. Existing native multi-architecture image publishing remains in the Docker workflow.
 
