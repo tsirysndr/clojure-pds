@@ -13,7 +13,7 @@
 (def headers
   {"Cache-Control" "no-store" "Pragma" "no-cache" "X-Content-Type-Options" "nosniff"
    "Referrer-Policy" "no-referrer" "X-Frame-Options" "DENY"
-   "Content-Security-Policy" "default-src 'none'; script-src 'self' https://challenges.cloudflare.com; style-src 'self'; connect-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
+   "Content-Security-Policy" "default-src 'none'; script-src 'self' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self'; connect-src 'self' https://challenges.cloudflare.com https://cloudflareinsights.com; frame-src https://challenges.cloudflare.com; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
    "Permissions-Policy" "publickey-credentials-get=(self), publickey-credentials-create=(self)"})
 (defn- secure? [settings] (str/starts-with? (:public-url settings) "https://"))
 (defn cookie-name [settings] (if (secure? settings) "__Host-pds-security" "pds-security"))
