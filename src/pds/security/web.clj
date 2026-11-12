@@ -4,6 +4,7 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [pds.errors :as errors]
+            [pds.turnstile :as turnstile]
             [pds.request :as request]
             [pds.security.browser :as browser]
             [pds.security.identity :as identity]
@@ -12,7 +13,7 @@
 (def headers
   {"Cache-Control" "no-store" "Pragma" "no-cache" "X-Content-Type-Options" "nosniff"
    "Referrer-Policy" "no-referrer" "X-Frame-Options" "DENY"
-   "Content-Security-Policy" "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
+   "Content-Security-Policy" "default-src 'none'; script-src 'self' https://challenges.cloudflare.com; style-src 'self'; connect-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
    "Permissions-Policy" "publickey-credentials-get=(self), publickey-credentials-create=(self)"})
 (defn- secure? [settings] (str/starts-with? (:public-url settings) "https://"))
 (defn cookie-name [settings] (if (secure? settings) "__Host-pds-security" "pds-security"))
@@ -77,6 +78,7 @@
                   (response settings (update result :view assoc :passkeys-available passkeys? :origin (:public-url settings)
                                                 :signup-enabled (boolean (:signup-enabled settings))
                                                 :email-enabled (boolean (:email-enabled settings))
+                                                :turnstile (turnstile/description settings)
                                                 :invite-required (boolean (:invite-required settings)) :user-domain (:user-domain settings))))
                 (and (= :post (:request-method request)) (str/starts-with? (:uri request) "/account/action/"))
                 (let [body (body! settings request)

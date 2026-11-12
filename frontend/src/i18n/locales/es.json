@@ -1,4 +1,5 @@
 {
+  "turnstile": {"error": "No se pudo completar la verificación. Inténtalo de nuevo.", "retry": "Reintentar verificación"},
   "common": {
     "language": "Idioma",
     "signIn": "Iniciar sesión",

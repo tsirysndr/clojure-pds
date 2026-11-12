@@ -8,6 +8,7 @@
             [pds.errors :as errors]
             [pds.events :as events]
             [pds.invites :as invites]
+            [pds.turnstile :as turnstile]
             [pds.oauth.permissions :as permissions]
             [pds.handle-registry :as handles]
             [pds.identity :as identity]
@@ -161,6 +162,7 @@
 
 (defn- create-account! [ds settings body issue-session?]
   (when-not (:signup-enabled settings) (errors/raise! 403 "SignupDisabled" "Account registration is disabled"))
+  (turnstile/verify! settings (get body "turnstileToken"))
   (when (some #(contains? body %) ["did" "plcOp" "verificationCode" "verificationPhone"])
     (errors/raise! 400 "InvalidRequest" "Account imports and phone verification are not implemented"))
   (when (and (not= :plc (:did-method settings)) (contains? body "recoveryKey"))

@@ -1,4 +1,5 @@
 {
+  "turnstile": {"error": "Impossibile completare la verifica. Riprova.", "retry": "Riprova la verifica"},
   "common": {
     "language": "Lingua",
     "signIn": "Accedi",

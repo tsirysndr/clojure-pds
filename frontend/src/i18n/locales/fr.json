@@ -1,4 +1,5 @@
 {
+  "turnstile": {"error": "La vérification a échoué. Veuillez réessayer.", "retry": "Réessayer la vérification"},
   "common": {
     "language": "Langue",
     "signIn": "Se connecter",

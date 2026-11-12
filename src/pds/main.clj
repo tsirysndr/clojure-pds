@@ -11,6 +11,7 @@
             [pds.handles :as handles]
             [pds.firehose :as firehose]
             [pds.invites :as invites]
+            [pds.turnstile :as turnstile]
             [pds.identity :as identity]
             [pds.master-keys :as master-keys]
             [pds.net :as net]
@@ -30,6 +31,7 @@
         rate-config (redis/settings (System/getenv))
         settings (merge (config/load-config) (accounts/settings (System/getenv))
                         (admin/settings (System/getenv)) (invites/settings (System/getenv))
+                        (turnstile/settings (System/getenv))
                         (firehose/settings (System/getenv))
                         (identity/settings (System/getenv))
                         (proxy/settings (System/getenv))

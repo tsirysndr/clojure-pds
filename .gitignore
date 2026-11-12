@@ -10,3 +10,6 @@
 node_modules/
 /docs/_site/
 /docs/.lume/
+
+# Private Turnstile credentials.
+/.env.turnstile

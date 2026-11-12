@@ -17,6 +17,7 @@
             [pds.oauth.grants :as oauth-grants]
             [pds.oauth.resource :as oauth-resource]
             [pds.oauth.server :as oauth-server]
+            [pds.turnstile :as turnstile]
             [pds.rate-limit :as rate-limit]))
 
 (def version "clojure-pds v0.1.0-dev")
@@ -49,11 +50,12 @@
                         {:method :get
                          :handler (fn [_]
                                     (xrpc/response 200
-                                      {:did (:service-did config)
+                                      (cond-> {:did (:service-did config)
                                        :inviteCodeRequired (boolean (:invite-required config))
                                        :blobUploadLimit blob-api/max-size
                                        :availableUserDomains (if (and ds (:signup-enabled config))
-                                                               [(str "." (:user-domain config))] [])}))}})]
+                                                               [(str "." (:user-domain config))] [])}
+                                        (:turnstile-site-key config) (assoc :turnstile (turnstile/description config)))))}})]
      (-> (xrpc/router routes fallback)
          (oauth-resource/wrap ds config resolver)
          (security-web/wrap ds config)

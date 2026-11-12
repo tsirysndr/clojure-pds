@@ -12,6 +12,7 @@
             [pds.request :as request]
             [pds.reserved-keys :as reserved-keys]
             [pds.service-auth :as service-auth]
+            [pds.turnstile :as turnstile]
             [pds.xrpc :as xrpc]))
 
 (defn json-route [method f] {:method method :handler #(xrpc/response 200 (f %))})
@@ -33,7 +34,8 @@
    (json-route :post (fn [r]
                        (let [body (request/json-body r)]
                          (if (contains? body "did")
-                           (migration/create! ds settings resolver r body)
+                           (do (turnstile/verify! settings (get body "turnstileToken"))
+                               (migration/create! ds settings resolver r (dissoc body "turnstileToken")))
                            (accounts/create! ds settings body)))))
    "/xrpc/com.atproto.server.reserveSigningKey"
    (json-route :post #(reserved-keys/reserve! ds settings (request/json-body %)))

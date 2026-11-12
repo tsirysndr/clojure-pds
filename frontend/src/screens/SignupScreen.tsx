@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { Turnstile } from "../components/Turnstile";
 import { useTranslation } from "react-i18next";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -25,6 +27,8 @@ export function SignupScreen({
 }) {
   const { t } = useTranslation();
   const action = useAction();
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [verificationAttempt, setVerificationAttempt] = useState(0);
   const setSignup = useSetAtom(signupModeAtom);
   const { run, buttonProps, notice, pending } = usePending();
   const domain = session["user-domain"];
@@ -50,7 +54,13 @@ export function SignupScreen({
         password: values.password,
       };
       if (values.inviteCode) body.inviteCode = values.inviteCode;
-      await action.mutateAsync({ action: "signup", body });
+      if (session.turnstile) body.turnstileToken = turnstileToken;
+      try {
+        await action.mutateAsync({ action: "signup", body });
+      } finally {
+        setTurnstileToken("");
+        setVerificationAttempt((value) => value + 1);
+      }
       setSignup(false);
       await onAuthenticated();
     }),
@@ -124,12 +134,15 @@ export function SignupScreen({
           />
         ) : null}
 
+        {session.turnstile && <Turnstile key={verificationAttempt} siteKey={session.turnstile.siteKey} onToken={setTurnstileToken} />}
+
         <Button
           type="submit"
           color="primary"
           size="lg"
           radius="sm"
           {...buttonProps("signup")}
+          isDisabled={Boolean(session.turnstile && !turnstileToken)}
           /* Validation runs before the request starts, so the click would
              otherwise sit with no feedback until it finishes. isSubmitting
              covers the whole submit, from the click until the work settles. */
